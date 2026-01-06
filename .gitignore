@@ -1,0 +1,97 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+wheels/
+.installed.cfg
+/lib/
+/lib64/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# uv
+.uv/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# mypy
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
+
+# Alembic
+alembic/versions/__pycache__/
+
+# Docker
+.docker/
+
+# Uploads / temp
+uploads/
+tmp/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Backup files
+*.bak
+*.zip
+
+# Code indexing cache (local tooling)
+.codegraph/
+
+# Browser automation state
+.playwright-mcp/
+
+# Agent state
+.omc/
+
+# AI agent internal state (not for public repo)
+.claude/
+.opencode/
+
+# Local agent guide (not for public repo)
+AGENTS.md
+
+# Development-only scripts and artifacts (removed from tracking)
+seed_eval.py
+check_db.py
+frontend/screenshot*.png
+frontend/screenshot*.cjs
+frontend/dump_dom.cjs
+frontend/test-puppeteer.mjs
