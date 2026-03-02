@@ -1,0 +1,230 @@
+"""
+Supervisor Agent — LLM 问题分解 + SubPlan 生成
+"""
+
+import json
+
+import structlog
+from openai import AsyncOpenAI
+
+from app.chat.schema import ExecutionPlan, SubPlan
+from app.common.enums import ExecutionMode
+from app.common.jinja import jinja_env as _jinja_env
+from app.common.llm_client import get_chat_client, llm_breaker
+
+logger = structlog.get_logger(__name__)
+
+
+class SupervisorService:
+    """LLM 驱动的任务分解服务"""
+
+    def __init__(self) -> None:
+        self._openai: AsyncOpenAI | None = None
+
+    def _get_openai(self) -> AsyncOpenAI:
+        if self._openai is None:
+            self._openai = get_chat_client()
+        return self._openai
+
+    async def decompose(self, plan: ExecutionPlan) -> ExecutionPlan:
+        from app.config import get_settings
+
+        settings = get_settings()
+
+        if not settings.rag.supervisor_enabled:
+            return plan
+
+        if plan.mode not in (ExecutionMode.RETRIEVAL, ExecutionMode.RAG_CHAT):
+            return plan
+
+        try:
+            prompt = self._render_prompt(plan)
+            client = self._get_openai()
+            async with llm_breaker():
+                response = await client.chat.completions.create(
+                    model=settings.llm.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "你是智能任务分解助手。仅输出 JSON。",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=settings.rag.supervisor_temperature,
+                    max_tokens=1024,
+                    response_format={"type": "json_object"},
+                    timeout=settings.llm.timeout_seconds,
+                )
+            content = response.choices[0].message.content or "{}"
+            result = json.loads(content)
+        except Exception:
+            logger.exception("supervisor_decompose_failed")
+            return plan
+
+        if not result.get("decompose"):
+            logger.info("supervisor declined to decompose")
+            return plan
+
+        raw_plans = result.get("sub_plans", [])
+        if not raw_plans or len(raw_plans) < 2:
+            return plan
+
+        sub_plans = self._build_sub_plans(raw_plans)
+        if not sub_plans:
+            return plan
+
+        # ── Phase A: 结构验证 ────────────────────────────────
+        is_valid, errors = self._validate_sub_plans(sub_plans)
+        if not is_valid:
+            logger.warning("sub_plan structural validation failed", errors=errors)
+            return plan
+
+        # ── Phase A: LLM 质量评审 + 自动重试 ────────────────
+        prompt_feedback = ""
+        max_retries = settings.rag.supervisor_max_review_retries
+        for attempt in range(max_retries + 1):
+            if attempt > 0:
+                try:
+                    prompt = self._render_prompt(plan, feedback=prompt_feedback)
+                    client = self._get_openai()
+                    async with llm_breaker():
+                        response = await client.chat.completions.create(
+                            model=settings.llm.model,
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "你是智能任务分解助手。仅输出 JSON。",
+                                },
+                                {"role": "user", "content": prompt},
+                            ],
+                            temperature=settings.rag.supervisor_temperature,
+                            max_tokens=1024,
+                            response_format={"type": "json_object"},
+                            timeout=settings.llm.timeout_seconds,
+                        )
+                    content = response.choices[0].message.content or "{}"
+                    result = json.loads(content)
+                    raw_plans = result.get("sub_plans", [])
+                    if not raw_plans or len(raw_plans) < 2:
+                        return plan
+                    sub_plans = self._build_sub_plans(raw_plans)
+                    if not sub_plans:
+                        return plan
+                    is_valid, errors = self._validate_sub_plans(sub_plans)
+                    if not is_valid:
+                        return plan
+                except Exception:
+                    logger.exception("supervisor_retry_decompose_failed")
+                    return plan
+
+            approved, feedback = await self._review_sub_plans(sub_plans, plan.original_question)
+            prompt_feedback = feedback
+            for sp in sub_plans:
+                sp.review_status = "approved" if approved else "rejected"
+                sp.review_feedback = feedback
+            if approved:
+                break
+            logger.warning("sub_plan review rejected", attempt=attempt, feedback=feedback)
+        else:
+            logger.warning("sub_plan review exhausted retries, falling back to single mode")
+            for sp in sub_plans:
+                sp.review_status = "rejected"
+            plan.sub_plans = sub_plans
+            return plan
+
+        plan.supervisor_mode = True
+        plan.mode = ExecutionMode.MULTI_AGENT
+        plan.sub_plans = sub_plans
+        plan.aggregation_style = "synthesize"
+        logger.info(
+            "supervisor decomposed",
+            count=len(sub_plans),
+            modes=[sp.mode.value for sp in sub_plans],
+        )
+        return plan
+
+    def _render_prompt(self, plan: ExecutionPlan, feedback: str = "") -> str:
+        template = _jinja_env.get_template("supervisor_decompose.j2")
+        return template.render(
+            question=plan.original_question,
+            history_summary=plan.history_summary or "",
+            feedback=feedback,
+        )
+
+    async def _review_sub_plans(self, sub_plans: list[SubPlan], question: str) -> tuple[bool, str]:
+        """LLM 质量评审：检查子任务分解的完整性和合理性。
+
+        返回 (approved, feedback)。
+        """
+        from app.config import get_settings
+
+        settings = get_settings()
+        if not settings.rag.supervisor_enabled:
+            return True, ""
+
+        try:
+            template = _jinja_env.get_template("supervisor_review.j2")
+            prompt = template.render(question=question, sub_plans=sub_plans)
+            client = self._get_openai()
+            async with llm_breaker():
+                response = await client.chat.completions.create(
+                    model=settings.llm.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "你是质量评审助手。仅输出 JSON。",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.1,
+                    max_tokens=512,
+                    response_format={"type": "json_object"},
+                    timeout=15,
+                )
+            content = response.choices[0].message.content or "{}"
+            result = json.loads(content)
+            approved = result.get("approved", True)
+            feedback = result.get("feedback", "") or ""
+            return bool(approved), feedback
+        except Exception:
+            logger.exception("sub_plan_review_failed")
+            return True, ""
+
+    @staticmethod
+    def _build_sub_plans(raw_plans: list[dict]) -> list[SubPlan]:
+        sub_plans: list[SubPlan] = []
+        for raw in raw_plans:
+            mode_str = raw.get("mode", "RETRIEVAL").upper()
+            try:
+                mode = ExecutionMode(mode_str)
+            except ValueError:
+                logger.warning("unknown mode in sub_plan", mode=mode_str)
+                continue
+            sub_plans.append(
+                SubPlan(
+                    id=raw.get("id", str(len(sub_plans) + 1)),
+                    mode=mode,
+                    question=raw.get("question", ""),
+                    depends_on=raw.get("depends_on", []),
+                )
+            )
+        return sub_plans
+
+    @staticmethod
+    def _validate_sub_plans(sub_plans: list[SubPlan]) -> tuple[bool, list[str]]:
+        """结构验证：检查依赖引用有效、无重复 ID、问题非空。"""
+        errors: list[str] = []
+        ids = {sp.id for sp in sub_plans}
+
+        if len(ids) != len(sub_plans):
+            errors.append("子计划 ID 存在重复")
+            return False, errors
+
+        for sp in sub_plans:
+            if not sp.question or not sp.question.strip():
+                errors.append(f"子计划 {sp.id} 问题为空")
+            for dep_id in sp.depends_on:
+                if dep_id not in ids:
+                    errors.append(f"子计划 {sp.id} 依赖 {dep_id} 不存在")
+
+        return len(errors) == 0, errors
