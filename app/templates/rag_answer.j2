@@ -1,0 +1,15 @@
+当前日期：{{ current_date }}
+
+用户原始问题：
+{{ original_question }}
+{% if has_retrieval_question %}
+检索理解后的问题：
+{{ retrieval_question }}
+
+{% endif %}{% if has_history_context %}{{ history_context }}
+
+{% endif %}{% if has_sub_questions %}请按下面这些子问题逐一回答：
+{{ sub_questions }}
+
+{% endif %}证据材料：
+{{ evidence_blocks }}
