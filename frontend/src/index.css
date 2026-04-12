@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+@theme {
+  /* Editorial Minimal Typography */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Semantic Colors for Light Mode (Editorial Minimal) */
+  --color-background: #FAFAFA;
+  --color-foreground: #09090B;
+
+  --color-card: #FFFFFF;
+  --color-card-foreground: #09090B;
+
+  --color-popover: #FFFFFF;
+  --color-popover-foreground: #09090B;
+
+  --color-primary: #D97706; /* Amber 600 */
+  --color-primary-foreground: #FFFFFF;
+
+  --color-secondary: #F4F4F5;
+  --color-secondary-foreground: #18181B;
+
+  --color-muted: #F4F4F5;
+  --color-muted-foreground: #52525B; /* Zinc 600 */
+
+  --color-accent: #FEF3C7; /* Amber 100 */
+  --color-accent-foreground: #92400E; /* Amber 800 */
+
+  --color-success: #10B981;
+  --color-success-foreground: #ffffff;
+  
+  --color-warning: #F59E0B;
+  --color-warning-foreground: #ffffff;
+
+  --color-destructive: #EF4444;
+  --color-destructive-foreground: #FAFAFA;
+
+  --color-border: #E5E7EB;
+  --color-input: #E5E7EB;
+  --color-ring: #D97706;
+
+  --radius: 0.5rem;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+.dark {
+  /* Semantic Colors for Dark Mode (Warm Dark) */
+  --color-background: #0A0A0A;
+  --color-foreground: #FAFAFA;
+
+  --color-card: #121212;
+  --color-card-foreground: #FAFAFA;
+
+  --color-popover: #121212;
+  --color-popover-foreground: #FAFAFA;
+
+  --color-primary: #F59E0B; /* Amber 500 */
+  --color-primary-foreground: #000000;
+
+  --color-secondary: #27272A;
+  --color-secondary-foreground: #FAFAFA;
+
+  --color-muted: #27272A;
+  --color-muted-foreground: #A1A1AA;
+
+  --color-accent: #78350F;
+  --color-accent-foreground: #FDE68A;
+
+  --color-success: #34D399;
+  --color-success-foreground: #000000;
+  
+  --color-warning: #FBBF24;
+  --color-warning-foreground: #000000;
+
+  --color-destructive: #F87171;
+  --color-destructive-foreground: #FAFAFA;
+
+  --color-border: #27272A;
+  --color-input: #27272A;
+  --color-ring: #F59E0B;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: var(--font-sans);
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+
+  code, pre {
+    font-family: var(--font-mono);
+  }
+  
+  #root {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+}
