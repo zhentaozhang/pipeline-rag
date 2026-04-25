@@ -1,0 +1,189 @@
+services:
+  # ── MySQL 8.4（业务数据库 + LangGraph Checkpointer）──────────────────────
+  # 注意：禁止使用 MySQL 9.x，checkpoint-mysql 依赖 MD5 函数在 9.6+ 被废弃
+  mysql:
+    image: mysql:8.4
+    container_name: pipeline-rag-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-pipeline-rag123}
+      MYSQL_DATABASE: ${MYSQL_DB:-pipeline_rag}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── PostgreSQL 16 + PGVector（向量检索）──────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: pipeline-rag-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pipeline_rag_vector}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pipeline-rag123}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Elasticsearch 8.13（关键词检索 + IK 分词）────────────────────────────
+  elasticsearch:
+    image: elasticsearch:8.13.4
+    container_name: pipeline-rag-es
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx1g
+      - "cluster.name=pipeline-rag-es"
+    command: >
+      bash -c '
+        if [ ! -d "/usr/share/elasticsearch/plugins/ik" ]; then
+          ./bin/elasticsearch-plugin install -b https://get.infini.cloud/elasticsearch/analysis-ik/8.13.4;
+        fi;
+        /usr/local/bin/docker-entrypoint.sh eswrapper
+      '
+    ports:
+      - "${ES_PORT:-9200}:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── Neo4j 5.20（文档结构图谱）───────────────────────────────────────────
+  neo4j:
+    image: neo4j:5.20
+    container_name: pipeline-rag-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-pipeline-rag123}
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "7474:7474"   # Browser UI
+      - "7687:7687"   # Bolt
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── Redis 7.2（缓存 + 分布式锁 + Celery Broker）─────────────────────────
+  redis:
+    image: redis:7.2
+    container_name: pipeline-rag-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MinIO（对象存储）───────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: pipeline-rag-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console UI
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI App（Python）─────────────────────────────────────────────────
+  app:
+    build: .
+    container_name: pipeline-rag
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8080"
+      MYSQL_HOST: mysql
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      ES_HOST: elasticsearch
+      MINIO_ENDPOINT: minio:9000
+    ports:
+      - "${APP_PORT:-8080}:8080"
+
+  # ── Celery Worker（异步任务）────────────────────────────────────────────
+  celery-worker:
+    build: .
+    container_name: pipeline-rag-celery
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      MYSQL_HOST: mysql
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      ES_HOST: elasticsearch
+      MINIO_ENDPOINT: minio:9000
+    command: celery -A app.celery_app worker -l info -c 4 --without-gossip --without-mingle
+
+volumes:
+  mysql_data:
+  postgres_data:
+  es_data:
+  neo4j_data:
+  neo4j_logs:
+  redis_data:
+  minio_data:

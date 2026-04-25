@@ -1,0 +1,24 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy typecheck
+        entry: uv run mypy app/
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: pytest-quick
+        name: pytest quick (safety + core)
+        entry: uv run pytest tests/test_core.py tests/test_safety_input.py tests/test_safety_output.py tests/test_circuit_breaker.py tests/test_tool_registry.py -x --no-header -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
