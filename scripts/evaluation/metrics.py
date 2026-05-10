@@ -1,0 +1,100 @@
+from __future__ import annotations
+
+import re
+
+import structlog
+
+from app.config import get_settings
+
+logger = structlog.get_logger(__name__)
+settings = get_settings()
+
+
+async def compute_answer_correctness(
+    fallback,
+    question: str,
+    generated_answer: str,
+    ground_truth_answer: str,
+) -> float:
+    """评估生成答案与标准答案的事实一致性。
+
+    LLM-as-judge，返回 0.0 ~ 1.0 分数。
+    """
+    if not generated_answer or not ground_truth_answer:
+        return 0.0
+
+    system = "你是一个评估助手。比较 生成答案 和 标准答案 的事实一致性。"
+    user = (
+        f"问题：{question}\n\n"
+        f"生成答案：{generated_answer}\n\n"
+        f"标准答案：{ground_truth_answer}\n\n"
+        "返回一个 0-100 的整数分数（0=完全不一致，100=完全一致）。只返回数字。"
+    )
+
+    resp = await fallback.chat_completion(
+        model=None,
+        temperature=0.0,
+        max_tokens=256,
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+    )
+    score_text = resp.choices[0].message.content or "0"
+    return max(0.0, min(1.0, _parse_score(score_text) / 100.0))
+
+
+_CHINESE_RE = re.compile(r"[\u4e00-\u9fff]+")
+_ALPHANUM_RE = re.compile(r"[a-zA-Z0-9_]+")
+
+
+def _char_bigrams(text: str) -> set[str]:
+    """将文本拆分为字符级 2-gram（同时兼容中文和英文）"""
+    text = re.sub(r"\s+", "", text.lower())
+    text = re.sub(r"[^\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaffa-zA-Z0-9_]", "", text)
+    return {text[i : i + 2] for i in range(len(text) - 1)}
+
+
+def compute_context_recall(
+    retrieved_contexts: list[str],
+    relevant_contexts: list[str],
+) -> float:
+    """计算上下文召回率：应检出的上下文中，有多少被实际检索到。
+
+    使用字符 bigrams 跨语言对比，无须分词（兼容中文/英文混合文本）。
+    """
+    if not relevant_contexts:
+        return 0.0
+
+    if not retrieved_contexts:
+        return 0.0
+
+    retrieved_bigram_sets = [_char_bigrams(c) for c in retrieved_contexts]
+
+    matched = 0
+    for ctx in relevant_contexts:
+        ctx_bigrams = _char_bigrams(ctx)
+        if not ctx_bigrams:
+            matched += 1
+            continue
+
+        found = False
+        for ret_bigrams in retrieved_bigram_sets:
+            overlap = len(ctx_bigrams & ret_bigrams)
+            if overlap / len(ctx_bigrams) >= 0.35:
+                found = True
+                break
+
+        if found:
+            matched += 1
+
+    return matched / len(relevant_contexts)
+
+
+def _parse_score(text: str) -> float:
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```.*?\n", "", text)
+        text = re.sub(r"\n```$", "", text)
+    text = text.strip()
+    nums = re.findall(r"\d+", text)
+    if nums:
+        return float(nums[0])
+    return 0.0
