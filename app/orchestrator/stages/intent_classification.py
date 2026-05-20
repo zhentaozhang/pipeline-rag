@@ -17,7 +17,6 @@ logger = structlog.get_logger(__name__)
 
 
 class IntentClassifyStage(Stage[PrepareContext, "ExecutionPlan"]):
-
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:
         classifier = IntentClassifier()
         intent = await classifier.classify(ctx.question, ctx.memory_ctx)

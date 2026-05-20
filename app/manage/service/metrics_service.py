@@ -82,9 +82,9 @@ class MetricsService:
         failed_result = await self.db.execute(failed_count_stmt)
         failed_exchanges = failed_result.scalar() or 0
 
-        avg_response_stmt = select(
-            sa_func.avg(ConversationExchange.total_response_time_ms)
-        ).where(ConversationExchange.total_response_time_ms.isnot(None))
+        avg_response_stmt = select(sa_func.avg(ConversationExchange.total_response_time_ms)).where(
+            ConversationExchange.total_response_time_ms.isnot(None)
+        )
         avg_result = await self.db.execute(avg_response_stmt)
         avg_response_time_ms = float(avg_result.scalar() or 0.0)
 
@@ -92,14 +92,12 @@ class MetricsService:
 
         active_conversations = ChatRuntimeRegistry.active_count()
 
-        today_usage_stmt = (
-            select(
-                sa_func.coalesce(sa_func.sum(ChatModelUsageTrace.total_tokens), 0),
-                sa_func.coalesce(sa_func.sum(ChatModelUsageTrace.cost_usd), 0.0),
-            ).where(
-                ChatModelUsageTrace.created_at >= today_start,
-                ChatModelUsageTrace.created_at < today_end,
-            )
+        today_usage_stmt = select(
+            sa_func.coalesce(sa_func.sum(ChatModelUsageTrace.total_tokens), 0),
+            sa_func.coalesce(sa_func.sum(ChatModelUsageTrace.cost_usd), 0.0),
+        ).where(
+            ChatModelUsageTrace.created_at >= today_start,
+            ChatModelUsageTrace.created_at < today_end,
         )
         today_result = await self.db.execute(today_usage_stmt)
         today_row = today_result.one()
@@ -154,5 +152,3 @@ class MetricsService:
             }
             for row in rows
         ]
-
-

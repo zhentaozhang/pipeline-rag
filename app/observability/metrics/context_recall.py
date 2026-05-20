@@ -47,7 +47,10 @@ class ContextRecallMetric(Metric):
 
         if not statements:
             return MetricResult(
-                metric_name="context_recall", value=1.0, reason="no statements to verify", metadata={}
+                metric_name="context_recall",
+                value=1.0,
+                reason="no statements to verify",
+                metadata={},
             )
 
         context_str = "\n\n".join(contexts) if contexts else ""
@@ -55,10 +58,13 @@ class ContextRecallMetric(Metric):
             model=self.model,
             messages=[
                 {"role": "system", "content": _COVERAGE_PROMPT},
-                {"role": "user", "content": (
-                    f"Context:\n{context_str}\n\n"
-                    f"Statements:\n" + "\n".join(f"- {s}" for s in statements)
-                )},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Context:\n{context_str}\n\n"
+                        f"Statements:\n" + "\n".join(f"- {s}" for s in statements)
+                    ),
+                },
             ],
             temperature=0.0,
         )

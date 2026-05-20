@@ -135,7 +135,9 @@ class ParallelExecutor(ConversationExecutor):
             yield chunk
 
         if aggregator.last_refs:
-            self.task.references = aggregator.last_refs  # service.py will emit the reference SSE event
+            self.task.references = (
+                aggregator.last_refs
+            )  # service.py will emit the reference SSE event
 
     async def _run_single(self, sp: SubPlan) -> WorkerResult:
         executor = self.registry.get(sp.mode)

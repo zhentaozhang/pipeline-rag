@@ -5,7 +5,6 @@
 IK 分词器处理中文，相对阈值过滤弱命中（score < top_score * keyword_relative_score_floor）
 """
 
-
 import structlog
 
 from app.chat.schema import Evidence, SubQuestion
@@ -20,12 +19,12 @@ settings = get_settings()
 
 class KeywordRetrievalChannel:
     """
-     基于 Elasticsearch 的全文关键词匹配。
-       - match_phrase: sectionPath^8, chunkText^5, documentName^4
-       - multi_match (BestFields): sectionPath^6, documentName^4, knowledgeScopeName^3, chunkText
-       - 可选 filter 子句：文档路由、章节路径、结构化导航
-       - 最低 should 匹配: minimum_should_match=1
-     """
+    基于 Elasticsearch 的全文关键词匹配。
+      - match_phrase: sectionPath^8, chunkText^5, documentName^4
+      - multi_match (BestFields): sectionPath^6, documentName^4, knowledgeScopeName^3, chunkText
+      - 可选 filter 子句：文档路由、章节路径、结构化导航
+      - 最低 should 匹配: minimum_should_match=1
+    """
 
     @staticmethod
     def _build_es_query(query_text: str, sub_q: SubQuestion, limit: int) -> dict:

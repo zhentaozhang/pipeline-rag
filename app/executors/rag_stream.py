@@ -127,9 +127,7 @@ async def stream_llm_with_tools(
             )
 
     if last_finish_reason:
-        LLM_FINISH_REASON_TOTAL.labels(
-            model=settings.llm.model, reason=last_finish_reason
-        ).inc()
+        LLM_FINISH_REASON_TOTAL.labels(model=settings.llm.model, reason=last_finish_reason).inc()
 
     if not tool_calls:
         return
@@ -180,9 +178,7 @@ async def stream_llm_with_tools(
                 args = {}
             result = await _code_executor_fn.ainvoke(args)
         except Exception as e:
-            logger.warning(
-                "tool execution failed", tool_call_id=tc_id, error=str(e), exc_info=True
-            )
+            logger.warning("tool execution failed", tool_call_id=tc_id, error=str(e), exc_info=True)
             result = f"工具执行失败: {e}"
         messages.append(
             {

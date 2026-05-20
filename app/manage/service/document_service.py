@@ -275,9 +275,7 @@ async def query_evaluation_dataset_page(
     return await ObservabilityRepository.get_evaluation_page(db, page_no, page_size)
 
 
-async def run_evaluation_dataset(
-    db: AsyncSession, dataset_ids: list[int] | None = None
-) -> list:
+async def run_evaluation_dataset(db: AsyncSession, dataset_ids: list[int] | None = None) -> list:
     return await ObservabilityRepository.run_evaluation(db, dataset_ids)
 
 
@@ -326,15 +324,14 @@ async def create_index_task(
     return task_id_val
 
 
-async def get_strategy_plan_by_doc_id(
-    db: AsyncSession, doc_id: str
-) -> dict | None:
+async def get_strategy_plan_by_doc_id(db: AsyncSession, doc_id: str) -> dict | None:
     plan = await DocumentRepository.get_strategy_plan_by_doc_id(db, doc_id)
     if not plan:
         return None
     pipeline_stages = []
     if plan.strategy_snapshot:
         import json
+
         try:
             snapshot = json.loads(plan.strategy_snapshot)
             pipeline_stages = snapshot if isinstance(snapshot, list) else []
@@ -347,9 +344,7 @@ async def get_strategy_plan_by_doc_id(
     }
 
 
-async def get_sibling_chunks(
-    db: AsyncSession, parent_block_id: int, exclude_chunk_id: str
-) -> list:
+async def get_sibling_chunks(db: AsyncSession, parent_block_id: int, exclude_chunk_id: str) -> list:
     return await DocumentRepository.get_sibling_chunks(db, parent_block_id, exclude_chunk_id)
 
 
@@ -365,9 +360,7 @@ async def get_latest_task_by_doc_id(
     return await DocumentRepository.get_latest_task_by_doc_id(db, doc_id)
 
 
-async def get_documents_by_doc_ids(
-    db: AsyncSession, doc_ids: list[str]
-) -> dict[str, Document]:
+async def get_documents_by_doc_ids(db: AsyncSession, doc_ids: list[str]) -> dict[str, Document]:
     return await DocumentRepository.get_by_doc_ids(db, doc_ids)
 
 
@@ -394,4 +387,3 @@ async def retry_document(db: AsyncSession, doc_id: str) -> dict:
     trigger_document_pipeline(doc_id, doc.object_name)
     logger.info("document retry triggered", doc_id=doc_id)
     return {"docId": doc_id, "status": "retry_triggered"}
-

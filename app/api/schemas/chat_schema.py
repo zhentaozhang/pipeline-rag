@@ -75,4 +75,3 @@ class SessionDetailVO(CamelModel):
     selected_document_name: str = ""
     updated_at: str | None = None
     exchanges: list[dict] = Field(default_factory=list)
-

@@ -234,9 +234,7 @@ async def list_topic_documents(
             document_id=d["doc_id"],
             doc_id=d["doc_id"],
             title=d.get("title", ""),
-            document_name=doc_map[d["doc_id"]].document_name
-            if d["doc_id"] in doc_map
-            else None,
+            document_name=doc_map[d["doc_id"]].document_name if d["doc_id"] in doc_map else None,
             relation_score=d.get("relation_score"),
             relation_source=d.get("relation_source"),
             reason=d.get("reason"),

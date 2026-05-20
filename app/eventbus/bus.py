@@ -69,4 +69,5 @@ class EventBus:
 
         await asyncio.gather(*[safe_call(fn) for fn in to_call])
 
+
 bus: EventBus = EventBus()

@@ -14,8 +14,8 @@ from app.rag.graph.models import GraphItem, GraphQueryResult, GraphSection
 
 class GraphAnswerRenderer:
     """
-     将 Neo4j 返回的结构化 JSON 数据，渲染为自然语言文本。
-     """
+    将 Neo4j 返回的结构化 JSON 数据，渲染为自然语言文本。
+    """
 
     def render_graph_answer(
         self,

@@ -19,7 +19,9 @@ EXECUTION_MODE_TOTAL = _Counter("execution_mode_total", "执行模式分布", ["
 ACTIVE_EXCHANGES = _Gauge("active_exchanges", "当前活跃对话数")
 
 # LLM subsystem
-LLM_FINISH_REASON_TOTAL = _Counter("llm_finish_reason_total", "LLM 结束原因分布", ["model", "reason"])
+LLM_FINISH_REASON_TOTAL = _Counter(
+    "llm_finish_reason_total", "LLM 结束原因分布", ["model", "reason"]
+)
 
 # Context subsystem
 CONTEXT_WINDOW_UTILIZATION = _Gauge("context_window_utilization", "上下文窗口利用率")

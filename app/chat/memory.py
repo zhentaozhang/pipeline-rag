@@ -66,9 +66,6 @@ class ConversationSummaryPayload(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-
-
-
 def deduplicate_and_limit(values: list[str]) -> list[str]:
     """有序去重 + 截断 + 数量限制"""
     seen: OrderedDict[str, None] = OrderedDict()
@@ -248,14 +245,14 @@ class SlidingWindowStrategy(MemoryStrategy):
 
 class SummaryCompressionStrategy(MemoryStrategy):
     """
-     摘要压缩（生产推荐方案）。
+    摘要压缩（生产推荐方案）。
 
-     设计：
-     - 最近 window_size 轮原文始终保留
-     - 更早的历史增量摘要（每次最多推进 batch_size 轮）
-     - 长期摘要最大 max_summary_chars 字符
-     - 最近原文最大 max_window_chars 字符
-     """
+    设计：
+    - 最近 window_size 轮原文始终保留
+    - 更早的历史增量摘要（每次最多推进 batch_size 轮）
+    - 长期摘要最大 max_summary_chars 字符
+    - 最近原文最大 max_window_chars 字符
+    """
 
     async def load(self, conversation_id: str, db: AsyncSession) -> MemoryContext:
         from sqlalchemy import desc, select
@@ -285,7 +282,9 @@ class SummaryCompressionStrategy(MemoryStrategy):
                 for e in renderable[-settings.memory.window_size :]
             ]
             recent_transcript = TranscriptRenderer.render_recent_transcript(recent_turns)
-            answer_recent_transcript = TranscriptRenderer.render_answer_recent_transcript(recent_turns)
+            answer_recent_transcript = TranscriptRenderer.render_answer_recent_transcript(
+                recent_turns
+            )
             return MemoryContext(
                 long_term_summary="",
                 recent_transcript=recent_transcript,
@@ -356,7 +355,9 @@ class SummaryCompressionStrategy(MemoryStrategy):
         # Build answer recent transcript
         answer_recent_transcript = TranscriptRenderer.render_answer_recent_transcript(recent_turns)
         # Assemble history
-        assembled_history = TranscriptRenderer.assemble_history(long_term_summary, recent_transcript)
+        assembled_history = TranscriptRenderer.assemble_history(
+            long_term_summary, recent_transcript
+        )
 
         return MemoryContext(
             summary_payload=summary_payload,
@@ -394,11 +395,7 @@ class SummaryCompressionStrategy(MemoryStrategy):
         from app.chat.memory_compressor import ConversationMemoryCompressor
 
         compressor = ConversationMemoryCompressor()
-        await compressor.compress_history(
-            conversation_id, db, known_exchange_id=known_exchange_id
-        )
-
-
+        await compressor.compress_history(conversation_id, db, known_exchange_id=known_exchange_id)
 
 
 # ── 工厂函数 ──────────────────────────────────────────────────────────────────

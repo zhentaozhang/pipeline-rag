@@ -97,7 +97,9 @@ def _route_group(path: str) -> str | None:
     return None
 
 
-async def rate_limit_middleware(request: Request, call_next: Callable[[Request], Response]) -> Response:
+async def rate_limit_middleware(
+    request: Request, call_next: Callable[[Request], Response]
+) -> Response:
     settings = get_settings()
     if not settings.rate_limit.enabled:
         return await call_next(request)

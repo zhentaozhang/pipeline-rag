@@ -84,13 +84,24 @@ class DocumentStructureSignalExtractor:
         indent = logical_line.indent_level
 
         if not normalized:
-            return self._signal(line_no, raw_text, normalized, indent, DocumentStructureSignalKind.BLANK, confidence=1.0)
+            return self._signal(
+                line_no,
+                raw_text,
+                normalized,
+                indent,
+                DocumentStructureSignalKind.BLANK,
+                confidence=1.0,
+            )
 
-        result = self._classify_noise(document_title, normalized, indent, line_frequency, line_no, raw_text)
+        result = self._classify_noise(
+            document_title, normalized, indent, line_frequency, line_no, raw_text
+        )
         if result is not None:
             return result
 
-        result = classify_markdown_heading(self, document_title, normalized, indent, line_no, raw_text)
+        result = classify_markdown_heading(
+            self, document_title, normalized, indent, line_no, raw_text
+        )
         if result is not None:
             return result
 
@@ -98,7 +109,9 @@ class DocumentStructureSignalExtractor:
         if result is not None:
             return result
 
-        result = classify_chapter_heading(self, document_title, normalized, indent, line_no, raw_text)
+        result = classify_chapter_heading(
+            self, document_title, normalized, indent, line_no, raw_text
+        )
         if result is not None:
             return result
 
@@ -134,18 +147,47 @@ class DocumentStructureSignalExtractor:
         if result is not None:
             return result
 
-        result = classify_plain_heading_candidate(self, normalized, indent, line_no, raw_text, context)
+        result = classify_plain_heading_candidate(
+            self, normalized, indent, line_no, raw_text, context
+        )
         if result is not None:
             return result
 
-        return self._signal(line_no, raw_text, normalized, indent, DocumentStructureSignalKind.BODY, title=normalized, reasons=["body"], confidence=1.0)
+        return self._signal(
+            line_no,
+            raw_text,
+            normalized,
+            indent,
+            DocumentStructureSignalKind.BODY,
+            title=normalized,
+            reasons=["body"],
+            confidence=1.0,
+        )
 
-    def _classify_noise(self, document_title, normalized, indent, line_frequency, line_no, raw_text):
+    def _classify_noise(
+        self, document_title, normalized, indent, line_frequency, line_no, raw_text
+    ):
         freq = line_frequency.get(normalized, 0)
         if self._is_repeated_noise(document_title, normalized, freq):
-            return self._signal(line_no, raw_text, normalized, indent, DocumentStructureSignalKind.NOISE, reasons=["repeated-running-header-or-footer"], confidence=0.99)
+            return self._signal(
+                line_no,
+                raw_text,
+                normalized,
+                indent,
+                DocumentStructureSignalKind.NOISE,
+                reasons=["repeated-running-header-or-footer"],
+                confidence=0.99,
+            )
         if PAGE_NOISE_PATTERN.match(normalized):
-            return self._signal(line_no, raw_text, normalized, indent, DocumentStructureSignalKind.NOISE, reasons=["page-noise"], confidence=0.98)
+            return self._signal(
+                line_no,
+                raw_text,
+                normalized,
+                indent,
+                DocumentStructureSignalKind.NOISE,
+                reasons=["page-noise"],
+                confidence=0.98,
+            )
         return None
 
     def _classify_explicit_step(self, normalized, indent, line_no, raw_text):
@@ -153,29 +195,75 @@ class DocumentStructureSignalExtractor:
         if not m:
             return None
         item_index = self._parse_loose_number(m.group(1) or m.group(2))
-        return self._signal(line_no, raw_text, normalized, indent, DocumentStructureSignalKind.STEP_ITEM, title=m.group(3).strip(), item_index=item_index, reasons=["explicit-step"], confidence=0.96)
+        return self._signal(
+            line_no,
+            raw_text,
+            normalized,
+            indent,
+            DocumentStructureSignalKind.STEP_ITEM,
+            title=m.group(3).strip(),
+            item_index=item_index,
+            reasons=["explicit-step"],
+            confidence=0.96,
+        )
 
     def _classify_table_row(self, normalized, indent, line_no, raw_text):
         if not self._is_table_row(normalized):
             return None
-        return self._signal(line_no, raw_text, normalized, indent, DocumentStructureSignalKind.TABLE_ROW, title=normalized, reasons=["table-row"], confidence=0.90)
+        return self._signal(
+            line_no,
+            raw_text,
+            normalized,
+            indent,
+            DocumentStructureSignalKind.TABLE_ROW,
+            title=normalized,
+            reasons=["table-row"],
+            confidence=0.90,
+        )
 
     def _classify_quote(self, normalized, indent, line_no, raw_text):
         if not normalized.startswith(">"):
             return None
-        return self._signal(line_no, raw_text, normalized, indent, DocumentStructureSignalKind.QUOTE, title=normalized, reasons=["quote"], confidence=0.88)
+        return self._signal(
+            line_no,
+            raw_text,
+            normalized,
+            indent,
+            DocumentStructureSignalKind.QUOTE,
+            title=normalized,
+            reasons=["quote"],
+            confidence=0.88,
+        )
 
     def _classify_checkbox(self, normalized, indent, line_no, raw_text):
         m = CHECKBOX_PATTERN.match(normalized)
         if not m:
             return None
-        return self._signal(line_no, raw_text, normalized, indent, DocumentStructureSignalKind.LIST_ITEM, title=m.group(1).strip(), reasons=["checkbox-list"], confidence=0.92)
+        return self._signal(
+            line_no,
+            raw_text,
+            normalized,
+            indent,
+            DocumentStructureSignalKind.LIST_ITEM,
+            title=m.group(1).strip(),
+            reasons=["checkbox-list"],
+            confidence=0.92,
+        )
 
     def _classify_bullet(self, normalized, indent, line_no, raw_text):
         m = BULLET_PATTERN.match(normalized)
         if not m:
             return None
-        return self._signal(line_no, raw_text, normalized, indent, DocumentStructureSignalKind.LIST_ITEM, title=m.group(2).strip(), reasons=["bullet-list"], confidence=0.90)
+        return self._signal(
+            line_no,
+            raw_text,
+            normalized,
+            indent,
+            DocumentStructureSignalKind.LIST_ITEM,
+            title=m.group(2).strip(),
+            reasons=["bullet-list"],
+            confidence=0.90,
+        )
 
     def _classify_single_level_digit(self, normalized, indent, line_no, raw_text, context):
         m = SINGLE_LEVEL_DIGIT_PATTERN.match(normalized)
@@ -185,11 +273,33 @@ class DocumentStructureSignalExtractor:
         item_index = self._parse_loose_number(m.group(1))
         sequential = self._is_neighbor_sequence(item_index, "ARABIC_SINGLE", context)
         introduced = self._previous_introduces_list(context.previous_non_blank)
-        heading_like = not sequential and not introduced and self._looks_like_plain_heading(title, context)
-        kind = DocumentStructureSignalKind.HEADING_CANDIDATE if heading_like else DocumentStructureSignalKind.LIST_ITEM
-        reason = "single-digit-ambiguous-heading" if heading_like else ("single-digit-sequence-list" if sequential else "single-digit-list")
+        heading_like = (
+            not sequential and not introduced and self._looks_like_plain_heading(title, context)
+        )
+        kind = (
+            DocumentStructureSignalKind.HEADING_CANDIDATE
+            if heading_like
+            else DocumentStructureSignalKind.LIST_ITEM
+        )
+        reason = (
+            "single-digit-ambiguous-heading"
+            if heading_like
+            else ("single-digit-sequence-list" if sequential else "single-digit-list")
+        )
         conf = 0.62 if heading_like else (0.93 if sequential or introduced else 0.88)
-        signal = self._signal(line_no, raw_text, normalized, indent, kind, code=m.group(1).strip(), title=title, level_hint=1 if heading_like else None, item_index=item_index, reasons=[reason], confidence=conf)
+        signal = self._signal(
+            line_no,
+            raw_text,
+            normalized,
+            indent,
+            kind,
+            code=m.group(1).strip(),
+            title=title,
+            level_hint=1 if heading_like else None,
+            item_index=item_index,
+            reasons=[reason],
+            confidence=conf,
+        )
         if heading_like and item_index and item_index > 0:
             signal.numeric_path = [item_index]
         return signal
@@ -202,11 +312,33 @@ class DocumentStructureSignalExtractor:
         item_index = self._parse_loose_number(m.group(1))
         sequential = self._is_neighbor_sequence(item_index, "CHINESE_OUTLINE", context)
         introduced = self._previous_introduces_list(context.previous_non_blank)
-        heading_like = not sequential and not introduced and self._looks_like_plain_heading(title, context)
-        kind = DocumentStructureSignalKind.HEADING_CANDIDATE if heading_like else DocumentStructureSignalKind.LIST_ITEM
-        reason = "chinese-outline-ambiguous-heading" if heading_like else ("chinese-outline-sequence-list" if sequential else "chinese-outline-list")
+        heading_like = (
+            not sequential and not introduced and self._looks_like_plain_heading(title, context)
+        )
+        kind = (
+            DocumentStructureSignalKind.HEADING_CANDIDATE
+            if heading_like
+            else DocumentStructureSignalKind.LIST_ITEM
+        )
+        reason = (
+            "chinese-outline-ambiguous-heading"
+            if heading_like
+            else ("chinese-outline-sequence-list" if sequential else "chinese-outline-list")
+        )
         conf = 0.60 if heading_like else (0.92 if sequential or introduced else 0.86)
-        signal = self._signal(line_no, raw_text, normalized, indent, kind, code=m.group(1).strip(), title=title, level_hint=1 if heading_like else None, item_index=item_index, reasons=[reason], confidence=conf)
+        signal = self._signal(
+            line_no,
+            raw_text,
+            normalized,
+            indent,
+            kind,
+            code=m.group(1).strip(),
+            title=title,
+            level_hint=1 if heading_like else None,
+            item_index=item_index,
+            reasons=[reason],
+            confidence=conf,
+        )
         if heading_like and item_index and item_index > 0:
             signal.numeric_path = [item_index]
         return signal
@@ -332,13 +464,17 @@ class DocumentStructureSignalExtractor:
         normalized = re.sub(r"\s+", "", normalized)
         return normalized.lower()
 
-    def _previous_introduces_list(self, prev_non_blank: DocumentStructureLogicalLine | None) -> bool:
+    def _previous_introduces_list(
+        self, prev_non_blank: DocumentStructureLogicalLine | None
+    ) -> bool:
         if not prev_non_blank:
             return False
         prev = safe_text(prev_non_blank.normalized_text)
         return prev.endswith("：") or prev.endswith(":")
 
-    def _is_neighbor_sequence(self, item_index: int | None, family: str, context: LineContext) -> bool:
+    def _is_neighbor_sequence(
+        self, item_index: int | None, family: str, context: LineContext
+    ) -> bool:
         if item_index is None:
             return False
         return self._is_sequence_neighbor(
@@ -373,8 +509,15 @@ class DocumentStructureSignalExtractor:
         if res is not None:
             return res
         digit_map = {
-            "一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
-            "六": 6, "七": 7, "八": 8, "九": 9,
+            "一": 1,
+            "二": 2,
+            "三": 3,
+            "四": 4,
+            "五": 5,
+            "六": 6,
+            "七": 7,
+            "八": 8,
+            "九": 9,
         }
         if normalized == "十":
             return 10

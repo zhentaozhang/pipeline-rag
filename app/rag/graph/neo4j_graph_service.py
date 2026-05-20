@@ -90,11 +90,11 @@ def _neo_node_to_item(n: dict) -> dict:
 
 class Neo4jGraphService:
     """
-     文档结构图谱查询引擎。
-     包含 10+ 种精确查询和图导航方法。
-     属性名：documentId, nodeId, nodeCode, nodeNo, parentNodeId,
-     prevSiblingNodeId, nextSiblingNodeId, normalizedTitle, normalizedPath, contentText。
-     """
+    文档结构图谱查询引擎。
+    包含 10+ 种精确查询和图导航方法。
+    属性名：documentId, nodeId, nodeCode, nodeNo, parentNodeId,
+    prevSiblingNodeId, nextSiblingNodeId, normalizedTitle, normalizedPath, contentText。
+    """
 
     async def _run_query(
         self,

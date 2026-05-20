@@ -22,7 +22,6 @@ logger = structlog.get_logger(__name__)
 
 
 class KnowledgeRoutingStage(Stage[PrepareContext, ExecutionPlan]):
-
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:
         settings = get_settings()
         is_auto_doc = ctx.chat_mode == ChatQueryMode.AUTO_DOCUMENT

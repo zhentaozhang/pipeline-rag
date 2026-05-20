@@ -6,14 +6,16 @@ from fastapi.responses import JSONResponse
 from app.common.exceptions import (
     ArgumentException,
     AuthException,
-    RateLimitException,
     PipelineRAGBaseException,
+    RateLimitException,
 )
 
 logger = structlog.get_logger(__name__)
 
 
-async def pipeline_rag_exception_handler(request: Request, exc: PipelineRAGBaseException) -> JSONResponse:
+async def pipeline_rag_exception_handler(
+    request: Request, exc: PipelineRAGBaseException
+) -> JSONResponse:
     logger.warning("business exception", code=exc.code, message=exc.message)
     headers = None
     if isinstance(exc, AuthException):
@@ -33,7 +35,9 @@ async def pipeline_rag_exception_handler(request: Request, exc: PipelineRAGBaseE
     )
 
 
-async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
     logger.warning("validation error", errors=exc.errors())
 
     formatted_errors = []

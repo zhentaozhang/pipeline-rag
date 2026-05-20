@@ -241,4 +241,3 @@ async def get_rag_evaluation_summary(
         "avgContextPrecision": float(row[3]) if row[3] else None,
     }
     return ApiResponse.ok(data=data)
-

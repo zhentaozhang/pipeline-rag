@@ -289,7 +289,9 @@ def upgrade() -> None:
     op.drop_index(op.f("idx_document_id"), table_name="pipeline_rag_document_strategy_step")
     op.drop_index(op.f("idx_pipeline_type"), table_name="pipeline_rag_document_strategy_step")
     op.drop_index(op.f("idx_strategy_type"), table_name="pipeline_rag_document_strategy_step")
-    op.drop_index(op.f("uk_plan_pipeline_step_no"), table_name="pipeline_rag_document_strategy_step")
+    op.drop_index(
+        op.f("uk_plan_pipeline_step_no"), table_name="pipeline_rag_document_strategy_step"
+    )
     op.drop_table("pipeline_rag_document_strategy_step")
     op.drop_index(
         op.f("idx_pipeline_rag_chat_exchange_create_time"), table_name="pipeline_rag_chat_exchange"
@@ -302,7 +304,9 @@ def upgrade() -> None:
         op.f("idx_pipeline_rag_chat_exchange_state_status"), table_name="pipeline_rag_chat_exchange"
     )
     op.drop_table("pipeline_rag_chat_exchange")
-    op.drop_index(op.f("idx_channel_exec_channel"), table_name="pipeline_rag_chat_channel_execution")
+    op.drop_index(
+        op.f("idx_channel_exec_channel"), table_name="pipeline_rag_chat_channel_execution"
+    )
     op.drop_index(
         op.f("idx_channel_exec_exchange"), table_name="pipeline_rag_chat_channel_execution"
     )
@@ -347,7 +351,9 @@ def upgrade() -> None:
     op.drop_index(op.f("idx_plan_status"), table_name="pipeline_rag_document_strategy_plan")
     op.drop_index(op.f("uk_document_version"), table_name="pipeline_rag_document_strategy_plan")
     op.drop_table("pipeline_rag_document_strategy_plan")
-    op.drop_index(op.f("idx_conversation_exchange"), table_name="pipeline_rag_knowledge_route_trace")
+    op.drop_index(
+        op.f("idx_conversation_exchange"), table_name="pipeline_rag_knowledge_route_trace"
+    )
     op.drop_index(op.f("idx_create_time"), table_name="pipeline_rag_knowledge_route_trace")
     op.drop_index(op.f("idx_route_status"), table_name="pipeline_rag_knowledge_route_trace")
     op.drop_index(op.f("idx_selected_document_id"), table_name="pipeline_rag_knowledge_route_trace")
@@ -527,7 +533,10 @@ def downgrade() -> None:
         unique=True,
     )
     op.create_index(
-        op.f("idx_plan_status"), "pipeline_rag_document_strategy_plan", ["plan_status"], unique=False
+        op.f("idx_plan_status"),
+        "pipeline_rag_document_strategy_plan",
+        ["plan_status"],
+        unique=False,
     )
     op.create_table(
         "pipeline_rag_document_structure_node",
@@ -1343,7 +1352,9 @@ def downgrade() -> None:
         mysql_default_charset="utf8mb4",
         mysql_engine="InnoDB",
     )
-    op.create_index(op.f("idx_task_id"), "pipeline_rag_document_task_log", ["task_id"], unique=False)
+    op.create_index(
+        op.f("idx_task_id"), "pipeline_rag_document_task_log", ["task_id"], unique=False
+    )
     op.create_index(
         op.f("idx_stage_type"), "pipeline_rag_document_task_log", ["stage_type"], unique=False
     )
@@ -1687,7 +1698,10 @@ def downgrade() -> None:
         unique=False,
     )
     op.create_index(
-        op.f("idx_document_id"), "pipeline_rag_document_strategy_step", ["document_id"], unique=False
+        op.f("idx_document_id"),
+        "pipeline_rag_document_strategy_step",
+        ["document_id"],
+        unique=False,
     )
     op.create_table(
         "pipeline_rag_document_chunk",
@@ -1811,13 +1825,19 @@ def downgrade() -> None:
         mysql_engine="InnoDB",
     )
     op.create_index(
-        op.f("uk_task_chunk_no"), "pipeline_rag_document_chunk", ["task_id", "chunk_no"], unique=True
+        op.f("uk_task_chunk_no"),
+        "pipeline_rag_document_chunk",
+        ["task_id", "chunk_no"],
+        unique=True,
     )
     op.create_index(
         op.f("idx_vector_status"), "pipeline_rag_document_chunk", ["vector_status"], unique=False
     )
     op.create_index(
-        op.f("idx_parent_block_id"), "pipeline_rag_document_chunk", ["parent_block_id"], unique=False
+        op.f("idx_parent_block_id"),
+        "pipeline_rag_document_chunk",
+        ["parent_block_id"],
+        unique=False,
     )
     op.create_index(
         op.f("idx_document_id"), "pipeline_rag_document_chunk", ["document_id"], unique=False
@@ -2387,7 +2407,10 @@ def downgrade() -> None:
     )
     op.create_index(op.f("idx_status"), "pipeline_rag_document_profile", ["status"], unique=False)
     op.create_index(
-        op.f("idx_profile_status"), "pipeline_rag_document_profile", ["profile_status"], unique=False
+        op.f("idx_profile_status"),
+        "pipeline_rag_document_profile",
+        ["profile_status"],
+        unique=False,
     )
     op.create_index(
         op.f("idx_document_type"), "pipeline_rag_document_profile", ["document_type"], unique=False

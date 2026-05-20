@@ -22,7 +22,9 @@ class RAGEvaluationService:
     EvaluationPipeline.standard().run(question, answer, contexts, tracer=tracer)
     """
 
-    async def evaluate(self, conversation_id: str, exchange_id: int, question: str, answer: str) -> dict[str, Any]:
+    async def evaluate(
+        self, conversation_id: str, exchange_id: int, question: str, answer: str
+    ) -> dict[str, Any]:
         return {}
 
     async def evaluate_dataset(self, **kwargs) -> dict[str, Any]:

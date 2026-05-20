@@ -293,9 +293,10 @@ async def execute_stream(
     )
 
     # ── 延迟评估：DONE 发出后执行，再 flush（确保 eval scores 落盘）─
-    pending = getattr(task, '_pending_eval', None)
+    pending = getattr(task, "_pending_eval", None)
     if pending:
         from app.observability.metrics.pipeline import EvaluationPipeline
+
         try:
             _pipeline = EvaluationPipeline.standard()
             _results = await _pipeline.run(

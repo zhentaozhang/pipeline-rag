@@ -145,6 +145,7 @@ class ChatTaskInfo(BaseModel):
             self._cancel_event = asyncio.Event()
         return self._cancel_event
 
+
 class ChatRuntimeRegistry:
     """
     进程内任务注册表（内存级，进程重启后清空）。

@@ -55,4 +55,3 @@ async def metrics_usage_trend(
     svc = MetricsService(db)
     trend = await svc.get_usage_trend(days=req.days)
     return ApiResponse.ok(data=trend)
-

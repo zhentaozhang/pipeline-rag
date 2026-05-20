@@ -28,7 +28,11 @@ _CHINESE_WEEKDAY = {
 
 
 def _estimate_tokens(text: str) -> int:
-    cjk = sum(1 for c in text if '\u4e00' <= c <= '\u9fff' or '\u3000' <= c <= '\u303f' or '\uff00' <= c <= '\uffef')
+    cjk = sum(
+        1
+        for c in text
+        if "\u4e00" <= c <= "\u9fff" or "\u3000" <= c <= "\u303f" or "\uff00" <= c <= "\uffef"
+    )
     ascii = sum(1 for c in text if c.isascii() and c.isprintable())
     other = len(text) - cjk - ascii
     return int(cjk / 1.5 + ascii / 4 + other / 2)

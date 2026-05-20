@@ -114,7 +114,9 @@ async def get_me(current_user: str = Depends(get_current_user)) -> dict:
 MANAGE_PREFIX = "/manage/"
 
 
-async def auth_middleware_for_manage(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+async def auth_middleware_for_manage(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     """FastAPI 中间件：自动拦截 /manage/** 请求，无需每个路由重复声明 Depends"""
     if request.url.path.startswith(MANAGE_PREFIX) and request.method not in ("OPTIONS", "HEAD"):
         auth_header = request.headers.get("Authorization", "")
@@ -150,7 +152,9 @@ async def auth_middleware_for_manage(request: Request, call_next: Callable[[Requ
 CHAT_PREFIX = "/api/chat"
 
 
-async def chat_auth_middleware(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+async def chat_auth_middleware(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     """FastAPI 中间件：APP_API_KEY 非空时拦截 /api/chat/** 请求"""
     api_key = getattr(settings.app, "api_key", "")
     if not api_key:
@@ -190,7 +194,9 @@ PREVIEW_BLOCKED_PATHS = frozenset(
 )
 
 
-async def preview_mode_middleware(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+async def preview_mode_middleware(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     """FastAPI 中间件：线上只读展示模式，拦截写操作"""
     preview_settings = getattr(settings, "preview", None)
     if not preview_settings or not preview_settings.enabled:

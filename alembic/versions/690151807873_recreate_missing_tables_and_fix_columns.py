@@ -78,7 +78,10 @@ def upgrade() -> None:
         "document_profile",
         sa.Column("id", sa.BigInteger(), nullable=False),
         sa.Column(
-            "document_id", sa.BigInteger(), sa.ForeignKey("pipeline_rag_document.id"), nullable=False
+            "document_id",
+            sa.BigInteger(),
+            sa.ForeignKey("pipeline_rag_document.id"),
+            nullable=False,
         ),
         sa.Column("profile_status", sa.Integer(), nullable=False, server_default=sa.text("1")),
         sa.Column("document_summary", sa.Text(), nullable=True),
@@ -101,7 +104,10 @@ def upgrade() -> None:
         sa.Column("topic_id", sa.BigInteger(), sa.ForeignKey("knowledge_topic.id"), nullable=False),
         sa.Column("topic_code", sa.String(64), nullable=False),
         sa.Column(
-            "document_id", sa.BigInteger(), sa.ForeignKey("pipeline_rag_document.id"), nullable=False
+            "document_id",
+            sa.BigInteger(),
+            sa.ForeignKey("pipeline_rag_document.id"),
+            nullable=False,
         ),
         sa.Column("relation_score", sa.Float(), nullable=True),
         sa.Column("status", sa.Integer(), nullable=False, server_default=sa.text("1")),
@@ -460,7 +466,8 @@ def downgrade() -> None:
         table_name="pipeline_rag_document_task_log",
     )
     op.drop_index(
-        op.f("ix_pipeline_rag_document_task_log_task_id"), table_name="pipeline_rag_document_task_log"
+        op.f("ix_pipeline_rag_document_task_log_task_id"),
+        table_name="pipeline_rag_document_task_log",
     )
     op.drop_table("pipeline_rag_document_task_log")
 

@@ -13,7 +13,6 @@ logger = structlog.get_logger(__name__)
 
 
 class OpenChatShortcutStage(Stage[PrepareContext, "ExecutionPlan"]):
-
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:
         logger.info("open_chat shortcut triggered", question=ctx.question[:80])
         plan = PlanBuilder.build_open_chat_plan(ctx)

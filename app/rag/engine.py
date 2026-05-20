@@ -65,18 +65,17 @@ class RetrievalChannelResult:
     avg_score: float = 0.0
 
 
-
 class RagRetrievalEngine:
     """
-     双通道 RAG 检索引擎，包含：
-     - 子问题并行 + 通道并行
-     - EvidenceGate
-     - RRF 融合
-     - ParentBlock 提升
-     - Rerank
-     - 引用ID分配
-     - 留痕记录
-     """
+    双通道 RAG 检索引擎，包含：
+    - 子问题并行 + 通道并行
+    - EvidenceGate
+    - RRF 融合
+    - ParentBlock 提升
+    - Rerank
+    - 引用ID分配
+    - 留痕记录
+    """
 
     def __init__(self, db=None) -> None:
         self.db = db
@@ -114,8 +113,13 @@ class RagRetrievalEngine:
             try:
                 return await asyncio.wait_for(
                     self._retrieve_one(
-                        sq, idx + 1, plan, context.used_channels, context.retrieval_notes,
-                        collected_spans_out=_collected_spans, tracer=tracer,
+                        sq,
+                        idx + 1,
+                        plan,
+                        context.used_channels,
+                        context.retrieval_notes,
+                        collected_spans_out=_collected_spans,
+                        tracer=tracer,
                     ),
                     timeout=per_sub_timeout,
                 )
@@ -175,8 +179,12 @@ class RagRetrievalEngine:
         raw_results = await self._parallel_channel_retrieve(sub_q, sub_question_index, notes)
         if not raw_results:
             return SubQuestionEvidence(
-                sub_question=sub_q, evidences=[], channel_trace={},
-                fused_candidate_count=0, parent_candidate_count=0, reranked_candidate_count=0,
+                sub_question=sub_q,
+                evidences=[],
+                channel_trace={},
+                fused_candidate_count=0,
+                parent_candidate_count=0,
+                reranked_candidate_count=0,
             )
 
         # ── 创建通道 span（使用预录制的 timing）────────────────────
@@ -206,8 +214,12 @@ class RagRetrievalEngine:
             if result.documents:
                 self._mark_used_channel(used_channels, result.channel_name)
 
-        vector_accepted = next((r.documents for r in channel_results if r.channel_name == "vector"), [])
-        keyword_accepted = next((r.documents for r in channel_results if r.channel_name == "keyword"), [])
+        vector_accepted = next(
+            (r.documents for r in channel_results if r.channel_name == "vector"), []
+        )
+        keyword_accepted = next(
+            (r.documents for r in channel_results if r.channel_name == "keyword"), []
+        )
 
         # ── RRF 融合 ───────────────────────────────────────────
         rrf_started_at = datetime.now(UTC)
@@ -215,14 +227,24 @@ class RagRetrievalEngine:
         merged = rrf_fusion(vector_accepted, keyword_accepted)[: settings.rag.candidate_top_k]
         rrf_duration_ms = int((time.monotonic() - t_rrf) * 1000)
         if collected_spans_out is not None:
-            collected_spans_out.append(SpanContext(
-                span_id=next_id_str(), trace_id=trace_id, parent_span_id=parent_span_id,
-                kind=SpanKind.PIPELINE, name="rrf_fusion", status=SpanStatus.OK,
-                started_at=rrf_started_at,
-                ended_at=rrf_started_at + timedelta(milliseconds=rrf_duration_ms),
-                duration_ms=rrf_duration_ms,
-                metadata={"input_vector": len(vector_accepted), "input_keyword": len(keyword_accepted), "output": len(merged)},
-            ))
+            collected_spans_out.append(
+                SpanContext(
+                    span_id=next_id_str(),
+                    trace_id=trace_id,
+                    parent_span_id=parent_span_id,
+                    kind=SpanKind.PIPELINE,
+                    name="rrf_fusion",
+                    status=SpanStatus.OK,
+                    started_at=rrf_started_at,
+                    ended_at=rrf_started_at + timedelta(milliseconds=rrf_duration_ms),
+                    duration_ms=rrf_duration_ms,
+                    metadata={
+                        "input_vector": len(vector_accepted),
+                        "input_keyword": len(keyword_accepted),
+                        "output": len(merged),
+                    },
+                )
+            )
 
         # ── ParentBlock 提升 ────────────────────────────────────
         parent_started_at = datetime.now(UTC)
@@ -230,41 +252,67 @@ class RagRetrievalEngine:
         parent_candidates = await ParentBlockElevator().elevate(merged, session=self.db)
         parent_duration_ms = int((time.monotonic() - t_parent) * 1000)
         if collected_spans_out is not None:
-            collected_spans_out.append(SpanContext(
-                span_id=next_id_str(), trace_id=trace_id, parent_span_id=parent_span_id,
-                kind=SpanKind.PIPELINE, name="parent_block", status=SpanStatus.OK,
-                started_at=parent_started_at,
-                ended_at=parent_started_at + timedelta(milliseconds=parent_duration_ms),
-                duration_ms=parent_duration_ms,
-                metadata={"input": len(merged), "output": len(parent_candidates)},
-            ))
+            collected_spans_out.append(
+                SpanContext(
+                    span_id=next_id_str(),
+                    trace_id=trace_id,
+                    parent_span_id=parent_span_id,
+                    kind=SpanKind.PIPELINE,
+                    name="parent_block",
+                    status=SpanStatus.OK,
+                    started_at=parent_started_at,
+                    ended_at=parent_started_at + timedelta(milliseconds=parent_duration_ms),
+                    duration_ms=parent_duration_ms,
+                    metadata={"input": len(merged), "output": len(parent_candidates)},
+                )
+            )
 
         # ── Rerank ─────────────────────────────────────────────
         rerank_started_at = datetime.now(UTC)
         t_rerank = time.monotonic()
-        reranked = await self._maybe_rerank(sub_q.text, parent_candidates, sub_question_index, notes, used_channels)
+        reranked = await self._maybe_rerank(
+            sub_q.text, parent_candidates, sub_question_index, notes, used_channels
+        )
         rerank_duration_ms = int((time.monotonic() - t_rerank) * 1000)
         if collected_spans_out is not None:
-            collected_spans_out.append(SpanContext(
-                span_id=next_id_str(), trace_id=trace_id, parent_span_id=parent_span_id,
-                kind=SpanKind.RETRIEVAL, name="reranker", status=SpanStatus.OK,
-                started_at=rerank_started_at,
-                ended_at=rerank_started_at + timedelta(milliseconds=rerank_duration_ms),
-                duration_ms=rerank_duration_ms,
-                metadata={"input": len(parent_candidates), "output": len(reranked)},
-            ))
+            collected_spans_out.append(
+                SpanContext(
+                    span_id=next_id_str(),
+                    trace_id=trace_id,
+                    parent_span_id=parent_span_id,
+                    kind=SpanKind.RETRIEVAL,
+                    name="reranker",
+                    status=SpanStatus.OK,
+                    started_at=rerank_started_at,
+                    ended_at=rerank_started_at + timedelta(milliseconds=rerank_duration_ms),
+                    duration_ms=rerank_duration_ms,
+                    metadata={"input": len(parent_candidates), "output": len(reranked)},
+                )
+            )
 
         final_docs = self._apply_rerank_filter_and_topk(reranked)
 
         self._mark_selection(final_docs, sub_question_index, channel_results, notes)
-        self._record_empty_retrieval_metrics(final_docs, raw_results, vector_accepted, keyword_accepted, merged, sub_question_index, sub_q)
+        self._record_empty_retrieval_metrics(
+            final_docs,
+            raw_results,
+            vector_accepted,
+            keyword_accepted,
+            merged,
+            sub_question_index,
+            sub_q,
+        )
 
         return SubQuestionEvidence(
             sub_question=sub_q,
             evidences=final_docs,
             channel_trace={
-                "vector_recalled": len(next((r.documents for r in raw_results if r.channel_name == "vector"), [])),
-                "keyword_recalled": len(next((r.documents for r in raw_results if r.channel_name == "keyword"), [])),
+                "vector_recalled": len(
+                    next((r.documents for r in raw_results if r.channel_name == "vector"), [])
+                ),
+                "keyword_recalled": len(
+                    next((r.documents for r in raw_results if r.channel_name == "keyword"), [])
+                ),
                 "vector_accepted": len(vector_accepted),
                 "keyword_accepted": len(keyword_accepted),
                 "fused": len(merged),
@@ -276,7 +324,9 @@ class RagRetrievalEngine:
             reranked_candidate_count=len(reranked),
         )
 
-    async def _parallel_channel_retrieve(self, sub_q: SubQuestion, sub_question_index: int, notes: list[str]) -> list[RetrievalChannelResult]:
+    async def _parallel_channel_retrieve(
+        self, sub_q: SubQuestion, sub_question_index: int, notes: list[str]
+    ) -> list[RetrievalChannelResult]:
         from app.rag.channels.keyword import KeywordRetrievalChannel
         from app.rag.channels.vector import VectorRetrievalChannel
 
@@ -291,12 +341,25 @@ class RagRetrievalEngine:
             try:
                 docs = await asyncio.wait_for(channel_fn(sub_q), timeout=channel_timeout)
             except Exception as e:
-                logger.warning("检索通道失败", sub_question_index=sub_question_index, sub_question=sub_q.text[:50], channel=channel_name, error=str(e), exc_info=True)
-                notes.append(f"子问题{sub_question_index}通道[{channel_name}]检索失败或超时，已自动降级。")
+                logger.warning(
+                    "检索通道失败",
+                    sub_question_index=sub_question_index,
+                    sub_question=sub_q.text[:50],
+                    channel=channel_name,
+                    error=str(e),
+                    exc_info=True,
+                )
+                notes.append(
+                    f"子问题{sub_question_index}通道[{channel_name}]检索失败或超时，已自动降级。"
+                )
                 error_message = str(e)
 
             elapsed_ms = int((time.monotonic() - started_at) * 1000)
-            scores = [e.original_score or e.score or 0.0 for e in docs if e.original_score is not None or e.score is not None]
+            scores = [
+                e.original_score or e.score or 0.0
+                for e in docs
+                if e.original_score is not None or e.score is not None
+            ]
             avg_score = sum(scores) / len(scores) if scores else 0.0
 
             state = "error" if error_message else "success"
@@ -319,16 +382,29 @@ class RagRetrievalEngine:
 
         return await asyncio.gather(*channel_tasks) if channel_tasks else []
 
-    async def _maybe_rerank(self, query: str, candidates: list[Evidence], sub_question_index: int, notes: list[str], used_channels: set[str]) -> list[Evidence]:
+    async def _maybe_rerank(
+        self,
+        query: str,
+        candidates: list[Evidence],
+        sub_question_index: int,
+        notes: list[str],
+        used_channels: set[str],
+    ) -> list[Evidence]:
         if not settings.rerank.enabled or len(candidates) <= 1:
             return candidates
         try:
             from app.rag.reranker import Reranker
+
             reranked = await Reranker().rerank(query, candidates)
             self._mark_used_channel(used_channels, "rerank")
             return reranked
         except Exception as e:
-            logger.warning("rerank 失败，降级为跳过重排", sub_question_index=sub_question_index, error=str(e), exc_info=True)
+            logger.warning(
+                "rerank 失败，降级为跳过重排",
+                sub_question_index=sub_question_index,
+                error=str(e),
+                exc_info=True,
+            )
             notes.append(f"子问题{sub_question_index}重排失败，已降级跳过。")
             return candidates
 
@@ -338,19 +414,40 @@ class RagRetrievalEngine:
             docs = [e for e in docs if (e.rerank_score or 1.0) >= min_rerank]
         return docs[: settings.rag.final_top_k]
 
-    def _mark_selection(self, final_docs: list[Evidence], sub_question_index: int, channel_results: list[RetrievalChannelResult], notes: list[str]) -> None:
+    def _mark_selection(
+        self,
+        final_docs: list[Evidence],
+        sub_question_index: int,
+        channel_results: list[RetrievalChannelResult],
+        notes: list[str],
+    ) -> None:
         for rank, e in enumerate(final_docs, start=1):
             e.is_selected = True
             e.final_rank = rank
             e.selection_reason = "已选入最终 Prompt"
-        notes.append(f"子问题{sub_question_index}检索完成：" + "，".join(f"{r.channel_name}={len(r.documents)}" for r in channel_results) + f"，final={len(final_docs)}")
+        notes.append(
+            f"子问题{sub_question_index}检索完成："
+            + "，".join(f"{r.channel_name}={len(r.documents)}" for r in channel_results)
+            + f"，final={len(final_docs)}"
+        )
 
-    def _record_empty_retrieval_metrics(self, final_docs: list[Evidence], raw_results: list[RetrievalChannelResult], vector_accepted: list[Evidence], keyword_accepted: list[Evidence], merged: list[Evidence], sub_question_index: int, sub_q: SubQuestion) -> None:
+    def _record_empty_retrieval_metrics(
+        self,
+        final_docs: list[Evidence],
+        raw_results: list[RetrievalChannelResult],
+        vector_accepted: list[Evidence],
+        keyword_accepted: list[Evidence],
+        merged: list[Evidence],
+        sub_question_index: int,
+        sub_q: SubQuestion,
+    ) -> None:
         if final_docs:
             return
         vector_empty = not any(r.documents for r in raw_results if r.channel_name == "vector")
         keyword_empty = all(not r.documents for r in raw_results if r.channel_name == "keyword")
-        all_channels_empty = settings.rag.keyword_channel_enabled and (vector_empty and keyword_empty)
+        all_channels_empty = settings.rag.keyword_channel_enabled and (
+            vector_empty and keyword_empty
+        )
         channel_failed = any(r.error_message for r in raw_results)
         if all_channels_empty:
             RETRIEVAL_EMPTY_TOTAL.labels(reason="both_channels_empty").inc()
@@ -358,7 +455,15 @@ class RagRetrievalEngine:
             RETRIEVAL_EMPTY_TOTAL.labels(reason="channel_error").inc()
         else:
             RETRIEVAL_EMPTY_TOTAL.labels(reason="all_gate_filtered").inc()
-        logger.warning("empty retrieval", sub_question_index=sub_question_index, sub_question=sub_q.text[:80], vector_count=len(vector_accepted), keyword_count=len(keyword_accepted), merged_count=len(merged), final_count=len(final_docs))
+        logger.warning(
+            "empty retrieval",
+            sub_question_index=sub_question_index,
+            sub_question=sub_q.text[:80],
+            vector_count=len(vector_accepted),
+            keyword_count=len(keyword_accepted),
+            merged_count=len(merged),
+            final_count=len(final_docs),
+        )
 
     def _resolve_score(self, evidence: Evidence) -> float | None:
         """解析得分：优先 original_score，其次 score；null-safe。"""
@@ -421,5 +526,3 @@ class RagRetrievalEngine:
                     assigned[unique_key] = str(ref_counter)
                     ref_counter += 1
                 ev.reference_id = int(assigned[unique_key])
-
-

@@ -17,6 +17,7 @@ logger = structlog.get_logger(__name__)
 
 async def list_scopes(db: AsyncSession) -> list[KnowledgeScope]:
     from app.db.models.knowledge import KnowledgeScope
+
     result = await db.execute(
         select(KnowledgeScope)
         .where(KnowledgeScope.status == BusinessStatus.YES.value)
@@ -36,6 +37,7 @@ async def save_scope(
     sort_order: int = 0,
 ) -> dict:
     from app.db.models.knowledge import KnowledgeScope
+
     stmt = select(KnowledgeScope).where(
         KnowledgeScope.scope_code == scope_code,
         KnowledgeScope.status == BusinessStatus.YES.value,
@@ -72,6 +74,7 @@ async def save_scope(
 
 async def delete_scope(db: AsyncSession, scope_code: str) -> bool:
     from app.db.models.knowledge import KnowledgeScope
+
     result = await db.execute(
         update(KnowledgeScope)
         .where(
@@ -97,6 +100,7 @@ async def save_topic(
     sort_order: int = 0,
 ) -> dict:
     from app.db.models.knowledge import KnowledgeScope, KnowledgeTopic
+
     scope = (
         await db.execute(
             select(KnowledgeScope).where(
@@ -149,6 +153,7 @@ async def save_topic(
 
 async def delete_topic(db: AsyncSession, topic_code: str) -> bool:
     from app.db.models.knowledge import KnowledgeTopic
+
     result = await db.execute(
         update(KnowledgeTopic)
         .where(
@@ -163,6 +168,7 @@ async def delete_topic(db: AsyncSession, topic_code: str) -> bool:
 
 async def bind_topic_to_scope(db: AsyncSession, scope_code: str, topic_code: str) -> bool:
     from app.db.models.knowledge import KnowledgeScope, KnowledgeTopic
+
     scope = (
         await db.execute(
             select(KnowledgeScope).where(
@@ -190,6 +196,7 @@ async def bind_topic_to_scope(db: AsyncSession, scope_code: str, topic_code: str
 
 async def list_topics(db: AsyncSession, scope_code: str = "") -> list[KnowledgeTopic]:
     from app.db.models.knowledge import KnowledgeTopic
+
     query = select(KnowledgeTopic).where(KnowledgeTopic.status == BusinessStatus.YES.value)
     if scope_code:
         query = query.where(KnowledgeTopic.scope_code == scope_code)
@@ -302,4 +309,3 @@ async def remove_topic_document(db: AsyncSession, topic_code: str, doc_id: str) 
     )
     await db.commit()
     return result.rowcount > 0
-

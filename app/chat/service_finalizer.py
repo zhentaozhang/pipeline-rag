@@ -99,11 +99,7 @@ async def finalize_stream(
     except Exception:
         logger.exception("persist exchange failed")
 
-    if (
-        turn_status == 2
-        and state.full_answer
-        and session.title == question
-    ):
+    if turn_status == 2 and state.full_answer and session.title == question:
         try:
             from app.common.llm_client import get_chat_client
             from app.config import get_settings
@@ -123,15 +119,11 @@ async def finalize_stream(
                     max_tokens=64,
                     temperature=0.3,
                 )
-                title = (
-                    title_resp.choices[0].message.content.strip().strip('"').strip("'")[:256]
-                )
+                title = title_resp.choices[0].message.content.strip().strip('"').strip("'")[:256]
                 if title:
                     await archive_store.update_session_title(conversation_id, title)
         except Exception as title_err:
-            logger.warning(
-                "session title generation failed", error=str(title_err), exc_info=True
-            )
+            logger.warning("session title generation failed", error=str(title_err), exc_info=True)
 
     if task.tracer:
         await task.tracer.flush()
@@ -151,7 +143,9 @@ async def finalize_stream(
         logger.exception("state_machine.final_transition_error")
 
     try:
-        _event: Event[ConversationCompletedPayload | ConversationFailedPayload | ConversationCancelledPayload]
+        _event: Event[
+            ConversationCompletedPayload | ConversationFailedPayload | ConversationCancelledPayload
+        ]
         if turn_status == 2:
             _event = Event(
                 name="conversation.completed",
@@ -198,9 +192,7 @@ async def handle_cancelled_stream(
     conversation_id: str,
     temp_exchange_id: int,
 ) -> AsyncIterator[str]:
-    logger.info(
-        "chat stream cancelled by client or stop command", conversation_id=conversation_id
-    )
+    logger.info("chat stream cancelled by client or stop command", conversation_id=conversation_id)
     if task.finalize() and task.tracer:
         async with task.tracer.span("cancel", kind=SpanKind.PIPELINE):
             pass

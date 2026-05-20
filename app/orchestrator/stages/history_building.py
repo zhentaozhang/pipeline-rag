@@ -13,7 +13,6 @@ logger = structlog.get_logger(__name__)
 
 
 class HistoryBuildingStage(Stage[PrepareContext, "ExecutionPlan"]):
-
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:
         ctx.history_planning_ctx = HistoryBuilder.build_planning_context(ctx.memory_ctx)
         ctx.history_summary = HistoryBuilder.build_planning_history(

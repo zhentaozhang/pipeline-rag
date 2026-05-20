@@ -238,21 +238,23 @@ class RagChatExecutor(ConversationExecutor):
             )
 
             while (
-                not quality_result.passed
-                and plan.review_round < settings.rag.quality_max_retries
+                not quality_result.passed and plan.review_round < settings.rag.quality_max_retries
             ):
                 plan.review_round += 1
                 self.task.thinking_steps.append(
                     f"回答质量审核未通过（得分 {quality_result.score}），"
                     f"正在进行第 {plan.review_round} 轮优化。"
                 )
-                yield self._emit(SSEEventType.REVIEW, {
-                    "round": plan.review_round,
-                    "maxRounds": settings.rag.quality_max_retries,
-                    "score": quality_result.score,
-                    "message": f"回答质量审核未通过（得分 {quality_result.score}），"
-                    f"正在进行第 {plan.review_round} 轮优化。",
-                })
+                yield self._emit(
+                    SSEEventType.REVIEW,
+                    {
+                        "round": plan.review_round,
+                        "maxRounds": settings.rag.quality_max_retries,
+                        "score": quality_result.score,
+                        "message": f"回答质量审核未通过（得分 {quality_result.score}），"
+                        f"正在进行第 {plan.review_round} 轮优化。",
+                    },
+                )
 
                 improved_system = (
                     prompt_result.system_prompt
@@ -267,9 +269,7 @@ class RagChatExecutor(ConversationExecutor):
                     self.task.answer_buffer.append(extract_text(chunk))
                     yield chunk
 
-                retry_output = await run_output_filter(
-                    "".join(self.task.answer_buffer)
-                )
+                retry_output = await run_output_filter("".join(self.task.answer_buffer))
                 if not retry_output.safe:
                     blocked = retry_output.blocked_text
                     self.task.answer_buffer.clear()
@@ -289,15 +289,18 @@ class RagChatExecutor(ConversationExecutor):
                     reference_titles=[r.get("title", "") for r in self.task.references],
                 )
 
-            yield self._emit(SSEEventType.REVIEW_RESULT, {
-                "passed": quality_result.passed,
-                "score": quality_result.score,
-                "message": (
-                    "系统对当前回答的质量置信度较低，建议核实关键信息。"
-                    if not quality_result.passed
-                    else None
-                ),
-            })
+            yield self._emit(
+                SSEEventType.REVIEW_RESULT,
+                {
+                    "passed": quality_result.passed,
+                    "score": quality_result.score,
+                    "message": (
+                        "系统对当前回答的质量置信度较低，建议核实关键信息。"
+                        if not quality_result.passed
+                        else None
+                    ),
+                },
+            )
 
             if (
                 settings.rag.evaluation_enabled
@@ -317,6 +320,3 @@ class RagChatExecutor(ConversationExecutor):
                     }
                 except Exception:
                     logger.exception("rag_eval_params_failed")
-
-
-

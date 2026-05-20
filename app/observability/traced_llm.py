@@ -94,7 +94,9 @@ class TracedLLM:
 
             LLM_CALL_TOTAL.labels(model=self._model, status="ok").inc()
             LLM_TOKEN_TOTAL.labels(model=self._model, token_type="prompt").inc(prompt_tokens)
-            LLM_TOKEN_TOTAL.labels(model=self._model, token_type="completion").inc(completion_tokens)
+            LLM_TOKEN_TOTAL.labels(model=self._model, token_type="completion").inc(
+                completion_tokens
+            )
             LLM_CALL_DURATION_SECONDS.labels(model=self._model).observe(duration)
             LLM_COST_TOTAL.labels(model=self._model).inc(cost)
 

@@ -63,11 +63,13 @@ class EvaluationPipeline:
         model = settings.rag.evaluation_model or settings.llm.model
         eval_llm = get_eval_client()
 
-        return cls([
-            FaithfulnessMetric(eval_llm=eval_llm, model=model),
-            AnswerRelevancyMetric(eval_llm=eval_llm, model=model),
-            ContextPrecisionMetric(eval_llm=eval_llm, model=model),
-        ])
+        return cls(
+            [
+                FaithfulnessMetric(eval_llm=eval_llm, model=model),
+                AnswerRelevancyMetric(eval_llm=eval_llm, model=model),
+                ContextPrecisionMetric(eval_llm=eval_llm, model=model),
+            ]
+        )
 
     @classmethod
     def with_ground_truth(cls) -> EvaluationPipeline:
@@ -83,10 +85,12 @@ class EvaluationPipeline:
         model = settings.rag.evaluation_model or settings.llm.model
         eval_llm = get_eval_client()
 
-        return cls([
-            FaithfulnessMetric(eval_llm=eval_llm, model=model),
-            AnswerRelevancyMetric(eval_llm=eval_llm, model=model),
-            ContextPrecisionMetric(eval_llm=eval_llm, model=model),
-            ContextRecallMetric(eval_llm=eval_llm, model=model),
-            AnswerCorrectnessMetric(eval_llm=eval_llm, model=model),
-        ])
+        return cls(
+            [
+                FaithfulnessMetric(eval_llm=eval_llm, model=model),
+                AnswerRelevancyMetric(eval_llm=eval_llm, model=model),
+                ContextPrecisionMetric(eval_llm=eval_llm, model=model),
+                ContextRecallMetric(eval_llm=eval_llm, model=model),
+                AnswerCorrectnessMetric(eval_llm=eval_llm, model=model),
+            ]
+        )

@@ -65,10 +65,14 @@ class FaithfulnessMetric(Metric):
         try:
             extracted = StatementExtraction(**data)  # type: ignore[arg-type]
         except (TypeError, ValueError):
-            return MetricResult(metric_name="faithfulness", value=0.0, reason="parse error", metadata={})
+            return MetricResult(
+                metric_name="faithfulness", value=0.0, reason="parse error", metadata={}
+            )
 
         if not extracted.statements:
-            return MetricResult(metric_name="faithfulness", value=1.0, reason="no statements to verify", metadata={})
+            return MetricResult(
+                metric_name="faithfulness", value=1.0, reason="no statements to verify", metadata={}
+            )
 
         context_str = "\n\n".join(contexts)
         if len(context_str) > _MAX_CONTEXT_CHARS:
@@ -77,10 +81,13 @@ class FaithfulnessMetric(Metric):
             model=self.model,
             messages=[
                 {"role": "system", "content": _NLI_PROMPT},
-                {"role": "user", "content": (
-                    f"Context:\n{context_str}\n\n"
-                    f"Statements:\n" + "\n".join(f"- {s}" for s in extracted.statements)
-                )},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Context:\n{context_str}\n\n"
+                        f"Statements:\n" + "\n".join(f"- {s}" for s in extracted.statements)
+                    ),
+                },
             ],
             temperature=0.0,
         )
@@ -89,7 +96,9 @@ class FaithfulnessMetric(Metric):
         try:
             nli = NLIResult(**nli_data)  # type: ignore[arg-type]
         except (TypeError, ValueError):
-            return MetricResult(metric_name="faithfulness", value=0.0, reason="NLI parse error", metadata={})
+            return MetricResult(
+                metric_name="faithfulness", value=0.0, reason="NLI parse error", metadata={}
+            )
 
         total = len(nli.verdicts)
         supported = sum(nli.verdicts)

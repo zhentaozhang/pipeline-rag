@@ -14,7 +14,6 @@ logger = structlog.get_logger(__name__)
 
 
 class GuardrailStage(Stage[PrepareContext, "ExecutionPlan"]):
-
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:
         guardrail = IntentGuardrailService()
         is_safe, block_reason = await guardrail.evaluate(ctx.question)

@@ -27,7 +27,9 @@ class VectorizerService:
         self._provider = provider or get_embedding_provider()
         self._batch_size = settings.rag.vectorize_batch_size
 
-    async def vectorize(self, chunks: list[Chunk], task_id: str = "0", document_name: str = "") -> int:
+    async def vectorize(
+        self, chunks: list[Chunk], task_id: str = "0", document_name: str = ""
+    ) -> int:
         """
         批量向量化并写入 PGVector。
         - 所有的 Chunk（Parent + Child）全部存入 document_chunk（用于被 RAG 时通过 parent_chunk_id 反查大段文本）
@@ -36,7 +38,9 @@ class VectorizerService:
         Returns:
             成功写入的 embedding 数量
         """
-        logger.info("vectorizing chunks", count=len(chunks), task_id=task_id, document_name=document_name)
+        logger.info(
+            "vectorizing chunks", count=len(chunks), task_id=task_id, document_name=document_name
+        )
 
         child_chunks = [c for c in chunks if c.chunk_type == "child"]
         logger.info(

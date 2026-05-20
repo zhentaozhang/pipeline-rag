@@ -120,7 +120,6 @@ async def download_bytes(object_name: str) -> bytes:
         raise
 
 
-
 async def delete_object(object_name: str) -> None:
     """删除单个对象"""
     client = get_minio()

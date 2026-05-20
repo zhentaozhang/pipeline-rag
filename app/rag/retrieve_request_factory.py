@@ -47,8 +47,8 @@ _SHORT_FOLLOW_UP_HINTS = {"它", "这个", "那个", "刚才", "前面", "上面
 
 class DocumentRetrieveRequestFactory:
     """
-     构建检索请求：将编排阶段的决策映射到实际子问题过滤条件。
-     """
+    构建检索请求：将编排阶段的决策映射到实际子问题过滤条件。
+    """
 
     async def build(self, plan: ExecutionPlan) -> ExecutionPlan:
         """

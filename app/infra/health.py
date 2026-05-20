@@ -103,7 +103,6 @@ async def _probe_minio() -> dict[str, Any]:
     if _client is None:
         return {"status": "not_initialized"}
     try:
-
         await asyncio.to_thread(_client.list_buckets)
         return {"status": "up"}
     except Exception as e:

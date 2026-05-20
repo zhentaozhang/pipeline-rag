@@ -11,7 +11,14 @@ logger = structlog.get_logger(__name__)
 
 
 @task_failure.connect
-def _on_task_failure(sender: Any = None, task_id: str | None = None, exception: Any = None, args: tuple | None = None, kwargs: dict | None = None, **kw: Any) -> None:
+def _on_task_failure(
+    sender: Any = None,
+    task_id: str | None = None,
+    exception: Any = None,
+    args: tuple | None = None,
+    kwargs: dict | None = None,
+    **kw: Any,
+) -> None:
     """Celery 任务最终失败时触发（超过 max_retries）"""
     task_name = getattr(sender, "name", "")
     if not task_name.startswith("document."):

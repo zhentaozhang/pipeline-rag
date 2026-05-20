@@ -37,7 +37,6 @@ class ClarificationExecutor(ConversationExecutor):
         )
         clarification_reason = "" if plan is None else (plan.clarification_reason or "")
 
-
         if self.task.debug_trace is not None and clarification_reason:
             self.task.debug_trace.retrieval_notes.append(clarification_reason)
 

@@ -192,5 +192,3 @@ class SafetyResponse:
             if reason.startswith(key):
                 return template
         return cls.OUTPUT_BLOCK_TEMPLATES["default"]
-
-

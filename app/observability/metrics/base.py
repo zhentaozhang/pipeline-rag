@@ -69,8 +69,4 @@ class Metric(ABC):
         answer: str,
         contexts: list[str],
         ground_truth: str | None = None,
-    ) -> MetricResult:
-        ...
-
-
-
+    ) -> MetricResult: ...

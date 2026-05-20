@@ -25,19 +25,22 @@ class MySQLTraceStore:
                 output = VALUES(output),
                 flushed_at = VALUES(flushed_at)
         """)
-        await self._db.execute(stmt, {
-            "trace_id": trace.trace_id,
-            "conversation_id": trace.conversation_id,
-            "exchange_id": trace.exchange_id,
-            "session_id": trace.session_id,
-            "root_span_id": trace.root_span_id,
-            "input": _truncated_json(trace.input),
-            "output": _truncated_json(trace.output),
-            "metadata": _json(trace.metadata),
-            "tags": _json(trace.tags),
-            "created_at": trace.created_at,
-            "flushed_at": trace.flushed_at,
-        })
+        await self._db.execute(
+            stmt,
+            {
+                "trace_id": trace.trace_id,
+                "conversation_id": trace.conversation_id,
+                "exchange_id": trace.exchange_id,
+                "session_id": trace.session_id,
+                "root_span_id": trace.root_span_id,
+                "input": _truncated_json(trace.input),
+                "output": _truncated_json(trace.output),
+                "metadata": _json(trace.metadata),
+                "tags": _json(trace.tags),
+                "created_at": trace.created_at,
+                "flushed_at": trace.flushed_at,
+            },
+        )
 
     async def save_spans(self, spans: list[SpanContext]) -> None:
         if not spans:

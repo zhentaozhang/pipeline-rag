@@ -39,6 +39,7 @@ class AnswerRelevancyMetric(Metric):
         )
         content = resp.choices[0].message.content or "0"
         import re
+
         match = re.search(r"\d+", content)
         score = int(match.group()) / 100.0 if match else 0.0
         score = max(0.0, min(1.0, score))

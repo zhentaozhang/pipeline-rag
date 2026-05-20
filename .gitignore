@@ -60,10 +60,6 @@ alembic/versions/__pycache__/
 # Docker
 .docker/
 
-# Uploads / temp
-uploads/
-tmp/
-
 # Frontend
 frontend/node_modules/
 frontend/dist/
@@ -75,23 +71,8 @@ frontend/dist/
 # Code indexing cache (local tooling)
 .codegraph/
 
-# Browser automation state
-.playwright-mcp/
-
-# Agent state
-.omc/
-
 # AI agent internal state (not for public repo)
-.claude/
 .opencode/
 
-# Local agent guide (not for public repo)
-AGENTS.md
-
-# Development-only scripts and artifacts (removed from tracking)
-seed_eval.py
+# Development-only scripts (keep tracked copies clean)
 check_db.py
-frontend/screenshot*.png
-frontend/screenshot*.cjs
-frontend/dump_dom.cjs
-frontend/test-puppeteer.mjs

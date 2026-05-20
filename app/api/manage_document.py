@@ -143,16 +143,30 @@ async def list_documents(
                 document_name=d.document_name,
                 original_file_name=d.original_file_name,
                 file_type=d.file_type,
-                file_type_name=_FILE_TYPE_NAMES.get(DocumentFileTypeEnum(d.file_type), "") if d.file_type else "",
+                file_type_name=_FILE_TYPE_NAMES.get(DocumentFileTypeEnum(d.file_type), "")
+                if d.file_type
+                else "",
                 file_size=d.file_size,
                 char_count=d.char_count,
                 token_count=d.token_count,
                 parse_status=d.parse_status,
-                parse_status_name=_PARSE_STATUS_NAMES.get(DocumentParseStatusEnum(d.parse_status), "") if d.parse_status else "",
+                parse_status_name=_PARSE_STATUS_NAMES.get(
+                    DocumentParseStatusEnum(d.parse_status), ""
+                )
+                if d.parse_status
+                else "",
                 strategy_status=d.strategy_status,
-                strategy_status_name=_STRATEGY_STATUS_NAMES.get(DocumentStrategyStatusEnum(d.strategy_status), "") if d.strategy_status else "",
+                strategy_status_name=_STRATEGY_STATUS_NAMES.get(
+                    DocumentStrategyStatusEnum(d.strategy_status), ""
+                )
+                if d.strategy_status
+                else "",
                 index_status=d.index_status,
-                index_status_name=_INDEX_STATUS_NAMES.get(DocumentIndexStatusEnum(d.index_status), "") if d.index_status else "",
+                index_status_name=_INDEX_STATUS_NAMES.get(
+                    DocumentIndexStatusEnum(d.index_status), ""
+                )
+                if d.index_status
+                else "",
                 parse_error_msg=d.parse_error_msg,
                 knowledge_scope_code=d.knowledge_scope_code,
                 knowledge_scope_name=d.knowledge_scope_name,
@@ -164,9 +178,15 @@ async def list_documents(
                 status=d.status,
                 latest_task_id=str(t.id) if t else None,
                 latest_task_type=t.task_type if t else None,
-                latest_task_type_name=_TASK_TYPE_NAMES.get(DocumentTaskTypeEnum(t.task_type)) if t and t.task_type else None,
+                latest_task_type_name=_TASK_TYPE_NAMES.get(DocumentTaskTypeEnum(t.task_type))
+                if t and t.task_type
+                else None,
                 latest_task_status=t.task_status if t else None,
-                latest_task_status_name=_TASK_STATUS_NAMES.get(DocumentTaskStatusEnum(t.task_status)) if t and t.task_status else None,
+                latest_task_status_name=_TASK_STATUS_NAMES.get(
+                    DocumentTaskStatusEnum(t.task_status)
+                )
+                if t and t.task_status
+                else None,
             )
         )
     resp = DocumentPageResponse(
@@ -199,16 +219,26 @@ async def get_document(
         document_name=doc.document_name,
         original_file_name=doc.original_file_name,
         file_type=doc.file_type,
-        file_type_name=_FILE_TYPE_NAMES.get(DocumentFileTypeEnum(doc.file_type), "") if doc.file_type else "",
+        file_type_name=_FILE_TYPE_NAMES.get(DocumentFileTypeEnum(doc.file_type), "")
+        if doc.file_type
+        else "",
         file_size=doc.file_size,
         char_count=doc.char_count,
         token_count=doc.token_count,
         parse_status=doc.parse_status,
-        parse_status_name=_PARSE_STATUS_NAMES.get(DocumentParseStatusEnum(doc.parse_status), "") if doc.parse_status else "",
+        parse_status_name=_PARSE_STATUS_NAMES.get(DocumentParseStatusEnum(doc.parse_status), "")
+        if doc.parse_status
+        else "",
         strategy_status=doc.strategy_status,
-        strategy_status_name=_STRATEGY_STATUS_NAMES.get(DocumentStrategyStatusEnum(doc.strategy_status), "") if doc.strategy_status else "",
+        strategy_status_name=_STRATEGY_STATUS_NAMES.get(
+            DocumentStrategyStatusEnum(doc.strategy_status), ""
+        )
+        if doc.strategy_status
+        else "",
         index_status=doc.index_status,
-        index_status_name=_INDEX_STATUS_NAMES.get(DocumentIndexStatusEnum(doc.index_status), "") if doc.index_status else "",
+        index_status_name=_INDEX_STATUS_NAMES.get(DocumentIndexStatusEnum(doc.index_status), "")
+        if doc.index_status
+        else "",
         parse_error_msg=doc.parse_error_msg,
         knowledge_scope_code=doc.knowledge_scope_code,
         knowledge_scope_name=doc.knowledge_scope_name,
@@ -220,9 +250,13 @@ async def get_document(
         status=doc.status,
         latest_task_id=str(latest_task.id) if latest_task else None,
         latest_task_type=latest_task.task_type if latest_task else None,
-        latest_task_type_name=_TASK_TYPE_NAMES.get(DocumentTaskTypeEnum(latest_task.task_type)) if latest_task and latest_task.task_type else None,
+        latest_task_type_name=_TASK_TYPE_NAMES.get(DocumentTaskTypeEnum(latest_task.task_type))
+        if latest_task and latest_task.task_type
+        else None,
         latest_task_status=latest_task.task_status if latest_task else None,
-        latest_task_status_name=_TASK_STATUS_NAMES.get(DocumentTaskStatusEnum(latest_task.task_status))
+        latest_task_status_name=_TASK_STATUS_NAMES.get(
+            DocumentTaskStatusEnum(latest_task.task_status)
+        )
         if latest_task and latest_task.task_status
         else None,
     )

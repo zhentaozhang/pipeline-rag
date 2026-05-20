@@ -69,7 +69,9 @@ class RecursiveChunker:
                 )
             else:
                 try:
-                    text_chunks = await loop.run_in_executor(None, split_text, p_chunk.content, config.chunk_size)
+                    text_chunks = await loop.run_in_executor(
+                        None, split_text, p_chunk.content, config.chunk_size
+                    )
                 except Exception as e:
                     logger.error("recursive chunker failed on parent", error=str(e), exc_info=True)
                     continue

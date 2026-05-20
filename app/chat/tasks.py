@@ -50,9 +50,6 @@ def task_compress_conversation_memory(
         raise
 
 
-
-
-
 @celery_app.task(
     bind=True,
     name="chat.evaluate_dataset_item",

@@ -133,7 +133,9 @@ def task_vectorize_document(self, chunk_result: dict, doc_id: str) -> dict:
 
     async def _do_vectorize():
         vectorizer = VectorizerService()
-        return await vectorizer.vectorize(chunks, task_id=self.request.id, document_name=document_name)
+        return await vectorizer.vectorize(
+            chunks, task_id=self.request.id, document_name=document_name
+        )
 
     try:
         count = run_async(_do_vectorize())

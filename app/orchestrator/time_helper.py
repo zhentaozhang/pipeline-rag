@@ -192,9 +192,6 @@ class TimeSensitiveQueryHelper:
             TimeSensitiveQueryHelper._normalize(query), _RELATIVE_TIME_REFS
         )
 
-
-
-
     @staticmethod
     def derive_temporal_hint(query: str) -> str:
         normalized = TimeSensitiveQueryHelper._normalize(query)

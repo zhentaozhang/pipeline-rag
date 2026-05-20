@@ -18,7 +18,6 @@ logger = structlog.get_logger(__name__)
 
 
 class NavigationAnalysisStage(Stage[PrepareContext, ExecutionPlan]):
-
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:
         doc_id = (
             ctx.routed_document_id

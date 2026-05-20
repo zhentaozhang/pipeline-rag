@@ -18,52 +18,63 @@ logger = structlog.get_logger(__name__)
 # ── Prometheus 指标 ──────────────────────────────────────────────
 
 STAGE_DURATION_SECONDS = Histogram(
-    "stage_duration_seconds", "Stage duration in seconds",
+    "stage_duration_seconds",
+    "Stage duration in seconds",
     ["kind", "name", "status"],
 )
 STAGE_CALL_TOTAL = Counter(
-    "stage_call_total", "Stage call count",
+    "stage_call_total",
+    "Stage call count",
     ["kind", "name", "status"],
 )
 
 LLM_CALL_TOTAL = Counter(
-    "llm_call_total", "LLM call count",
+    "llm_call_total",
+    "LLM call count",
     ["model", "status"],
 )
 LLM_TOKEN_TOTAL = Counter(
-    "llm_token_total", "LLM token count",
+    "llm_token_total",
+    "LLM token count",
     ["model", "token_type"],
 )
 LLM_CALL_DURATION_SECONDS = Histogram(
-    "llm_call_duration_seconds", "LLM call duration in seconds",
+    "llm_call_duration_seconds",
+    "LLM call duration in seconds",
     ["model"],
 )
 LLM_COST_TOTAL = Counter(
-    "llm_cost_total", "LLM cost total (USD)",
+    "llm_cost_total",
+    "LLM cost total (USD)",
     ["model"],
 )
 
 RETRIEVAL_EMPTY_TOTAL = Counter(
-    "retrieval_empty_total", "Empty retrieval count",
+    "retrieval_empty_total",
+    "Empty retrieval count",
     ["reason"],
 )
 RETRIEVAL_CHANNEL_TOTAL = Counter(
-    "retrieval_channel_total", "Retrieval channel count",
+    "retrieval_channel_total",
+    "Retrieval channel count",
     ["channel", "state"],
 )
 
 RETRIEVAL_CHANNEL_DURATION = Histogram(
-    "retrieval_channel_duration_seconds", "Retrieval channel duration in seconds",
+    "retrieval_channel_duration_seconds",
+    "Retrieval channel duration in seconds",
     ["channel"],
 )
 
 EVALUATION_SCORE = Gauge(
-    "evaluation_score", "Evaluation metric score",
+    "evaluation_score",
+    "Evaluation metric score",
     ["metric_name"],
 )
 
 EVALUATION_SCORE_HISTOGRAM = Histogram(
-    "evaluation_score_bucket", "Evaluation score distribution",
+    "evaluation_score_bucket",
+    "Evaluation score distribution",
     ["metric_name"],
     buckets=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
 )
@@ -72,14 +83,26 @@ EVALUATION_SCORE_HISTOGRAM = Histogram(
 
 
 class _DummySpan:
-    async def __aenter__(self): return self
-    async def __aexit__(self, *args): pass
-    def span(self, **kwargs): return self
-    def attach_score(self, **kwargs): pass
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
+
+    def span(self, **kwargs):
+        return self
+
+    def attach_score(self, **kwargs):
+        pass
+
     @property
-    def span_id(self): return ""
+    def span_id(self):
+        return ""
+
     @property
-    def trace_id(self): return ""
+    def trace_id(self):
+        return ""
+
     metadata: dict[str, Any] = {}
     output = None
 
@@ -88,15 +111,28 @@ _DUMMY_SPAN = _DummySpan()
 
 
 class _DummyTracer:
-    async def __aenter__(self): return self
-    async def __aexit__(self, *args): pass
-    def root(self, **kwargs): return _DUMMY_SPAN
-    async def flush(self): pass
-    def attach_score(self, **kwargs): pass
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
+
+    def root(self, **kwargs):
+        return _DUMMY_SPAN
+
+    async def flush(self):
+        pass
+
+    def attach_score(self, **kwargs):
+        pass
+
     @property
-    def current_span_id(self): return None
+    def current_span_id(self):
+        return None
+
     @property
-    def trace_id(self): return ""
+    def trace_id(self):
+        return ""
 
 
 class _SpanManager:
@@ -117,7 +153,9 @@ class _SpanManager:
             self._span.status = SpanStatus.ERROR
         self._tracer._pop()
 
-    def span(self, name: str, kind: SpanKind = SpanKind.PIPELINE, *, input: Any = None) -> _SpanManager:
+    def span(
+        self, name: str, kind: SpanKind = SpanKind.PIPELINE, *, input: Any = None
+    ) -> _SpanManager:
         child = SpanContext(
             span_id=next_id_str(),
             trace_id=self._span.trace_id,
@@ -190,7 +228,9 @@ class Tracer:
             self._pop()
         await self.flush()
 
-    def span(self, name: str, kind: SpanKind = SpanKind.PIPELINE, *, input: Any = None) -> _SpanManager:
+    def span(
+        self, name: str, kind: SpanKind = SpanKind.PIPELINE, *, input: Any = None
+    ) -> _SpanManager:
         if not self._active:
             return _DUMMY_SPAN
         parent = self._stack[-1] if self._stack else self._root_span
@@ -204,7 +244,9 @@ class Tracer:
         )
         return _SpanManager(self, span)
 
-    def root(self, name: str, kind: SpanKind = SpanKind.PIPELINE, *, input: Any = None) -> _SpanManager:
+    def root(
+        self, name: str, kind: SpanKind = SpanKind.PIPELINE, *, input: Any = None
+    ) -> _SpanManager:
         if not self._active:
             return _DUMMY_SPAN  # type: ignore[return-value]
         span = SpanContext(
@@ -250,13 +292,28 @@ class Tracer:
         if not self._trace.input:
             first_span = next((s for s in spans if s.input is not None), None)
             if first_span and first_span.input is not None:
-                self._trace.input = str(first_span.input) if not isinstance(first_span.input, str) else first_span.input
+                self._trace.input = (
+                    str(first_span.input)
+                    if not isinstance(first_span.input, str)
+                    else first_span.input
+                )
         if not self._trace.output:
             last_span = next((s for s in reversed(spans) if s.output is not None), None)
             if last_span and last_span.output is not None:
-                self._trace.output = str(last_span.output) if not isinstance(last_span.output, str) else last_span.output
+                self._trace.output = (
+                    str(last_span.output)
+                    if not isinstance(last_span.output, str)
+                    else last_span.output
+                )
 
-    def attach_score(self, metric_name: str, value: float, *, reason: str | None = None, span_id: str | None = None) -> None:
+    def attach_score(
+        self,
+        metric_name: str,
+        value: float,
+        *,
+        reason: str | None = None,
+        span_id: str | None = None,
+    ) -> None:
         if not self._active:
             return
         target_span = None

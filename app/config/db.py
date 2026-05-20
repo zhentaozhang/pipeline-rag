@@ -57,6 +57,8 @@ class PostgresSettings(BaseSettings):
     @computed_field  # type: ignore[misc]
     @property
     def sync_url(self) -> str:
-        return f"postgresql+psycopg2://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}"
+        return (
+            f"postgresql+psycopg2://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}"
+        )
 
     model_config = SettingsConfigDict(env_prefix="POSTGRES_", env_file=_ENV_FILE, extra="ignore")

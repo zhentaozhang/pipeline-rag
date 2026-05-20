@@ -25,7 +25,7 @@ def normalize_step_numeral(text: str) -> str:
         arabic = _NUMERAL_MAP.get(cn)
         if arabic:
             return f"第{arabic}{suffix}"
-        return m.group(0)
+        return str(m.group(0))
 
     return re.sub(r"(第)([零〇一二三四五六七八九十])(步|个步骤|条|项|点)", _cn_to_arabic, text)
 

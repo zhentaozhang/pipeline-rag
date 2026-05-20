@@ -228,6 +228,7 @@ class DocumentParser:
 
         def _do_parse() -> Any:
             return md.convert(str(path))
+
         result = await loop.run_in_executor(None, _do_parse)
         return ParseResult(text=result.text_content or "", metadata={}, file_type="html")
 

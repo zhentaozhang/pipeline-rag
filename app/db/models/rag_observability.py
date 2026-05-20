@@ -166,7 +166,9 @@ class ChatExchangeFeedback(Base, TimestampMixin):
     tenant_id: Mapped[str] = mapped_column(
         String(64), default="default", server_default="default", nullable=False
     )
-    rating: Mapped[int] = mapped_column(Integer, nullable=False, comment="1=thumbs_up, -1=thumbs_down")
+    rating: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="1=thumbs_up, -1=thumbs_down"
+    )
     comment: Mapped[str | None] = mapped_column(Text, nullable=True, comment="可选评论文本")
 
     status: Mapped[int] = mapped_column(Integer, default=1)

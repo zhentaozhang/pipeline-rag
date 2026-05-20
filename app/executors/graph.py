@@ -81,7 +81,7 @@ class GraphExecutor(ConversationExecutor):
             nav_decision.summary_text,
         )
 
-        async with (tracer.span("graph_query", kind=SpanKind.RETRIEVAL) if tracer else _NoopSpan()):
+        async with tracer.span("graph_query", kind=SpanKind.RETRIEVAL) if tracer else _NoopSpan():
             graph_result: GraphQueryResult
             if nav_decision.action == NAV_ACTION_ADJACENCY:
                 result = await engine.find_section_with_siblings(doc_id, section_node_id)
@@ -205,7 +205,7 @@ class GraphThenEvidenceExecutor(ConversationExecutor):
         )
 
         engine = StructureGraphQueryEngine()
-        async with (tracer.span("graph_query", kind=SpanKind.RETRIEVAL) if tracer else _NoopSpan()):
+        async with tracer.span("graph_query", kind=SpanKind.RETRIEVAL) if tracer else _NoopSpan():
             graph_result = await engine.build_graph_result(
                 doc_id=doc_id,
                 target_section_node_id=section_node_id,

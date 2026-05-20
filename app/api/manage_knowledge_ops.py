@@ -151,7 +151,7 @@ async def get_route_trace_page_post(
             question=t.question,
             rewrite_question=t.rewrite_question,
             mode=t.mode,
-            confidence=float(t.confidence) if t.confidence is not None else None,
+            confidence=float(t.confidence) if t.confidence is not None else 0.0,
             route_status=str(t.route_status),
             created_at=t.created_at.isoformat() if t.created_at else None,
         )

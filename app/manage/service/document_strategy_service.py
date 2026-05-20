@@ -44,6 +44,7 @@ PLAN_STATUS_CONFIRMED = 2
 
 async def get_next_plan_version(db: AsyncSession, doc_id: str) -> int:
     from app.db.models.document import DocumentStrategyPlan
+
     """获取下一个 plan_version"""
     from app.db.models.document import Document
 
@@ -64,6 +65,7 @@ async def get_next_plan_version(db: AsyncSession, doc_id: str) -> int:
 
 async def recommend_strategy(db: AsyncSession, doc_id: str) -> None:
     from app.db.models.document import DocumentStrategyPlan, DocumentStrategyStep
+
     """
     AI (或启发式) 推荐适合该文档的切块策略。
      生成 PARENT 和 CHILD 双管道步骤，包含主策略 + 优化/兜底/增强策略。
@@ -293,6 +295,7 @@ async def normalize_steps(
     request_child_strategy_types: list[int],
 ) -> list[dict]:
     from app.db.models.document import DocumentStrategyStep
+
     """规范化步骤——用户调整后重新生成步骤"""
     from app.db.models.document import Document
 
@@ -389,6 +392,7 @@ async def normalize_steps(
 
 async def confirm_strategy(db: AsyncSession, doc_id: str, plan_id: int, user_id: int) -> None:
     from app.db.models.document import DocumentStrategyPlan
+
     """人工确认策略计划，触发最终生效"""
     from app.common.enums import DocumentStrategyStatusEnum
     from app.db.models.document import Document
@@ -418,6 +422,7 @@ async def confirm_strategy(db: AsyncSession, doc_id: str, plan_id: int, user_id:
 
 async def build_chunks(db: AsyncSession, doc_id: str, text: str, task_id: str) -> list[dict]:
     from app.db.models.document import DocumentStrategyPlan, DocumentStrategyStep
+
     """批量构建 Parent-Child 切块关联关系"""
     from app.db.models.document import Document, DocumentParentBlock
 

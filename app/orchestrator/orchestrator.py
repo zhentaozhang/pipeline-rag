@@ -139,8 +139,7 @@ def _build_orchestrator_pipeline() -> Pipeline[PrepareContext, ExecutionPlan]:
             ),
             PipelineStage(QueryRewriteStage()),
             PipelineStage(KnowledgeRoutingStage()).when(
-                lambda ctx: ctx.chat_mode
-                in (ChatQueryMode.AUTO_DOCUMENT, ChatQueryMode.DOCUMENT)
+                lambda ctx: ctx.chat_mode in (ChatQueryMode.AUTO_DOCUMENT, ChatQueryMode.DOCUMENT)
             ),
             PipelineStage(NavigationAnalysisStage()),
             PipelineStage(FinalPlanBuildingStage()),

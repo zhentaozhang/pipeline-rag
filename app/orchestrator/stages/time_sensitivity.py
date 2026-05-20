@@ -11,7 +11,6 @@ from app.orchestrator.time_helper import TimeSensitiveQueryHelper
 
 
 class TimeSensitivityStage(Stage[PrepareContext, "ExecutionPlan"]):
-
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:
         ctx.requires_current_date_anchoring = (
             TimeSensitiveQueryHelper.requires_current_date_anchoring(ctx.question)

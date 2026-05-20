@@ -10,7 +10,6 @@ logger = structlog.get_logger(__name__)
 class ElasticsearchDocumentNavigationIndexService:
     """文档导航结构索引服务"""
 
-
     async def delete_document(self, doc_id: str) -> None:
         """删除指定文档的所有章节索引"""
         es = get_es()
@@ -72,8 +71,6 @@ class ElasticsearchDocumentNavigationIndexService:
         except Exception as e:
             logger.error("es search_sections failed", doc_id=doc_id, error=str(e), exc_info=True)
             return []
-
-
 
 
 class ElasticsearchKnowledgeRouteIndexService:

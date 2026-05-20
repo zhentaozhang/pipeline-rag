@@ -31,14 +31,15 @@ class ContextPrecisionMetric(Metric):
                 metadata={},
             )
 
-        chunks_text = "\n\n---\n\n".join(
-            f"Chunk {i+1}: {c}" for i, c in enumerate(contexts)
-        )
+        chunks_text = "\n\n---\n\n".join(f"Chunk {i + 1}: {c}" for i, c in enumerate(contexts))
         resp = self.eval_llm.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": _PROMPT},
-                {"role": "user", "content": f"Question: {question}\n\nContext chunks:\n{chunks_text}"},
+                {
+                    "role": "user",
+                    "content": f"Question: {question}\n\nContext chunks:\n{chunks_text}",
+                },
             ],
             temperature=0.0,
         )

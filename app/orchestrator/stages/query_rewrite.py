@@ -14,7 +14,6 @@ logger = structlog.get_logger(__name__)
 
 
 class QueryRewriteStage(Stage[PrepareContext, "ExecutionPlan"]):
-
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:
         rewrite_service = ChatQueryRewriteService()
         rewrite_result = await rewrite_service.rewrite(

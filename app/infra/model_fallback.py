@@ -45,7 +45,9 @@ class ModelFallbackManager:
             self._chain = chain
         self._current_index = 0
         self._switched = False
-        logger.info("模型回退管理器初始化", chain=self._chain, current=self._chain[self._current_index])
+        logger.info(
+            "模型回退管理器初始化", chain=self._chain, current=self._chain[self._current_index]
+        )
 
     def _switch_to_next(self) -> str | None:
         """切换到下一个可用模型"""

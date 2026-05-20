@@ -50,9 +50,7 @@ class ObservabilityRepository:
         return (await db.execute(stmt)).scalars().all(), total or 0
 
     @staticmethod
-    async def run_evaluation(
-        db: AsyncSession, dataset_ids: list[int] | None = None
-    ) -> list:
+    async def run_evaluation(db: AsyncSession, dataset_ids: list[int] | None = None) -> list:
         stmt = select(RagEvaluationDataset)
         if dataset_ids:
             stmt = stmt.where(RagEvaluationDataset.id.in_(dataset_ids))

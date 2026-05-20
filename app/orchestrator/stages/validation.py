@@ -13,7 +13,6 @@ from app.orchestrator.context import PrepareContext
 
 
 class ValidationStage(Stage[PrepareContext, "ExecutionPlan"]):
-
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:
         settings = get_settings()
         if not settings.rag.enabled:

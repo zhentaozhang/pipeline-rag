@@ -123,5 +123,3 @@ class NavigationIndexer:
                 exc_info=True,
             )
             return []
-
-

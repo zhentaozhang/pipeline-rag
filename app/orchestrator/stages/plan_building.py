@@ -9,7 +9,6 @@ from app.orchestrator.plan_builder import PlanBuilder
 
 
 class FinalPlanBuildingStage(Stage[PrepareContext, "ExecutionPlan"]):
-
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:
         plan = PlanBuilder.build_final_plan(ctx)
         return StageResult(signal=StageSignal.TERMINATE, plan=plan)

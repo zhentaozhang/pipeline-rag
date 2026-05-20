@@ -81,16 +81,12 @@ async def get_session_detail(db: AsyncSession, cid: str) -> dict[str, Any] | Non
     memory = (await db.execute(stmt_mem)).scalar_one_or_none()
 
     exchange_count = (
-        await db.execute(
-            select(func.count()).where(ConversationExchange.conversation_id == cid)
-        )
+        await db.execute(select(func.count()).where(ConversationExchange.conversation_id == cid))
     ).scalar() or 0
 
     try:
         checkpoint_count = (
-            await db.execute(
-                select(func.count()).where(GraphCheckpoint.thread_id == cid)
-            )
+            await db.execute(select(func.count()).where(GraphCheckpoint.thread_id == cid))
         ).scalar() or 0
     except Exception:
         checkpoint_count = 0
@@ -133,27 +129,29 @@ async def get_session_detail(db: AsyncSession, cid: str) -> dict[str, Any] | Non
             ex_debug_trace = json.loads(ex.debug_trace_json) if ex.debug_trace_json else None
         except (json.JSONDecodeError, TypeError):
             ex_debug_trace = None
-        exchange_dicts.append({
-            "exchangeId": str(ex.id),
-            "question": ex.question or "",
-            "answer": ex.answer or "",
-            "thinkingSteps": steps,
-            "references": refs,
-            "recommendations": recs,
-            "status": str(ex.status or ""),
-            "errorMessage": ex.error_message or "",
-            "createdAt": ex.created_at.isoformat() if ex.created_at else None,
-            "updatedAt": ex.updated_at.isoformat() if ex.updated_at else None,
-            "tokensUsed": ex.tokens_used,
-            "totalResponseTimeMs": ex.total_response_time_ms,
-            "executionMode": ex.execution_mode
-            or (
-                ex_debug_trace.get("execution_mode") or ex_debug_trace.get("executionMode", "")
-                if ex_debug_trace
-                else ""
-            ),
-            "debugTrace": _camel_case_keys(ex_debug_trace),
-        })
+        exchange_dicts.append(
+            {
+                "exchangeId": str(ex.id),
+                "question": ex.question or "",
+                "answer": ex.answer or "",
+                "thinkingSteps": steps,
+                "references": refs,
+                "recommendations": recs,
+                "status": str(ex.status or ""),
+                "errorMessage": ex.error_message or "",
+                "createdAt": ex.created_at.isoformat() if ex.created_at else None,
+                "updatedAt": ex.updated_at.isoformat() if ex.updated_at else None,
+                "tokensUsed": ex.tokens_used,
+                "totalResponseTimeMs": ex.total_response_time_ms,
+                "executionMode": ex.execution_mode
+                or (
+                    ex_debug_trace.get("execution_mode") or ex_debug_trace.get("executionMode", "")
+                    if ex_debug_trace
+                    else ""
+                ),
+                "debugTrace": _camel_case_keys(ex_debug_trace),
+            }
+        )
 
     vo = SessionDetailVO(
         id=session.id,
@@ -236,9 +234,7 @@ async def recover_session(db: AsyncSession, cid: str) -> dict[str, Any]:
 
 
 async def pin_session(db: AsyncSession, cid: str, pinned: bool) -> dict[str, Any]:
-    await _update_session_field(
-        db, cid, is_pinned=pinned, pinned_at=func.now() if pinned else None
-    )
+    await _update_session_field(db, cid, is_pinned=pinned, pinned_at=func.now() if pinned else None)
     return {"conversationId": cid, "pinned": pinned}
 
 
@@ -331,7 +327,9 @@ async def list_sessions(db: AsyncSession, req: SessionListRequest) -> dict[str, 
             message_count=exchange_counts.get(cid, 0) * 2,
             latest_user_message=latest_questions.get(cid, ""),
             latest_assistant_message=latest_answers.get(cid, ""),
-            latest_exchange_id=str(latest_exchange_ids[cid]) if cid in latest_exchange_ids else None,
+            latest_exchange_id=str(latest_exchange_ids[cid])
+            if cid in latest_exchange_ids
+            else None,
             latest_turn_status=latest_statuses.get(cid, ""),
             latest_turn_error_message=latest_error_messages.get(cid, ""),
         )

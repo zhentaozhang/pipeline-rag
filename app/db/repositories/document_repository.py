@@ -55,9 +55,7 @@ class DocumentRepository:
         return result.scalars().all(), total or 0
 
     @staticmethod
-    async def get_by_doc_ids(
-        db: AsyncSession, doc_ids: list[str]
-    ) -> dict[str, Document]:
+    async def get_by_doc_ids(db: AsyncSession, doc_ids: list[str]) -> dict[str, Document]:
         if not doc_ids:
             return {}
         stmt = select(Document).where(Document.doc_id.in_(doc_ids))
@@ -140,7 +138,9 @@ class DocumentRepository:
     @staticmethod
     async def delete_structure_nodes_by_doc_id(db: AsyncSession, doc_internal_id: int) -> None:
         await db.execute(
-            delete(DocumentStructureNode).where(DocumentStructureNode.document_id == doc_internal_id)
+            delete(DocumentStructureNode).where(
+                DocumentStructureNode.document_id == doc_internal_id
+            )
         )
 
     @staticmethod
@@ -204,7 +204,9 @@ class DocumentRepository:
 
     @staticmethod
     async def delete_profile_by_doc_id(db: AsyncSession, doc_internal_id: int) -> None:
-        await db.execute(delete(DocumentProfile).where(DocumentProfile.document_id == doc_internal_id))
+        await db.execute(
+            delete(DocumentProfile).where(DocumentProfile.document_id == doc_internal_id)
+        )
 
     @staticmethod
     async def get_strategy_plan_by_doc_id(
@@ -221,17 +223,13 @@ class DocumentRepository:
     @staticmethod
     async def delete_strategy_steps_by_doc_id(db: AsyncSession, doc_internal_id: int) -> None:
         await db.execute(
-            delete(DocumentStrategyStep).where(
-                DocumentStrategyStep.document_id == doc_internal_id
-            )
+            delete(DocumentStrategyStep).where(DocumentStrategyStep.document_id == doc_internal_id)
         )
 
     @staticmethod
     async def delete_strategy_plans_by_doc_id(db: AsyncSession, doc_internal_id: int) -> None:
         await db.execute(
-            delete(DocumentStrategyPlan).where(
-                DocumentStrategyPlan.document_id == doc_internal_id
-            )
+            delete(DocumentStrategyPlan).where(DocumentStrategyPlan.document_id == doc_internal_id)
         )
 
     @staticmethod

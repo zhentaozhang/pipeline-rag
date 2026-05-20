@@ -81,7 +81,11 @@ async def list_document_chunks(
                 char_count=c.char_count,
                 token_count=c.token_count,
                 vector_status=c.vector_status,
-                vector_status_name=_VECTOR_STATUS_NAMES.get(DocumentVectorStatusEnum(c.vector_status), "") if c.vector_status else "",
+                vector_status_name=_VECTOR_STATUS_NAMES.get(
+                    DocumentVectorStatusEnum(c.vector_status), ""
+                )
+                if c.vector_status
+                else "",
                 parent_block_id=c.parent_block_id,
                 parent_block_no=pb_ref.parent_no if pb_ref else None,
                 parent_child_count=pb_ref.child_count if pb_ref else None,
@@ -135,7 +139,11 @@ async def get_document_chunk_detail(
         char_count=chunk.char_count,
         token_count=chunk.token_count,
         vector_status=chunk.vector_status,
-        vector_status_name=_VECTOR_STATUS_NAMES.get(DocumentVectorStatusEnum(chunk.vector_status), "") if chunk.vector_status else "",
+        vector_status_name=_VECTOR_STATUS_NAMES.get(
+            DocumentVectorStatusEnum(chunk.vector_status), ""
+        )
+        if chunk.vector_status
+        else "",
         parent_block_id=chunk.parent_block_id,
     )
 
@@ -169,7 +177,11 @@ async def get_document_chunk_detail(
                     char_count=sc.char_count,
                     token_count=sc.token_count,
                     vector_status=sc.vector_status,
-                    vector_status_name=_VECTOR_STATUS_NAMES.get(DocumentVectorStatusEnum(sc.vector_status), "") if sc.vector_status else "",
+                    vector_status_name=_VECTOR_STATUS_NAMES.get(
+                        DocumentVectorStatusEnum(sc.vector_status), ""
+                    )
+                    if sc.vector_status
+                    else "",
                     parent_block_id=sc.parent_block_id,
                 )
             )

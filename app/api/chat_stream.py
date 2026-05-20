@@ -19,6 +19,7 @@ class ChatRequest(BaseModel):
     selected_document_id: str | None = Field(default=None, alias="selectedDocumentId")
     model_config = {"populate_by_name": True}
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
