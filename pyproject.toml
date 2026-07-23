@@ -1,7 +1,7 @@
 [project]
 name = "pipeline-rag"
 version = "0.1.0"
-description = "Enterprise-grade AI Agent + RAG platform built with FastAPI and LangGraph"
+description = "AgenticRAG - 企业级 AI Agent 智能体平台"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
