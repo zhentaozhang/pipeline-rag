@@ -1,6 +1,6 @@
 <div align="center">
-  <h1>Agentic RAG</h1>
-  <p><b>企业级 AI Agent 智能体平台</b> — 检索增强 + 多智能体协作 + 长期记忆管理 + 工具调用</p>
+  <h1>pipeline-rag</h1>
+  <p><b>AgenticRAG — 企业级 AI Agent 智能体平台</b> — 检索增强 + 多智能体协作 + 长期记忆管理 + 工具调用</p>
 
   <p>
     <a href="#项目简介">简介</a> •
@@ -321,7 +321,7 @@ flowchart TB
 ## 项目结构
 
 ```
-agentic-rag/
+pipeline-rag/
 ├── app/                              # 后端应用
 │   ├── main.py                       # 应用入口 & Lifespan
 │   ├── api/                          # REST API 路由
