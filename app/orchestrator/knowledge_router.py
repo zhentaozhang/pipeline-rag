@@ -88,10 +88,9 @@ async def route_by_document(
     if not document_id:
         return DocumentRouteDecision(execution_mode="RETRIEVAL")
 
-    from app.orchestrator.navigation_analyzer import NavigationAnalyzer
+    from app.orchestrator.navigation_analyzer import analyze as nav_analyze
 
-    nav = NavigationAnalyzer()
-    nav_decision = await nav.analyze(question=question, doc_id=document_id)
+    nav_decision = await nav_analyze(doc_id=document_id, original_question=question)
 
     if nav_decision is None:
         return DocumentRouteDecision(execution_mode="RETRIEVAL", doc_ids=[document_id])

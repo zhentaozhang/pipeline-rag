@@ -209,7 +209,7 @@ class DocumentStructureTreeValidator:
         slug = re.sub(r"\s+", "-", normalized)
         # Python covers CJK Unified + Ext A/B/C/D/E/F
         slug = re.sub(
-            r"[^\w\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf\u2ceb0-\u2ebef.-]",
+            r"[^\w\u4e00-\u9fff\u3400-\u4dbf\U00020000-\U0002A6DF\U0002A700-\U0002B73F\U0002B740-\U0002B81F\U0002B820-\U0002CEAF\U0002CEB0-\U0002EBEF.-]",
             "",
             slug,
         )

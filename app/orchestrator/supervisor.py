@@ -3,6 +3,7 @@ Supervisor Agent — LLM 问题分解 + SubPlan 生成
 """
 
 import json
+import uuid
 
 import structlog
 from openai import AsyncOpenAI
@@ -16,7 +17,7 @@ logger = structlog.get_logger(__name__)
 
 
 class SupervisorService:
-    """LLM 驱动的任务分解服务"""
+    """LLM 驱动的任务分解服务（薄门面：优先走 LangGraph supervisor 图，失败回退 legacy）"""
 
     def __init__(self) -> None:
         self._openai: AsyncOpenAI | None = None
@@ -36,6 +37,63 @@ class SupervisorService:
 
         if plan.mode not in (ExecutionMode.RETRIEVAL, ExecutionMode.RAG_CHAT):
             return plan
+
+        graph_sub_plans, graph_ran = await self._decompose_via_graph(plan)
+        if graph_sub_plans is not None:
+            plan.supervisor_mode = True
+            plan.mode = ExecutionMode.MULTI_AGENT
+            plan.sub_plans = graph_sub_plans
+            plan.aggregation_style = "synthesize"
+            logger.info(
+                "supervisor decomposed via graph",
+                count=len(graph_sub_plans),
+                modes=[sp.mode.value for sp in graph_sub_plans],
+            )
+            return plan
+
+        if graph_ran:
+            # 图明确判定不合格（结构校验失败/评审重试耗尽）：与 legacy 耗尽语义一致，
+            # 直接保持单模式返回，不重跑 legacy（避免二次 LLM 成本与结果不确定性）
+            logger.warning("supervisor graph rejected sub-plans, keeping single mode")
+            return plan
+
+        return await self._decompose_legacy(plan)
+
+    async def _decompose_via_graph(self, plan: ExecutionPlan) -> tuple[list[SubPlan] | None, bool]:
+        """调用 LangGraph supervisor 图。
+
+        返回 (sub_plans, graph_ran)：
+        - sub_plans 非 None：图评审通过，sub_plans 可直接使用
+        - graph_ran=True 且 sub_plans=None：图运行但判定不合格（调用方应直接保持单模式）
+        - graph_ran=False：图不可用或异常（调用方应回退 legacy）
+        """
+        try:
+            from app.orchestrator.supervisor_graph import build_supervisor_graph
+
+            graph = build_supervisor_graph()
+            if graph is None:
+                return None, False
+            result = await graph.ainvoke(
+                {"plan": plan, "feedback": ""},
+                config={"configurable": {"thread_id": f"sup-{uuid.uuid4().hex}"}},
+            )
+            sub_plans = result.get("sub_plans")
+            if result.get("review_status") == "approved" and sub_plans:
+                for sp in sub_plans:
+                    sp.review_status = "approved"
+                    sp.review_feedback = result.get("feedback", "") or ""
+                return sub_plans, True
+            return None, True
+        except Exception:
+            logger.exception("supervisor_graph_decompose_failed, falling back to legacy")
+            return None, False
+
+    async def _decompose_legacy(self, plan: ExecutionPlan) -> ExecutionPlan:
+        """legacy 分解：LLM 分解 + 结构验证 + 评审重试循环（原 decompose 主体）。"""
+
+        from app.config import get_settings
+
+        settings = get_settings()
 
         try:
             prompt = self._render_prompt(plan)
@@ -69,12 +127,12 @@ class SupervisorService:
         if not raw_plans or len(raw_plans) < 2:
             return plan
 
-        sub_plans = self._build_sub_plans(raw_plans)
+        sub_plans = _build_sub_plans(raw_plans)
         if not sub_plans:
             return plan
 
         # ── Phase A: 结构验证 ────────────────────────────────
-        is_valid, errors = self._validate_sub_plans(sub_plans)
+        is_valid, errors = _validate_sub_plans(sub_plans)
         if not is_valid:
             logger.warning("sub_plan structural validation failed", errors=errors)
             return plan
@@ -107,10 +165,10 @@ class SupervisorService:
                     raw_plans = result.get("sub_plans", [])
                     if not raw_plans or len(raw_plans) < 2:
                         return plan
-                    sub_plans = self._build_sub_plans(raw_plans)
+                    sub_plans = _build_sub_plans(raw_plans)
                     if not sub_plans:
                         return plan
-                    is_valid, errors = self._validate_sub_plans(sub_plans)
+                    is_valid, errors = _validate_sub_plans(sub_plans)
                     if not is_valid:
                         return plan
                 except Exception:
@@ -190,41 +248,41 @@ class SupervisorService:
             logger.exception("sub_plan_review_failed")
             return True, ""
 
-    @staticmethod
-    def _build_sub_plans(raw_plans: list[dict]) -> list[SubPlan]:
-        sub_plans: list[SubPlan] = []
-        for raw in raw_plans:
-            mode_str = raw.get("mode", "RETRIEVAL").upper()
-            try:
-                mode = ExecutionMode(mode_str)
-            except ValueError:
-                logger.warning("unknown mode in sub_plan", mode=mode_str)
-                continue
-            sub_plans.append(
-                SubPlan(
-                    id=raw.get("id", str(len(sub_plans) + 1)),
-                    mode=mode,
-                    question=raw.get("question", ""),
-                    depends_on=raw.get("depends_on", []),
-                )
+
+def _build_sub_plans(raw_plans: list[dict]) -> list[SubPlan]:
+    sub_plans: list[SubPlan] = []
+    for raw in raw_plans:
+        mode_str = raw.get("mode", "RETRIEVAL").upper()
+        try:
+            mode = ExecutionMode(mode_str)
+        except ValueError:
+            logger.warning("unknown mode in sub_plan", mode=mode_str)
+            continue
+        sub_plans.append(
+            SubPlan(
+                id=raw.get("id", str(len(sub_plans) + 1)),
+                mode=mode,
+                question=raw.get("question", ""),
+                depends_on=raw.get("depends_on", []),
             )
-        return sub_plans
+        )
+    return sub_plans
 
-    @staticmethod
-    def _validate_sub_plans(sub_plans: list[SubPlan]) -> tuple[bool, list[str]]:
-        """结构验证：检查依赖引用有效、无重复 ID、问题非空。"""
-        errors: list[str] = []
-        ids = {sp.id for sp in sub_plans}
 
-        if len(ids) != len(sub_plans):
-            errors.append("子计划 ID 存在重复")
-            return False, errors
+def _validate_sub_plans(sub_plans: list[SubPlan]) -> tuple[bool, list[str]]:
+    """结构验证：检查依赖引用有效、无重复 ID、问题非空。"""
+    errors: list[str] = []
+    ids = {sp.id for sp in sub_plans}
 
-        for sp in sub_plans:
-            if not sp.question or not sp.question.strip():
-                errors.append(f"子计划 {sp.id} 问题为空")
-            for dep_id in sp.depends_on:
-                if dep_id not in ids:
-                    errors.append(f"子计划 {sp.id} 依赖 {dep_id} 不存在")
+    if len(ids) != len(sub_plans):
+        errors.append("子计划 ID 存在重复")
+        return False, errors
 
-        return len(errors) == 0, errors
+    for sp in sub_plans:
+        if not sp.question or not sp.question.strip():
+            errors.append(f"子计划 {sp.id} 问题为空")
+        for dep_id in sp.depends_on:
+            if dep_id not in ids:
+                errors.append(f"子计划 {sp.id} 依赖 {dep_id} 不存在")
+
+    return len(errors) == 0, errors

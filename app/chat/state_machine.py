@@ -122,6 +122,10 @@ class ConversationStateMachine:
     def state(self) -> ConversationState:
         return self._state
 
+    @property
+    def transition_count(self) -> int:
+        return self._transition_count
+
     # ── 钩子注册 ────────────────────────────────────────────────────
 
     def on_enter(self, state: ConversationState, hook: Callable) -> None:

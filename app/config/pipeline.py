@@ -60,6 +60,8 @@ class RAGSettings(BaseSettings):
     quality_max_retries: int = 2
     quality_min_score: float = 7.0
     quality_model: str = ""
+    corrective_retrieval_enabled: bool = True
+    corrective_retrieval_max_rounds: int = 1
 
     model_config = SettingsConfigDict(env_prefix="RAG_", env_file=_ENV_FILE, extra="ignore")
 

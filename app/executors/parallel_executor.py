@@ -75,8 +75,6 @@ class ParallelExecutor(ConversationExecutor):
             )
             return
 
-        self.task.executor_type = self.mode
-
         conv_id = self.task.conversation_id
         exch_id = self.task.exchange_id
 

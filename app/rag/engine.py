@@ -162,6 +162,53 @@ class RagRetrievalEngine:
         context.sub_question_evidence_list = evidence_list
         return context
 
+    async def retrieve_with_correction(
+        self, plan: ExecutionPlan, tracer: Any = None
+    ) -> RagRetrievalContext:
+        """Corrective Retrieval：证据不足时改写查询重查，最多 corrective_retrieval_max_rounds 轮。"""
+        context = await self.retrieve(plan, tracer=tracer)
+        max_rounds = settings.rag.corrective_retrieval_max_rounds
+        if not settings.rag.corrective_retrieval_enabled or max_rounds <= 0:
+            return context
+
+        base_question = (plan.rewritten_question or plan.original_question).strip()
+        corrected = False
+        for _ in range(max_rounds):
+            if not context.is_empty:
+                break
+            rewritten = await self._rewrite_query(base_question)
+            if not rewritten or rewritten == base_question:
+                break
+            corrected = True
+            plan.retrieval_question = rewritten
+            plan.retrieval_sub_questions = [rewritten]
+            context = await self.retrieve(plan, tracer=tracer)
+            context.retrieval_notes.append(
+                f"检索证据不足，已按改写查询重查：{rewritten[:80]}"
+            )
+
+        if corrected:
+            logger.info(
+                "corrective_retrieval_done",
+                retrieval_question=context.retrieval_question[:50],
+                still_empty=context.is_empty,
+                notes=context.retrieval_notes,
+            )
+        return context
+
+    async def _rewrite_query(self, question: str) -> str:
+        """复用查询改写服务，强制改写为更利于检索的形式。"""
+        if not question:
+            return ""
+        try:
+            from app.orchestrator.query_rewriter import ChatQueryRewriteService
+
+            result = await ChatQueryRewriteService().rewrite(question, force=True)
+            return (result.rewritten or "").strip()
+        except Exception as e:
+            logger.warning("corrective_retrieval_rewrite_failed", error=str(e), exc_info=True)
+            return ""
+
     async def _retrieve_one(
         self,
         sub_q: SubQuestion,

@@ -26,7 +26,12 @@ class PrepareContext:
     chat_mode: ChatQueryMode
     tenant_id: str = "default"
     exchange_id: int = 0
-    tenant_id: str = "default"
+
+    # ── 原始文档指定（PrepareRequest 直传）──────────────────────────
+    original_doc_ids: list[str] | None = None
+    original_selected_document_id: str | None = None
+    original_selected_document_name: str | None = None
+    original_selected_task_id: str | None = None
 
     # ── 时间感知（TimeSensitivityStage 填充）────────────────────────
     current_date: date = field(default_factory=date.today)

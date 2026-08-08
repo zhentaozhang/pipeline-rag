@@ -42,7 +42,7 @@ def _normalise_tool_args(args: dict | str, fallback_query: str) -> dict:
             try:
                 args = _json.loads(args)
             except Exception:
-                logger.debug("tool args json parse failed, using raw string", raw=args[:80])
+                logger.debug("tool args json parse failed, using raw string: %s", args[:80])
                 args = {"query": args.strip()}
         else:
             args = {}
@@ -64,17 +64,12 @@ async def _call_with_retry(tool_fn: Any, args: dict, max_retries: int = 2) -> st
             return str(result)
         except Exception as e:
             last_error = str(e)
-            logger.debug(
-                "tool call attempt failed",
-                attempt=attempt + 1,
-                max_retries=max_retries,
-                error=str(e),
-            )
+            logger.debug("tool call attempt failed: attempt=%s max_retries=%s error=%s", attempt + 1, max_retries, str(e))
             if attempt < max_retries:
                 delay_ms = min(200 * (2**attempt), 1200)
                 delay_ms += _random.randint(0, 100)
                 await asyncio.sleep(delay_ms / 1000)
-    logger.warning("tool call exhausted retries", max_retries=max_retries, error=last_error)
+    logger.warning("tool call exhausted retries: max_retries=%s error=%s", max_retries, last_error)
     return f"工具执行失败（已重试{max_retries}次）：{last_error}"
 
 
@@ -85,7 +80,7 @@ async def _tavily_fallback(
     try:
         return await _tavily_search_api(query, topic=topic, max_results=max_results)
     except Exception as e:
-        logger.warning("tavily fallback search failed", query=query[:80], error=str(e))
+        logger.warning("tavily fallback search failed: query=%s error=%s", query[:80], str(e))
         return f"搜索服务不可用：{str(e)}"
 
 
@@ -208,7 +203,7 @@ async def call_tool(state: AgentState):
         tool_args = tool_call["args"]
 
         if await approval_policy.require_approval(tool_name, tool_args):
-            logger.warning("tool_approval_required, blocking", tool_name=tool_name)
+            logger.warning("tool_approval_required, blocking tool: %s", tool_name)
             tool_messages.append(
                 ToolMessage(
                     content=f"工具 {tool_name} 需要人工审批，当前模式不支持自动执行。",
@@ -229,7 +224,7 @@ async def call_tool(state: AgentState):
             )
             result = await _call_with_retry(fn, normalised_args)
         else:
-            logger.warning("unknown tool", tool_name=tool_name)
+            logger.warning("unknown tool: %s", tool_name)
             tool_messages.append(
                 ToolMessage(
                     content=f"未知工具 {tool_name}，当前可用工具：{', '.join(SkillRegistry.list_tools().keys())}",

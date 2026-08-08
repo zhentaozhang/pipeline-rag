@@ -34,7 +34,7 @@ def normalize_text(text: str) -> str:
     val = (text or "").strip()
     if not val:
         return ""
-    return re.sub(r"[\s>`*#_\-，,。；;：:（）()\u201c\u201d\"'\[\]]+", "", val).lower()
+    return re.sub(r"[\s>`*#_\-，,。；;：:（）()\u201c\u201d\"'\[\]？！…～%]+", "", val).lower()
 
 
 def first_non_blank(primary: str | None, fallback: str) -> str:

@@ -8,14 +8,19 @@ from __future__ import annotations
 
 import asyncio
 import io
+import os
+import signal
 import sys
 import traceback
 from contextlib import redirect_stdout
+from pathlib import Path
 
 import structlog
 from langchain_core.tools import tool
 
 logger = structlog.get_logger(__name__)
+
+_PROJECT_ROOT = str(Path(__file__).resolve().parents[3])
 
 _SAFE_BUILTINS: dict[str, object] = {
     "abs": abs,
@@ -96,8 +101,32 @@ def _check_code_safety(code: str) -> str | None:
                 return f"危险函数被禁止: {node.func.id}"
             elif isinstance(node.func, ast.Attribute) and node.func.attr in ("open",):
                 return "文件操作被禁止: open"
+        if isinstance(node, ast.Attribute) and node.attr in _FORBIDDEN_ATTRS:
+            return f"受限属性访问被禁止: {node.attr}"
 
     return None
+
+
+# 对象逃逸属性链：访问这些 dunder 属性可绕过白名单拿到内部对象（Popen 等）
+_FORBIDDEN_ATTRS = frozenset(
+    {
+        "__class__",
+        "__bases__",
+        "__base__",
+        "__mro__",
+        "__subclasses__",
+        "__globals__",
+        "__closure__",
+        "__code__",
+        "__builtins__",
+        "__getattribute__",
+        "__setattr__",
+        "__delattr__",
+        "__dict__",
+        "__module__",
+        "__qualname__",
+    }
+)
 
 
 def _execute_sync(code: str) -> str:
@@ -139,7 +168,7 @@ def _execute_sync(code: str) -> str:
 async def code_executor(code: str, timeout: int = 10) -> str:
     """
     执行 Python 代码并返回运行结果。适用于数据分析、数值计算、格式转换等任务。
-    代码在沙箱环境中运行，不支持 import、文件操作、网络请求。
+    代码在沙箱子进程中运行，不支持 import、文件操作、网络请求。
 
     Args:
         code: 要执行的 Python 代码
@@ -151,16 +180,58 @@ async def code_executor(code: str, timeout: int = 10) -> str:
     if not code or not code.strip():
         return "代码内容不能为空。"
 
-    loop = asyncio.get_running_loop()
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        _RUNNER_CODE,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=_PROJECT_ROOT,
+        start_new_session=os.name == "posix",
+    )
     try:
-        result = await asyncio.wait_for(
-            loop.run_in_executor(None, _execute_sync, code),
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(code.encode("utf-8")),
             timeout=timeout,
         )
-        logger.info("code_executor success", code_len=len(code), timeout=timeout)
-        return result
     except TimeoutError:
+        _kill_process_group(proc)
+        await proc.wait()
         return f"代码执行超时（{timeout}秒），请简化计算或分段执行。"
-    except Exception as e:
-        logger.exception("code_executor failed", code_len=len(code))
-        return f"代码执行异常: {e}"
+    except Exception:
+        _kill_process_group(proc)
+        await proc.wait()
+        logger.exception("code_executor failed", code_len=len(code), timeout=timeout)
+        return "代码执行失败，请重试或简化代码。"
+
+    stdout_text = stdout_bytes.decode("utf-8", errors="replace")
+    stderr_text = stderr_bytes.decode("utf-8", errors="replace")
+
+    if stderr_text:
+        if stdout_text:
+            return f"执行结果:\n{stdout_text}\n错误:\n{stderr_text}"
+        return f"错误:\n{stderr_text}"
+    if stdout_text:
+        return stdout_text
+    return "代码执行成功，无输出。"
+
+
+def _kill_process_group(proc: asyncio.subprocess.Process) -> None:
+    """杀掉子进程及其整个进程组（POSIX）。"""
+    if proc.returncode is not None:
+        return
+    try:
+        if os.name == "posix":
+            os.killpg(proc.pid, signal.SIGKILL)
+        else:
+            proc.kill()
+    except (ProcessLookupError, OSError):
+        pass
+
+
+_RUNNER_CODE = (
+    "import sys\n"
+    "from app.agent.tools.code_executor import _execute_sync\n"
+    "sys.stdout.write(_execute_sync(sys.stdin.read()))\n"
+)

@@ -73,6 +73,15 @@ frontend/dist/
 
 # AI agent internal state (not for public repo)
 .opencode/
+.agents/
+.claude/
+skills-lock.json
+
+# Playwright MCP debug artifacts (local tooling)
+.playwright-mcp/
+
+# Local documentation drafts
+docs/
 
 # Development-only scripts (keep tracked copies clean)
 check_db.py

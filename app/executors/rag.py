@@ -147,7 +147,7 @@ class RagChatExecutor(ConversationExecutor):
 
         async with tracer.span("rag_retrieve", kind=SpanKind.RETRIEVAL):
             engine = RagRetrievalEngine(db=self.db)
-            sub_evidences = await engine.retrieve(plan, tracer=self.task.tracer)
+            sub_evidences = await engine.retrieve_with_correction(plan, tracer=self.task.tracer)
             sub_question_list = sub_evidences.sub_question_evidence_list
 
             used_channels = sub_evidences.used_channels

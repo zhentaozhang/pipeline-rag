@@ -50,7 +50,7 @@ async def rag_search(query: str, doc_ids: list[str] | None = None, top_k: int = 
 
     try:
         engine = RagRetrievalEngine()
-        context = await engine.retrieve(plan)
+        context = await engine.retrieve_with_correction(plan)
     except Exception:
         logger.exception("rag_search retrieval failed", query=query[:80])
         return "RAG 知识检索过程出现异常，请稍后重试。"

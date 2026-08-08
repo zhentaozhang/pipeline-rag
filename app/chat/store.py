@@ -4,7 +4,7 @@ ConversationArchiveStore — 对话归档存储抽象层
 职责：封装 Exchange/Session 的所有 DB 操作，服务层不再直接操作 DB。
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import asc, delete, desc, func, select, update
@@ -293,7 +293,7 @@ class ConversationArchiveStore:
         task = ChatRuntimeRegistry.get(conversation_id)
         if not task:
             return None
-        elapsed = int((datetime.now() - task.start_time).total_seconds() * 1000)
+        elapsed = int((datetime.now(UTC) - task.start_time).total_seconds() * 1000)
         return {
             "id": task.exchange_id or 0,
             "conversation_id": conversation_id,

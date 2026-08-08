@@ -57,13 +57,13 @@ class EventBus:
             except TimeoutError:
                 logger.warning(
                     "eventbus.listener_timed_out",
-                    event=event.name,
+                    event_name=event.name,
                     listener=getattr(listener, "__name__", None),
                 )
             except Exception:
                 logger.exception(
                     "eventbus.listener_failed",
-                    event=event.name,
+                    event_name=event.name,
                     listener=getattr(listener, "__name__", None),
                 )
 

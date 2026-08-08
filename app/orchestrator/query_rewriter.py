@@ -18,7 +18,6 @@ from typing import Any
 
 import structlog
 
-from app.common.llm_client import get_chat_client, llm_breaker
 from app.config import get_settings
 
 logger = structlog.get_logger(__name__)
@@ -194,6 +193,8 @@ JSON 格式：
 3. 抽象对比、笼统追问一律不拆分"""
 
     def __init__(self) -> None:
+        from app.common.llm_client import get_chat_client
+
         self._client = get_chat_client()
 
     async def rewrite(
@@ -234,6 +235,8 @@ JSON 格式：
 
         raw_output = ""
         try:
+            from app.common.llm_client import llm_breaker
+
             create_kwargs: dict = {
                 "model": settings.llm.model,
                 "messages": [

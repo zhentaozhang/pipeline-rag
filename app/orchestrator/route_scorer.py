@@ -93,7 +93,7 @@ class RouteScorer:
         score = 0.0
         matched: list[str] = []
         for term in terms:
-            if any(existing in term for existing in matched):
+            if any(term in existing for existing in matched):
                 continue
             if term in normalized_content:
                 matched.append(term)
