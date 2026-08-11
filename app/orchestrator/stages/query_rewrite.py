@@ -21,6 +21,14 @@ class QueryRewriteStage(Stage[PrepareContext, "ExecutionPlan"]):
             memory_ctx=ctx.memory_ctx,
             history_summary=ctx.history_summary,
         )
+        if rewrite_result is None or not rewrite_result.needs_rewrite:
+            # 问题无需改写：返回 SKIP 跳过本阶段（不更新上下文，继续下一 Stage）。
+            # 下游对 ctx.rewritten_question 均有原问题兜底：
+            #   plan_builder.py:20 `ctx.rewritten_question or ctx.question`
+            #   navigation_analyzer first_non_blank(rewrote, original_question)
+            #   route_service._build_routing_text 空 rewr 时回退 orig
+            return StageResult(signal=StageSignal.SKIP)
+
         ctx.rewritten_question = (
             rewrite_result.rewritten
             if rewrite_result and rewrite_result.rewritten

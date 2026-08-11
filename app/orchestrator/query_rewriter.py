@@ -134,6 +134,7 @@ class RewriteResult:
     is_ambiguous: bool = False
     clarification_hint: str | None = None
     raw_model_output: str | None = None
+    needs_rewrite: bool = False  # 该问题是否需要改写（False = 无需改写，可跳过本阶段）
 
 
 @dataclass
@@ -223,6 +224,7 @@ JSON 格式：
                 rewritten=normalized_question,
                 sub_questions=[normalized_question],
                 keywords=[],
+                needs_rewrite=False,
             )
 
         # ── LLM rewrite ───────────────────────────────────────────────
@@ -260,6 +262,7 @@ JSON 格式：
             result = self._normalize_rewrite_result(normalized_question, parsed, history_summary)
             if result and result.rewritten:
                 result.raw_model_output = raw_output
+                result.needs_rewrite = True
                 logger.info(
                     "RAG 改写完成",
                     question=normalized_question[:50],
@@ -293,6 +296,7 @@ JSON 格式：
             rewritten=normalized_question,
             sub_questions=sub_qs,
             keywords=[],
+            needs_rewrite=True,
         )
 
     def _parse(self, raw: str) -> dict | None:

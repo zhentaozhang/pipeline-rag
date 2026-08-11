@@ -61,7 +61,9 @@ class FakeRewriteService:
 
     async def rewrite(self, **kwargs):
         return types.SimpleNamespace(
-            rewritten=self.rewritten, sub_questions=self.sub_questions
+            rewritten=self.rewritten,
+            sub_questions=self.sub_questions,
+            needs_rewrite=self.rewritten is not None,
         )
 
 
