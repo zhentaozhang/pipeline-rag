@@ -56,12 +56,11 @@ class ConversationMemoryCompressor:
             if e.turn_status == TURN_COMPLETED and e.question and e.question.strip()
         ]
 
-        overflow_count = max(0, len(stable_exchanges) - settings.memory.window_size)
-        if overflow_count <= 0:
-            return
-
-        overflow_exchanges = stable_exchanges[:overflow_count]
-        if not overflow_exchanges:
+        batch_size = settings.memory.summary_batch_size or 4
+        batches = self._select_overflow_batches(
+            stable_exchanges, settings.memory.window_size, batch_size
+        )
+        if not batches:
             return
 
         existing_payload = ConversationSummaryPayload()
@@ -75,13 +74,10 @@ class ConversationMemoryCompressor:
                 existing_payload.summary = mem.summary_json or ""
 
         merged_payload = existing_payload
-        batch_size = settings.memory.summary_batch_size or 4
         last_covered_id = covered_exchange_id
         covered_count = 0
 
-        for start in range(0, len(overflow_exchanges), batch_size):
-            end = min(start + batch_size, len(overflow_exchanges))
-            batch = overflow_exchanges[start:end]
+        for batch in batches:
             merged_payload = await self._merge_summary_payload(merged_payload, batch)
             last_exchange = batch[-1]
             last_covered_id = last_exchange.id
@@ -120,18 +116,47 @@ class ConversationMemoryCompressor:
         summary_json = merged_payload.model_dump_json(by_alias=True, exclude_none=True)
         long_term_summary_text = self._build_long_term_summary_text(merged_payload)
 
-        if not latest_mem:
+        expected_version = (
+            latest_mem.summary_version if latest_mem and latest_mem.summary_version else 0
+        )
+
+        from sqlalchemy import func
+        from sqlalchemy import update as sa_update
+
+        if latest_mem is None:
+            # 首次创建：版本从 1 开始
             latest_mem = ConversationMemory(
                 conversation_id=conversation_id,
-                summary_json="",
-                covered_exchange_id=0,
+                summary_json=summary_json,
+                summary_text=long_term_summary_text,
+                covered_exchange_id=last_covered_id,
+                summary_version=1,
             )
             db.add(latest_mem)
-
-        async with db.begin_nested():
-            latest_mem.summary_json = summary_json
-            latest_mem.summary_text = long_term_summary_text
-            latest_mem.covered_exchange_id = last_covered_id
+        else:
+            # 版本 CAS 条件更新：仅当 summary_version 未变化时写入。
+            # 并发下后提交者 rowcount=0 自动放弃，摘要不倒退（与上面的
+            # covered_exchange_id 写前重读形成双保险，CAS 提供原子判定）。
+            cas_result = await db.execute(
+                sa_update(ConversationMemory)
+                .where(
+                    ConversationMemory.conversation_id == conversation_id,
+                    func.coalesce(ConversationMemory.summary_version, 0) == expected_version,
+                )
+                .values(
+                    summary_json=summary_json,
+                    summary_text=long_term_summary_text,
+                    covered_exchange_id=last_covered_id,
+                    summary_version=expected_version + 1,
+                )
+            )
+            if cas_result.rowcount == 0:
+                logger.info(
+                    "memory compression skipped — version CAS conflict",
+                    conversation_id=conversation_id,
+                    expected_version=expected_version,
+                )
+                return
         await db.commit()
         logger.info(
             "memory compressed",
@@ -139,6 +164,27 @@ class ConversationMemoryCompressor:
             pointer=last_covered_id,
             covered_count=covered_count,
         )
+
+    @staticmethod
+    def _select_overflow_batches(
+        exchanges: list,
+        window_size: int,
+        batch_size: int,
+    ) -> list[list]:
+        """筛选超出窗口的已完成轮次，并按批大小分组（纯逻辑，可独立测试）。
+
+        仅把「超出最近窗口」的最旧轮次送入摘要，窗口内的轮保留原文。
+        返回批列表；无溢出时返回空列表。
+        """
+        overflow_count = max(0, len(exchanges) - max(0, window_size))
+        overflow_exchanges = exchanges[:overflow_count] if overflow_count > 0 else []
+        if not overflow_exchanges:
+            return []
+        step = max(1, batch_size)
+        return [
+            overflow_exchanges[start : start + step]
+            for start in range(0, len(overflow_exchanges), step)
+        ]
 
     async def _merge_summary_payload(
         self,
