@@ -33,7 +33,6 @@ dependencies = [
     # MCP 协议
     "fastmcp>=2.0.0",
     # 文档解析
-    "unstructured[pdf]>=0.15.0",
     "markitdown>=0.1.0",
     # 认证
     "pyjwt>=2.8.0",
@@ -57,6 +56,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# 完整文档解析（unstructured 为可选：镜像减重；缺失时 PDF/Word/PPT 自动降级 markitdown，
+# 复杂版式可启用 MinerU 增强通道 CONNECTOR/MINERU_ENABLED）
+full-parsing = [
+    "unstructured[pdf]>=0.15.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23.0",

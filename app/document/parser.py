@@ -31,6 +31,13 @@ class ParseResult(NamedTuple):
     content_quality_level: int = 0  # 内容质量 (3=HIGH, 2=MEDIUM, 1=LOW)
 
 
+def _unstructured_available() -> bool:
+    """unstructured 为可选依赖（镜像减重）：缺失时解析链降级 markitdown"""
+    import importlib.util
+
+    return importlib.util.find_spec("unstructured") is not None
+
+
 class DocumentParser:
     """
     多格式文档解析器。
@@ -197,7 +204,10 @@ class DocumentParser:
                     error=str(e),
                 )
 
-        # ── 默认：Unstructured ──
+        # ── 默认：Unstructured（可选依赖）；缺失时降级 markitdown ──
+        if not _unstructured_available():
+            return await self._parse_via_markitdown(path, "pdf")
+
         from unstructured.partition.pdf import partition_pdf
 
         loop = asyncio.get_event_loop()
@@ -220,7 +230,10 @@ class DocumentParser:
         return ParseResult(text=text, metadata=metadata, file_type="pdf")
 
     async def _parse_word(self, path: Path) -> ParseResult:
-        """使用 Unstructured 解析 Word 文档"""
+        """使用 Unstructured 解析 Word 文档（可选依赖，缺失降级 markitdown）"""
+        if not _unstructured_available():
+            return await self._parse_via_markitdown(path, "docx")
+
         from unstructured.partition.docx import partition_docx
 
         loop = asyncio.get_event_loop()
@@ -233,7 +246,10 @@ class DocumentParser:
         return ParseResult(text=text, metadata={}, file_type="docx")
 
     async def _parse_ppt(self, path: Path) -> ParseResult:
-        """使用 Unstructured 解析 PowerPoint"""
+        """使用 Unstructured 解析 PowerPoint（可选依赖，缺失降级 markitdown）"""
+        if not _unstructured_available():
+            return await self._parse_via_markitdown(path, "pptx")
+
         from unstructured.partition.pptx import partition_pptx
 
         loop = asyncio.get_event_loop()
@@ -244,6 +260,28 @@ class DocumentParser:
         elements = await loop.run_in_executor(None, _do_parse)
         text = "\n\n".join([str(el) for el in elements])
         return ParseResult(text=text, metadata={}, file_type="pptx")
+
+    async def _parse_via_markitdown(self, path: Path, file_type: str) -> ParseResult:
+        """统一降级：unstructured 不可用时的兜底解析（PDF/Word/PPT）"""
+        from markitdown import MarkItDown
+
+        md = MarkItDown()
+        loop = asyncio.get_event_loop()
+
+        def _do_parse() -> Any:
+            return md.convert(str(path))
+
+        try:
+            result = await loop.run_in_executor(None, _do_parse)
+            text = result.text_content or ""
+            if not text.strip():
+                raise ValueError("markitdown returned empty content")
+            return ParseResult(text=text.strip(), metadata={}, file_type=file_type)
+        except Exception as e:
+            raise RuntimeError(
+                f"解析失败：unstructured 未安装且 markitdown 降级失败（{e}）。"
+                "可安装可选依赖 `pip install 'pipeline-rag[full-parsing]'` 或启用 MinerU 增强通道。"
+            ) from e
 
     async def _parse_html(self, path: Path) -> ParseResult:
         """使用 MarkItDown 解析 HTML"""

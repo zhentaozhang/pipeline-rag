@@ -2718,7 +2718,6 @@ dependencies = [
     { name = "structlog" },
     { name = "tenacity" },
     { name = "trafilatura" },
-    { name = "unstructured", extra = ["pdf"] },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -2732,6 +2731,9 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "tiktoken" },
+]
+full-parsing = [
+    { name = "unstructured", extra = ["pdf"] },
 ]
 
 [package.metadata]
@@ -2776,10 +2778,10 @@ requires-dist = [
     { name = "tenacity", specifier = ">=8.3.0" },
     { name = "tiktoken", marker = "extra == 'dev'", specifier = ">=0.7.0" },
     { name = "trafilatura", specifier = ">=2.2.0" },
-    { name = "unstructured", extras = ["pdf"], specifier = ">=0.15.0" },
+    { name = "unstructured", extras = ["pdf"], marker = "extra == 'full-parsing'", specifier = ">=0.15.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["full-parsing", "dev"]
 
 [[package]]
 name = "platformdirs"
