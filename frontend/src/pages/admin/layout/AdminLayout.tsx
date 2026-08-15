@@ -34,6 +34,7 @@ export const AdminLayout: React.FC = () => {
     { to: '/admin/observability', icon: <ActivitySquare size={20} />, label: '对话观测' },
     { to: '/admin/metrics', icon: <BarChart3 size={20} />, label: '观测指标' },
     { to: '/admin/evaluation', icon: <FileText size={20} />, label: '评估看板' },
+    { to: '/admin/traces', icon: <ActivitySquare size={20} />, label: 'Trace 链路' },
   ];
 
   return (

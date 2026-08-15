@@ -15,6 +15,8 @@ import type {
   StreamEvent,
   StreamRequest,
   StrategyPlanResponse,
+  TraceDetail,
+  TracePageResponse,
 } from '../types/api';
 
 /** 前端会话列表分页结果（listSessionsPage 映射后的 shape，字段为字符串形态） */
@@ -565,6 +567,34 @@ export const adminAuthApi = {
 };
 
 export const manageApi = {
+  getTraces(params: {
+    pageNo?: number;
+    pageSize?: number;
+    conversationId?: string;
+    status?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  } = {}): Promise<TracePageResponse> {
+    const query = new URLSearchParams();
+    if (params.pageNo !== undefined) query.set('pageNo', String(params.pageNo));
+    if (params.pageSize !== undefined) query.set('pageSize', String(params.pageSize));
+    if (params.conversationId) query.set('conversationId', params.conversationId);
+    if (params.status) query.set('status', params.status);
+    if (params.dateFrom) query.set('from', params.dateFrom);
+    if (params.dateTo) query.set('to', params.dateTo);
+    const qs = query.toString();
+    return requestApiEnvelope<TracePageResponse>(
+      `/manage/observe/traces${qs ? `?${qs}` : ''}`,
+      { method: 'GET' }
+    );
+  },
+
+  getTraceDetail(traceId: string): Promise<TraceDetail> {
+    return requestApiEnvelope<TraceDetail>(`/manage/observe/traces/${traceId}`, {
+      method: 'GET'
+    });
+  },
+
   uploadDocument(params: {
     file: File;
     documentName?: string;

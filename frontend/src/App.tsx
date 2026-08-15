@@ -18,6 +18,8 @@ const AdminObservabilitySessionView = lazy(() => import('./pages/admin/AdminObse
 const AdminObservabilityDetailView = lazy(() => import('./pages/admin/AdminObservabilityDetailView').then((mod) => ({ default: mod.AdminObservabilityDetailView })));
 const AdminEvaluationDatasetView = lazy(() => import('./pages/admin/AdminEvaluationDatasetView').then((mod) => ({ default: mod.AdminEvaluationDatasetView })));
 const AdminMetricsView = lazy(() => import('./pages/admin/AdminMetricsView').then((mod) => ({ default: mod.AdminMetricsView })));
+const AdminTraceListView = lazy(() => import('./pages/admin/AdminTraceListView').then((mod) => ({ default: mod.AdminTraceListView })));
+const AdminTraceDetailView = lazy(() => import('./pages/admin/AdminTraceDetailView').then((mod) => ({ default: mod.AdminTraceDetailView })));
 
 function PageLoader({ children }: { children: React.ReactNode }) {
   return (
@@ -64,6 +66,8 @@ function App() {
           <Route path="observability/:conversationId/exchange/:exchangeId" element={<PageLoader><AdminObservabilityDetailView /></PageLoader>} />
           <Route path="evaluation" element={<PageLoader><AdminEvaluationDatasetView /></PageLoader>} />
           <Route path="metrics" element={<PageLoader><AdminMetricsView /></PageLoader>} />
+          <Route path="traces" element={<PageLoader><AdminTraceListView /></PageLoader>} />
+          <Route path="traces/:traceId" element={<PageLoader><AdminTraceDetailView /></PageLoader>} />
         </Route>
       </Routes>
     </BrowserRouter>
