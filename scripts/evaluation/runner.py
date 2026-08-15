@@ -253,47 +253,40 @@ async def run_evaluation(
     return final
 
 
-def _print_report(results: list[EvalResult], run_tag: str) -> None:
-    """Print a formatted evaluation report to stdout."""
-    completed = [r for r in results if r.status == "completed"]
-    failed = [r for r in results if r.status == "failed"]
-    partial = [r for r in results if r.status == "partial"]
-
-    logger.info("\n%s", "=" * 60)
-    logger.info("  Round %s — Report", run_tag)
-    logger.info("%s", "=" * 60)
-    logger.info("  Total:    %d", len(results))
-    logger.info("  Passed:   %d", len(completed))
-    logger.info("  Failed:   %d", len(failed))
-    logger.info("  Partial:  %d", len(partial))
-
-    if not completed:
-        logger.info("  (no completed results)")
-        return
-
-    faithfulness = [r.faithfulness_score for r in completed if r.faithfulness_score is not None]
-    relevancy = [
-        r.answer_relevancy_score for r in completed if r.answer_relevancy_score is not None
-    ]
-    precision = [
-        r.context_precision_score for r in completed if r.context_precision_score is not None
-    ]
-    correctness = [
-        r.answer_correctness_score for r in completed if r.answer_correctness_score is not None
-    ]
-    recall = [r.context_recall_score for r in completed if r.context_recall_score is not None]
-
+def _print_report(results: list[EvalResult], run_tag: str) -> dict[str, float]:
+    """打印报告并返回各指标平均分（P1-3：供门禁判断）"""
     def _avg(vals: list[float]) -> float:
-        return sum(vals) / len(vals) if vals else 0.0
+        if not vals:
+            return 0.0
+        return sum(vals) / len(vals)
 
-    logger.info("\n  ┌──────────────────────┬──────────┐")
-    logger.info("  │ Metric               │ Average  │")
-    logger.info("  ├──────────────────────┼──────────┤")
-    logger.info("  │ Faithfulness         │ %.3f    │", _avg(faithfulness))
-    logger.info("  │ Answer Relevancy     │ %.3f    │", _avg(relevancy))
-    logger.info("  │ Context Precision    │ %.3f    │", _avg(precision))
-    logger.info("  │ Answer Correctness   │ %.3f    │", _avg(correctness))
-    logger.info("  │ Context Recall       │ %.3f    │", _avg(recall))
+    completed = [r for r in results if r.status == "completed"]
+    partial = [r for r in results if r.status == "partial"]
+    failed = [r for r in results if r.status == "failed"]
+
+    faithfulness = [r.faithfulness_score or 0.0 for r in completed]
+    relevancy = [r.answer_relevancy_score or 0.0 for r in completed]
+    precision = [r.context_precision_score or 0.0 for r in completed]
+    correctness = [r.answer_correctness_score or 0.0 for r in completed]
+    recall = [r.context_recall_score or 0.0 for r in completed]
+
+    avg = {
+        "faithfulness": _avg(faithfulness),
+        "answer_relevancy": _avg(relevancy),
+        "context_precision": _avg(precision),
+        "answer_correctness": _avg(correctness),
+        "context_recall": _avg(recall),
+    }
+
+    logger.info("=" * 60)
+    logger.info("  Offline RAG Evaluation Report — round %s", run_tag)
+    logger.info("  Completed: %d / %d (partial=%d, failed=%d)", len(completed), len(results), len(partial), len(failed))
+    logger.info("  ├──────────────────────┬──────────┤")
+    logger.info("  │ Faithfulness         │ %.3f    │", avg["faithfulness"])
+    logger.info("  │ Answer Relevancy     │ %.3f    │", avg["answer_relevancy"])
+    logger.info("  │ Context Precision    │ %.3f    │", avg["context_precision"])
+    logger.info("  │ Answer Correctness   │ %.3f    │", avg["answer_correctness"])
+    logger.info("  │ Context Recall       │ %.3f    │", avg["context_recall"])
     logger.info("  └──────────────────────┴──────────┘")
 
     logger.info("\n  Per-question breakdown:")
@@ -319,14 +312,24 @@ def _print_report(results: list[EvalResult], run_tag: str) -> None:
             logger.warning("    %6s  PARTIAL: %s", r.question_id, r.error)
 
     logger.info("%s", "=" * 60)
+    return avg
 
 
 if __name__ == "__main__":
     import argparse
+    import json
+    import sys
 
-    parser = argparse.ArgumentParser(description="Offline RAG Evaluation")
+    parser = argparse.ArgumentParser(description="Offline RAG Evaluation (regression gate)")
     parser.add_argument("--round", type=str, default="latest", help="Round tag for report")
     parser.add_argument("--questions", type=int, default=0, help="Number of questions (0 = all)")
+    # P1-3 门禁：低于任一阈值则退出码 1（可接入 CI / pre-commit）
+    parser.add_argument("--min-faithfulness", type=float, default=0.6)
+    parser.add_argument("--min-relevancy", type=float, default=0.6)
+    parser.add_argument("--min-precision", type=float, default=0.6)
+    parser.add_argument("--min-recall", type=float, default=0.6)
+    parser.add_argument("--min-correctness", type=float, default=0.6)
+    parser.add_argument("--json-report", type=str, default="", help="Write JSON report to path")
     args = parser.parse_args()
 
     dataset = load_dataset()
@@ -337,4 +340,35 @@ if __name__ == "__main__":
 
     results = asyncio.run(run_evaluation(dataset))
 
-    _print_report(results, args.round)
+    avg = _print_report(results, args.round)
+
+    if args.json_report:
+        with open(args.json_report, "w", encoding="utf-8") as fh:
+            json.dump(
+                {
+                    "round": args.round,
+                    "total": len(results),
+                    "averages": avg,
+                    "failed": [r.error for r in results if r.status == "failed"],
+                },
+                fh,
+                ensure_ascii=False,
+                indent=2,
+            )
+        logger.info("JSON report written to %s", args.json_report)
+
+    # 门禁判定：阈值 0 表示跳过该指标
+    gates = [
+        ("faithfulness", args.min_faithfulness, avg["faithfulness"]),
+        ("answer_relevancy", args.min_relevancy, avg["answer_relevancy"]),
+        ("context_precision", args.min_precision, avg["context_precision"]),
+        ("context_recall", args.min_recall, avg["context_recall"]),
+        ("answer_correctness", args.min_correctness, avg["answer_correctness"]),
+    ]
+    violations = [g for g in gates if g[1] > 0 and g[2] < g[1]]
+    if violations:
+        for name, threshold, actual in violations:
+            logger.error("GATE FAILED: %s = %.3f < %.3f", name, actual, threshold)
+        logger.error("Regression gate failed (%d violations)", len(violations))
+        sys.exit(1)
+    logger.info("Regression gate passed ✓")
