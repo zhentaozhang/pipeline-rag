@@ -229,11 +229,13 @@ class RagChatExecutor(ConversationExecutor):
                 )
 
         # ── 回答质量审核（自审 + 可选重生成）─────────────────────────
-        if not _answer_blocked:
+        # P0-1d: 简短回答（<30 字）跳过评审——自审对短答复区分度低，省一次 LLM 调用
+        _reviewable_answer = "".join(self.task.answer_buffer)
+        if not _answer_blocked and len(_reviewable_answer) >= 30:
             quality_checker = AnswerQualityChecker()
             quality_result = await quality_checker.check(
                 question=plan.original_question,
-                answer="".join(self.task.answer_buffer),
+                answer=_reviewable_answer,
                 reference_titles=[r.get("title", "") for r in self.task.references],
             )
 
@@ -315,7 +317,7 @@ class RagChatExecutor(ConversationExecutor):
                                 contexts_list.append(ev.content)
                     self.task._pending_eval = {
                         "question": plan.original_question,
-                        "answer": "".join(self.task.answer_buffer),
+                        "answer": _reviewable_answer,
                         "contexts": contexts_list,
                     }
                 except Exception:

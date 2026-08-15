@@ -269,21 +269,25 @@ async def execute_stream(
                 exchange_id=temp_exchange_id,
             )
     elif plan:
-        async with tracer.span("recommendation", kind=SpanKind.PIPELINE):
-            from app.orchestrator.recommendation import RecommendationService
+        # P0-1d: 无证据兜底回复轮跳过推荐——推荐基于回答上下文，无证据时无推荐价值
+        answer_text = "".join(state.full_answer)
+        no_evidence = bool(plan.no_evidence_reply) and answer_text == plan.no_evidence_reply
+        if answer_text and not no_evidence:
+            async with tracer.span("recommendation", kind=SpanKind.PIPELINE):
+                from app.orchestrator.recommendation import RecommendationService
 
-            recommendations = await RecommendationService().generate_recommendations(
-                question=question, answer="".join(state.full_answer), memory_ctx=memory_ctx
-            )
-            if recommendations:
-                state.collected_recommendations.clear()
-                state.collected_recommendations.extend(recommendations)
-                yield sse_event(
-                    SSEEventType.RECOMMENDATION,
-                    recommendations,
-                    conversation_id=conversation_id,
-                    exchange_id=temp_exchange_id,
+                recommendations = await RecommendationService().generate_recommendations(
+                    question=question, answer=answer_text, memory_ctx=memory_ctx
                 )
+                if recommendations:
+                    state.collected_recommendations.clear()
+                    state.collected_recommendations.extend(recommendations)
+                    yield sse_event(
+                        SSEEventType.RECOMMENDATION,
+                        recommendations,
+                        conversation_id=conversation_id,
+                        exchange_id=temp_exchange_id,
+                    )
 
     if task.debug_trace and task.debug_trace.limit_stats and task.used_tools:
         task.debug_trace.limit_stats.tool_call_used = len(task.used_tools)

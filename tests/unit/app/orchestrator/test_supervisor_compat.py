@@ -5,10 +5,11 @@ from app.common.enums import ExecutionMode
 
 
 def _plan() -> ExecutionPlan:
+    # 问题含分析触发词，确保通过 supervisor 规则预筛（P0-1c）
     return ExecutionPlan(
         mode=ExecutionMode.RETRIEVAL,
-        original_question="测试问题",
-        rewritten_question="测试问题",
+        original_question="为什么两种配置方式在参数说明上有什么区别",
+        rewritten_question="为什么两种配置方式在参数说明上有什么区别",
     )
 
 
@@ -98,8 +99,8 @@ async def test_decompose_supports_rag_chat_mode(fake_llm):
 
     plan = ExecutionPlan(
         mode=ExecutionMode.RAG_CHAT,
-        original_question="q",
-        rewritten_question="q",
+        original_question="为什么两种方案在实施步骤上有区别",
+        rewritten_question="为什么两种方案在实施步骤上有区别",
     )
     svc = SupervisorService()
     result = await svc.decompose(plan)
@@ -132,3 +133,59 @@ async def test_decompose_keeps_single_mode_when_graph_rejects(fake_llm):
     assert not result.supervisor_mode
     # 耗尽后直接返回：LLM 调用恰好 6 次（3 分解 + 3 评审），未触发 legacy 二次循环
     assert len(fake_llm.calls) == 6
+
+
+async def test_rule_prefilter_skips_simple_question(fake_llm):
+    """P0-1c：简单问题（无触发词、非复合）不触发 LLM 分解，零 LLM 调用。"""
+    from app.config import get_settings
+    from app.orchestrator.supervisor import SupervisorService
+
+    settings = get_settings()
+    original = settings.rag.supervisor_rule_prefilter
+    settings.rag.supervisor_rule_prefilter = True
+    try:
+        plan = ExecutionPlan(
+            mode=ExecutionMode.RETRIEVAL,
+            original_question="如何配置数据库连接",
+            rewritten_question="如何配置数据库连接",
+        )
+        svc = SupervisorService()
+        result = await svc.decompose(plan)
+        assert result is plan
+        assert not result.supervisor_mode
+        assert fake_llm.calls == []  # 未触发任何 LLM 调用
+    finally:
+        settings.rag.supervisor_rule_prefilter = original
+
+
+async def test_rule_prefilter_allows_complex_question(fake_llm):
+    """P0-1c：含分析触发词的复合问题仍然触发分解。"""
+    from app.config import get_settings
+    from app.orchestrator.supervisor import SupervisorService
+
+    settings = get_settings()
+    original = settings.rag.supervisor_rule_prefilter
+    settings.rag.supervisor_rule_prefilter = True
+    try:
+        fake_llm.queue_json(
+            {
+                "decompose": True,
+                "reasoning": "ok",
+                "sub_plans": [
+                    {"id": "1", "mode": "RETRIEVAL", "question": "子问题1", "depends_on": []},
+                    {"id": "2", "mode": "RETRIEVAL", "question": "子问题2", "depends_on": []},
+                ],
+            }
+        )
+        fake_llm.queue_json({"approved": True, "feedback": ""})
+        plan = ExecutionPlan(
+            mode=ExecutionMode.RETRIEVAL,
+            original_question="为什么方案 A 与方案 B 的实施步骤有区别",
+            rewritten_question="为什么方案 A 与方案 B 的实施步骤有区别",
+        )
+        svc = SupervisorService()
+        result = await svc.decompose(plan)
+        assert result.supervisor_mode is True
+        assert len(fake_llm.calls) > 0
+    finally:
+        settings.rag.supervisor_rule_prefilter = original

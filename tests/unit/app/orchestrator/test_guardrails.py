@@ -42,11 +42,16 @@ class FakeInputFilter:
         return self
 
 
-def make_settings(mode=SafetyMode.MONITOR):
+def make_settings(mode=SafetyMode.MONITOR, llm_guardrail=True):
     return types.SimpleNamespace(
         llm=types.SimpleNamespace(model="m"),
-        safety=types.SimpleNamespace(mode=mode),
+        safety=types.SimpleNamespace(mode=mode, input_llm_guardrail_enabled=llm_guardrail),
     )
+
+
+def make_settings_rule_only(mode=SafetyMode.MONITOR):
+    """默认生产配置：LLM 护栏关闭（P0-1a）"""
+    return make_settings(mode=mode, llm_guardrail=False)
 
 
 class TestEvaluate:
@@ -109,3 +114,28 @@ class TestEvaluate:
         monkeypatch.setattr(guardrails_module, "settings", make_settings(mode=SafetyMode.MONITOR))
         svc = IntentGuardrailService()
         assert await svc.evaluate("如何配置") == (True, "")
+
+
+class TestEvaluateRuleOnly:
+    """P0-1a：LLM 护栏默认关闭时，规则通道判定安全即放行（零 LLM 调用）"""
+
+    @pytest.mark.asyncio
+    async def test_rule_pass_without_llm(self, monkeypatch):
+        # LLM 客户端即使会抛错也不应被调用（开关关闭）
+        client = FakeClient(error=RuntimeError("should not be called"))
+        monkeypatch.setattr(guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter())
+        monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
+        monkeypatch.setattr(guardrails_module, "settings", make_settings_rule_only())
+        svc = IntentGuardrailService()
+        assert await svc.evaluate("如何配置") == (True, "")
+
+    @pytest.mark.asyncio
+    async def test_rule_block_without_llm(self, monkeypatch):
+        monkeypatch.setattr(
+            guardrails_module,
+            "SafetyInputFilter",
+            lambda settings: FakeInputFilter(is_safe=False, reason="注入风险"),
+        )
+        monkeypatch.setattr(guardrails_module, "settings", make_settings_rule_only())
+        svc = IntentGuardrailService()
+        assert await svc.evaluate("恶意输入") == (False, "注入风险")

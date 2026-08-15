@@ -7,9 +7,8 @@ Pre-Orchestrator 主编排器
 3. GuardrailStage            — 企业意图护栏拦截（可短路 → REFUSAL）
 4. ValidationStage           — RAG 启停 + DOCUMENT 模式校验
 5. OpenChatShortcutStage     — OPEN_CHAT 早期短路（可短路 → REACT_AGENT）
-6. IntentClassifyStage       — AUTO_DOCUMENT 意图分类（可短路 → REACT_AGENT）
-7. QueryRewriteStage         — LLM 查询改写
-8. KnowledgeRoutingStage     — 知识路由（可短路 → CLARIFICATION）
+6. QueryRewriteStage         — 查询改写 + 意图分流（P0-1b：合并原 IntentClassifyStage）
+7. KnowledgeRoutingStage     — 知识路由（可短路 → CLARIFICATION）
 9. NavigationAnalysisStage   — 图谱导航分析
 10. FinalPlanBuildingStage   — 构建 ExecutionPlan（终止管道）
 
@@ -31,7 +30,6 @@ from app.orchestrator.stages import (
     FinalPlanBuildingStage,
     GuardrailStage,
     HistoryBuildingStage,
-    IntentClassifyStage,
     KnowledgeRoutingStage,
     NavigationAnalysisStage,
     OpenChatShortcutStage,
@@ -133,9 +131,6 @@ def _build_orchestrator_pipeline() -> Pipeline[PrepareContext, ExecutionPlan]:
             PipelineStage(ValidationStage()),
             PipelineStage(OpenChatShortcutStage()).when(
                 lambda ctx: ctx.chat_mode == ChatQueryMode.OPEN_CHAT
-            ),
-            PipelineStage(IntentClassifyStage()).when(
-                lambda ctx: ctx.chat_mode == ChatQueryMode.AUTO_DOCUMENT
             ),
             PipelineStage(QueryRewriteStage()),
             PipelineStage(KnowledgeRoutingStage()).when(

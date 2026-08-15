@@ -21,6 +21,8 @@ class SafetySettings(BaseSettings):
     input_pii_enabled: bool = True
     input_injection_enabled: bool = True
     input_injection_threshold: float = 7.0
+    # P0-1a: LLM 深度意图护栏（规则通道已含注入检测/PII，LLM 通道仅作兜底，默认关闭以减 LLM 调用）
+    input_llm_guardrail_enabled: bool = False
 
     # L3 输出检测
     output_pii_enabled: bool = True

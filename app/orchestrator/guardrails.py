@@ -70,6 +70,10 @@ class IntentGuardrailService:
         # 使用脱敏后的文本进行后续检测
         sanitized = input_result.sanitized_text
 
+        # P0-1a: LLM 深度意图分析仅作为兜底通道（默认关闭；规则层已含注入检测 + PII + fail-close）
+        if not settings.safety.input_llm_guardrail_enabled:
+            return True, ""
+
         # LLM 深度意图分析
         try:
             async with llm_breaker():

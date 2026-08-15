@@ -54,6 +54,8 @@ class RAGSettings(BaseSettings):
     checkpoint_keep_latest: int = 50
     vectorize_batch_size: int = 10
     supervisor_enabled: bool = True
+    # P0-1c: LLM 分解前规则预筛——仅复合/分析类/长问题触发分解，简单问题零 LLM 成本
+    supervisor_rule_prefilter: bool = True
     supervisor_temperature: float = 0.1
     supervisor_max_review_retries: int = 2
     quality_enabled: bool = True

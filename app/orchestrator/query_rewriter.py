@@ -135,6 +135,8 @@ class RewriteResult:
     clarification_hint: str | None = None
     raw_model_output: str | None = None
     needs_rewrite: bool = False  # 该问题是否需要改写（False = 无需改写，可跳过本阶段）
+    # P0-1b: 意图分类合并进改写（原独立 IntentClassifyStage 的 LLM 调用）
+    intent: str = "knowledge"  # knowledge | open | ambiguous
 
 
 @dataclass
@@ -172,8 +174,14 @@ JSON 格式：
   "sub_questions": ["子问题1", "子问题2"],
   "keywords": ["关键词1", "关键词2", "关键词3"],
   "is_ambiguous": false,
-  "clarification_hint": ""
+  "clarification_hint": "",
+  "intent": "knowledge"
 }
+
+意图规则（intent）：
+1. knowledge — 问题可以从企业知识库文档中找到答案
+2. open — 问题需要联网搜索实时信息（天气、新闻、股价、最新动态等）或明显闲聊（你好、谢谢）
+3. ambiguous — 问题信息量不足，无法确定意图（如“查一下那个”）
 
 改写规则（rewrite）：
 1. 做指代消解、上下文补全、口语转书面化
@@ -220,11 +228,14 @@ JSON 格式：
         if not settings.rag.rewrite_enabled or (
             not force and not _needs_rewrite(normalized_question, history_summary)
         ):
+            # P0-1b: 无需改写时也给出规则意图判定（开放提问/闲聊快速分流）
+            rule_intent = self._rule_based_intent(normalized_question)
             return RewriteResult(
                 rewritten=normalized_question,
                 sub_questions=[normalized_question],
                 keywords=[],
                 needs_rewrite=False,
+                intent=rule_intent,
             )
 
         # ── LLM rewrite ───────────────────────────────────────────────
@@ -297,7 +308,20 @@ JSON 格式：
             sub_questions=sub_qs,
             keywords=[],
             needs_rewrite=True,
+            # P0-1b: 规则回退时用规则意图判定（LLM 失败/关闭时兜底）
+            intent=self._rule_based_intent(normalized_question),
         )
+
+    def _rule_based_intent(self, question: str) -> str:
+        """规则意图判定：开放提问/闲聊 → open，其余默认 knowledge（P0-1b）"""
+        try:
+            from app.orchestrator.intent_detector import looks_like_open_chat_question
+
+            if looks_like_open_chat_question(question, requires_fresh_search=False):
+                return "open"
+        except Exception:
+            pass
+        return "knowledge"
 
     def _parse(self, raw: str) -> dict | None:
         """解析 LLM 返回的 JSON。"""
@@ -317,11 +341,14 @@ JSON 格式：
             keywords = []
             if isinstance(keywords_raw, list):
                 keywords = [str(k).strip() for k in keywords_raw if str(k).strip()]
+            intent_raw = root.get("intent", "knowledge")
+            intent = intent_raw if intent_raw in ("knowledge", "open", "ambiguous") else "knowledge"
             return {
                 "rewrite": rewrite,
                 "should_split": should_split,
                 "sub_questions": sub_questions,
                 "keywords": keywords,
+                "intent": intent,
             }
         except Exception as e:
             logger.warning("解析问题改写 JSON 失败", raw=raw[:100], error=str(e), exc_info=True)
@@ -344,6 +371,9 @@ JSON 格式：
         should_split_val = parsed.get("should_split")
         sub_questions = [s for s in parsed.get("sub_questions", []) if s]
         keywords = [k for k in parsed.get("keywords", []) if k]
+        intent = parsed.get("intent", "knowledge")
+        if intent not in ("knowledge", "open", "ambiguous"):
+            intent = "knowledge"
 
         explicit_multi = _looks_like_explicit_multi_question(original_question)
         should_split = bool(should_split_val) if should_split_val is not None else explicit_multi
@@ -368,6 +398,7 @@ JSON 格式：
             rewritten=rewrite,
             sub_questions=sub_questions,
             keywords=keywords,
+            intent=intent,
         )
 
     # ── AnswerHistoryContext 组装 ────────────────────────────────────────────

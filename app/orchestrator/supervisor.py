@@ -15,6 +15,38 @@ from app.common.llm_client import get_chat_client, llm_breaker
 
 logger = structlog.get_logger(__name__)
 
+# P0-1c: 复杂/多跳问题触发词（命中即建议分解）
+_COMPLEX_QUESTION_HINTS = (
+    "对比",
+    "比较",
+    "区别",
+    "为什么",
+    "原因",
+    "关系",
+    "关联",
+    "影响",
+    "如何影响",
+    "分析",
+    "总结",
+    "综述",
+    "分别",
+)
+
+
+def _should_decompose(plan: ExecutionPlan) -> bool:
+    """规则预筛：仅复合问题/分析类/长问题需要 LLM 任务分解。"""
+    question = (plan.rewritten_question or plan.original_question or "").strip()
+    if not question:
+        return False
+    # 已拆分为多个子问题的复合问题
+    if len(plan.rewrite_sub_questions or []) > 1:
+        return True
+    # 分析/多跳类触发词
+    if any(hint in question for hint in _COMPLEX_QUESTION_HINTS):
+        return True
+    # 长问题（>= 40 字）大概率是多跳
+    return len(question) >= 40
+
 
 class SupervisorService:
     """LLM 驱动的任务分解服务（薄门面：优先走 LangGraph supervisor 图，失败回退 legacy）"""
@@ -36,6 +68,14 @@ class SupervisorService:
             return plan
 
         if plan.mode not in (ExecutionMode.RETRIEVAL, ExecutionMode.RAG_CHAT):
+            return plan
+
+        # P0-1c: 规则预筛——简单问题不触发 LLM 分解（省一次关键路径 LLM 调用）
+        if settings.rag.supervisor_rule_prefilter and not _should_decompose(plan):
+            logger.info(
+                "supervisor rule prefilter: skip decomposition",
+                question=(plan.original_question or "")[:50],
+            )
             return plan
 
         graph_sub_plans, graph_ran = await self._decompose_via_graph(plan)

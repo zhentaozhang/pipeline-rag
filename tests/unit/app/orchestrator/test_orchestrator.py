@@ -46,24 +46,18 @@ class FakeGuardrailService:
         return (self.is_safe, self.reason)
 
 
-class FakeClassifier:
-    def __init__(self, intent="knowledge"):
-        self.intent = intent
-
-    async def classify(self, question, memory_ctx):
-        return self.intent
-
-
 class FakeRewriteService:
-    def __init__(self, rewritten=None, sub_questions=None):
+    def __init__(self, rewritten=None, sub_questions=None, intent="knowledge"):
         self.rewritten = rewritten
         self.sub_questions = sub_questions
+        self.intent = intent
 
     async def rewrite(self, **kwargs):
         return types.SimpleNamespace(
             rewritten=self.rewritten,
             sub_questions=self.sub_questions,
             needs_rewrite=self.rewritten is not None,
+            intent=self.intent,
         )
 
 
@@ -119,7 +113,6 @@ def install_fakes(
     monkeypatch,
     *,
     guardrail=None,
-    classifier=None,
     rewrite=None,
     route=None,
     nav=None,
@@ -129,10 +122,6 @@ def install_fakes(
     monkeypatch.setattr(
         "app.orchestrator.stages.guardrails.IntentGuardrailService",
         lambda: guardrail if guardrail is not None else FakeGuardrailService(),
-    )
-    monkeypatch.setattr(
-        "app.orchestrator.stages.intent_classification.IntentClassifier",
-        lambda: classifier if classifier is not None else FakeClassifier(),
     )
     monkeypatch.setattr(
         "app.orchestrator.stages.query_rewrite.ChatQueryRewriteService",
@@ -214,7 +203,7 @@ class TestAutoDocumentFlow:
 
     @pytest.mark.asyncio
     async def test_intent_open_redirects(self, monkeypatch):
-        install_fakes(monkeypatch, classifier=FakeClassifier(intent="open"))
+        install_fakes(monkeypatch, rewrite=FakeRewriteService(rewritten="改写后问题", intent="open"))
         plan = await orchestrator_module.prepare("聊聊生活", "c1", MemoryContext())
         assert plan.mode.value == "REACT_AGENT"
         assert plan.chat_mode == ChatQueryMode.OPEN_CHAT
