@@ -170,19 +170,15 @@ class TestPipelineSettings:
 
 class TestAppSettings:
     def test_defaults(self, monkeypatch):
-        s = AppSettings(secret_key="a" * 32)
+        s = AppSettings()
         assert s.env == "development"
         assert s.port == 8080
         assert len(s.cors_origins) == 4
         assert "http://localhost:5173" in s.cors_origins
 
-    def test_secret_key_min_length(self):
-        with pytest.raises(ValueError):
-            AppSettings(secret_key="short")
-
     def test_env_prefix_override(self, monkeypatch):
         monkeypatch.setenv("APP_DEBUG", "true")
-        s = AppSettings(secret_key="a" * 32)
+        s = AppSettings()
         assert s.debug is True
 
     def test_preview_defaults(self):

@@ -1,6 +1,5 @@
 from typing import Literal
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.config.base import _ENV_FILE
@@ -13,7 +12,6 @@ class AppSettings(BaseSettings):
     debug: bool = False
     host: str = "0.0.0.0"
     port: int = 8080
-    secret_key: str = Field(min_length=32)
     api_key: str = ""
     cors_origins: list[str] = [
         "http://localhost:5173",

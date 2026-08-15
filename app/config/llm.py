@@ -21,16 +21,6 @@ class LLMSettings(BaseSettings):
 
     timeout_seconds: int = 60
 
-    model_pricing: dict[str, dict[str, float]] = {
-        "qwen-plus": {"prompt": 0.004, "completion": 0.012},
-        "qwen-turbo": {"prompt": 0.0015, "completion": 0.006},
-        "deepseek-chat": {"prompt": 0.002, "completion": 0.008},
-        "deepseek-reasoner": {"prompt": 0.004, "completion": 0.016},
-        "gpt-4o": {"prompt": 0.0175, "completion": 0.07},
-        "gpt-4o-mini": {"prompt": 0.00105, "completion": 0.0042},
-        "default": {"prompt": 0.004, "completion": 0.012},
-    }
-
     model_config = SettingsConfigDict(env_prefix="LLM_", env_file=_ENV_FILE, extra="ignore")
 
 
