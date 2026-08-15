@@ -98,21 +98,24 @@ async def finalize_stream(
     except Exception:
         logger.exception("persist exchange failed")
 
-    if turn_status == 2 and state.full_answer and session.title == question:
-        # 标题生成改为 Celery 异步执行（体检 B5）：避免流式请求收尾被 LLM 调用阻塞。
-        # 任务内部会用独立 DB session，并二次校验标题未被用户重命名。
-        try:
-            from app.chat.tasks import task_generate_session_title
+    # 标题生成改为 Celery 异步执行（体检 B5）：避免流式请求收尾被 LLM 调用阻塞。
+    # 任务内部会用独立 DB session，并二次校验标题未被用户重命名。
+    # 用标量查询取标题，避免 finalize 阶段 ORM 属性访问触发 async IO（MissingGreenlet）
+    if turn_status == 2 and state.full_answer:
+        current_title = await archive_store.get_session_title(conversation_id)
+        if current_title == question:
+            try:
+                from app.chat.tasks import task_generate_session_title
 
-            task_generate_session_title.delay(
-                conversation_id, question, "".join(state.full_answer)[:1000]
-            )
-        except Exception as title_err:
-            logger.warning(
-                "session title task dispatch failed",
-                error=str(title_err),
-                exc_info=True,
-            )
+                task_generate_session_title.delay(
+                    conversation_id, question, "".join(state.full_answer)[:1000]
+                )
+            except Exception as title_err:
+                logger.warning(
+                    "session title task dispatch failed",
+                    error=str(title_err),
+                    exc_info=True,
+                )
 
     if task.tracer:
         await task.tracer.flush()

@@ -44,6 +44,15 @@ class ConversationArchiveStore:
             created = True
         return session, created
 
+    async def get_session_title(self, conversation_id: str) -> str:
+        """标量查询会话标题（避免 finalize 阶段 ORM 属性访问触发 async IO）"""
+        result = await self.db.execute(
+            select(ConversationSession.title).where(
+                ConversationSession.conversation_id == conversation_id
+            )
+        )
+        return result.scalar_one_or_none() or ""
+
     async def get_session(self, conversation_id: str) -> ConversationSession | None:
         stmt = select(ConversationSession).where(
             ConversationSession.conversation_id == conversation_id
