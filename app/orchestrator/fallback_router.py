@@ -175,4 +175,4 @@ class FallbackRouter:
 
     @staticmethod
     def normalize_fallback_text(value: str) -> str:
-        return re.sub(r"[\s>`*#_\-，,。；;：:（）()" "''\[\]]+", "", value).lower()
+        return re.sub(r"[\s>`*#_\-，,。；;：:（）()''\[\]]+", "", value).lower()

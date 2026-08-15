@@ -59,6 +59,22 @@ class TestNormalizeFallbackText:
         assert FallbackRouter.normalize_fallback_text(" 部署 手册，安装。 ") == "部署手册安装"
         assert FallbackRouter.normalize_fallback_text("ABC") == "abc"
 
+    def test_strips_markdown_and_punctuation(self):
+        # 反引号 / 方括号 / 单引号 / 星号 / 括号等符号应被剥离
+        assert FallbackRouter.normalize_fallback_text("a`b[c]d'e") == "abcde"
+        assert FallbackRouter.normalize_fallback_text("**标题**（子项）") == "标题子项"
+
+    def test_no_syntax_warning_on_compile(self):
+        """正则模式必须无无效转义（历史回归：SyntaxWarning）"""
+        import inspect
+        import textwrap
+        import warnings
+
+        source = textwrap.dedent(inspect.getsource(FallbackRouter.normalize_fallback_text))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", SyntaxWarning)
+            compile(source, "<test>", "exec")  # 含无效转义（如非 raw 的 \[）时抛 SyntaxWarning
+
 
 class TestFallbackDescriptorScore:
     def test_long_term_higher(self):

@@ -180,16 +180,21 @@ PREVIEW_BLOCKED_PATHS = frozenset(
         "/api/chat/session/summary/rebuild",
         "/manage/document/upload",
         "/manage/document/delete",
+        "/manage/document/retry",
         "/manage/document/strategy/confirm",
         "/manage/document/index/build",
+        "/manage/graph/blacklist",
         "/manage/knowledge/scope/save",
         "/manage/knowledge/scope/delete",
+        "/manage/knowledge/scope/topic/bind",
         "/manage/knowledge/topic/save",
         "/manage/knowledge/topic/delete",
         "/manage/knowledge/document/profile/regenerate",
         "/manage/knowledge/document/profile/batch/regenerate",
         "/manage/knowledge/topic/document/save",
         "/manage/knowledge/topic/document/remove",
+        "/manage/evaluation/dataset/run",
+        "/manage/evaluation/dataset/delete",
     }
 )
 

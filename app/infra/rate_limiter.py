@@ -69,7 +69,12 @@ def _client_identity(request: Request) -> str:
         return f"apikey:{hashlib.md5(api_key.encode()).hexdigest()}"
 
     forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
+    if forwarded and get_settings().rate_limit.trust_proxy_count > 0:
+        # 仅信任配置层数的反代：从右侧数第 trust_proxy_count+1 个地址为真实客户端
+        ips = [p.strip() for p in forwarded.split(",")]
+        idx = len(ips) - get_settings().rate_limit.trust_proxy_count - 1
+        if idx >= 0 and ips[idx]:
+            return ips[idx]
         return forwarded.split(",")[0].strip()
     client = request.client
     return client.host if client else "unknown"

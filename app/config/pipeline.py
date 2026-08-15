@@ -140,5 +140,8 @@ class RateLimitSettings(BaseSettings):
     auth_window_seconds: int = 60
     manage_calls: int = 60
     manage_window_seconds: int = 60
+    # 信任的反向代理层数。0 = 不信任 X-Forwarded-For（防伪造）；
+    # 直连部署保持 0；有 N 层可信反代时设为 N，将从 XFF 右侧数第 N+1 个地址作为客户端。
+    trust_proxy_count: int = 0
 
     model_config = SettingsConfigDict(env_prefix="RATE_LIMIT_", env_file=_ENV_FILE, extra="ignore")
