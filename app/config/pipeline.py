@@ -51,7 +51,6 @@ class RAGSettings(BaseSettings):
     evidence_min_score: float = 0.1
     rerank_min_score: float = 0.0
     knowledge_route_confidence_threshold: float = 0.40
-    checkpoint_keep_latest: int = 50
     vectorize_batch_size: int = 10
     # P0-2: Contextual Chunking——embedding 文本附加文档名+章节路径（重索引后生效，可回退关闭）
     contextual_chunking_enabled: bool = True

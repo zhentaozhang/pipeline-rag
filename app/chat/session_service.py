@@ -70,7 +70,6 @@ async def stop_session(cid: str) -> dict[str, Any]:
 
 async def get_session_detail(db: AsyncSession, cid: str) -> dict[str, Any] | None:
     from app.db.models.conversation import ConversationExchange, ConversationMemory
-    from app.db.models.langgraph import GraphCheckpoint
 
     archive_store = ConversationArchiveStore(db)
     session = await archive_store.get_session(cid)
@@ -83,13 +82,6 @@ async def get_session_detail(db: AsyncSession, cid: str) -> dict[str, Any] | Non
     exchange_count = (
         await db.execute(select(func.count()).where(ConversationExchange.conversation_id == cid))
     ).scalar() or 0
-
-    try:
-        checkpoint_count = (
-            await db.execute(select(func.count()).where(GraphCheckpoint.thread_id == cid))
-        ).scalar() or 0
-    except Exception:
-        checkpoint_count = 0
 
     latest_ex = (
         await db.execute(
@@ -161,7 +153,6 @@ async def get_session_detail(db: AsyncSession, cid: str) -> dict[str, Any] | Non
         created_at=session.created_at.isoformat() if session.created_at else None,
         updated_at=session.updated_at.isoformat() if session.updated_at else None,
         chat_mode=session.chat_mode or "auto",
-        checkpoint_count=checkpoint_count,
         exchange_count=exchange_count,
         running=is_running,
         message_count=exchange_count * 2,
@@ -181,7 +172,6 @@ async def get_session_detail(db: AsyncSession, cid: str) -> dict[str, Any] | Non
 
 
 async def reset_session(db: AsyncSession, cid: str) -> dict[str, Any]:
-    from app.chat.checkpoint_manager import ChatCheckpointManager
     from app.db.models.conversation import ConversationSession
 
     stopped_running_task = False
@@ -196,9 +186,6 @@ async def reset_session(db: AsyncSession, cid: str) -> dict[str, Any]:
         .values(is_deleted=True, updated_at=func.now())
     )
 
-    checkpoint_mgr = ChatCheckpointManager(db)
-    removed_checkpoint_count = await checkpoint_mgr.clear_thread(cid)
-
     await db.commit()
 
     if task:
@@ -207,7 +194,6 @@ async def reset_session(db: AsyncSession, cid: str) -> dict[str, Any]:
     return {
         "conversationId": cid,
         "stoppedRunningTask": stopped_running_task,
-        "removedCheckpointCount": removed_checkpoint_count,
         "message": "会话已删除",
     }
 

@@ -18,7 +18,6 @@ dependencies = [
     "alembic>=1.13.0",
     # LangGraph Agent & Orchestrator
     "langgraph>=0.2.0",
-    "langgraph-checkpoint-mysql>=2.0.0",
     "langchain-core>=0.3.0",
     # LLM & HTTP
     "openai>=1.30.0",

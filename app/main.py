@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from app.config import get_settings
-from app.db.session import close_agent_pool, close_db, init_db
+from app.db.session import close_db, init_db
 from app.infra.es import close_es, init_es
 from app.infra.health import mark_startup_complete
 from app.infra.middleware import request_id_middleware
@@ -142,7 +142,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await close_redis()
     await close_pg()
     await close_db()
-    await close_agent_pool()
     logger.info("pipeline-rag stopped")
 
 

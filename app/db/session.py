@@ -3,7 +3,6 @@
 提供：AsyncEngine、AsyncSessionLocal、依赖注入 get_db()
 """
 
-import asyncio
 from collections.abc import AsyncGenerator
 
 from sqlalchemy import event
@@ -18,12 +17,6 @@ from sqlalchemy.orm import DeclarativeBase
 from app.config import get_settings
 
 settings = get_settings()
-
-# Agent executor 独立连接池（用于 LangGraph AIOMySQLSaver）
-# 和主引擎共享同一数据库但使用独立的 aiomysql.Pool 对象，
-# 因为 AIOMySQLSaver 需要原始 pool 而不是 SQLAlchemy engine。
-_agent_mysql_pool = None
-_agent_pool_lock = asyncio.Lock()
 
 # ── 引擎（全局单例）──────────────────────────────────────────────────────────
 _engine: AsyncEngine | None = None
@@ -93,39 +86,3 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.rollback()
             raise
 
-
-# ── Agent MySQL 连接池（LangGraph Checkpointer 使用）────────────────────────
-
-
-async def get_agent_pool():
-    """获取 agent 连接池（LangGraph AIOMySQLSaver 使用），懒初始化。"""
-    global _agent_mysql_pool
-    if _agent_mysql_pool is not None:
-        return _agent_mysql_pool
-    async with _agent_pool_lock:
-        if _agent_mysql_pool is not None:
-            return _agent_mysql_pool
-        import aiomysql
-
-        _agent_mysql_pool = await aiomysql.create_pool(
-            host=settings.mysql.host,
-            port=settings.mysql.port,
-            user=settings.mysql.user,
-            password=settings.mysql.password,
-            db=settings.mysql.db,
-            charset="utf8mb4",
-            autocommit=True,
-            minsize=settings.mysql.agent_pool_minsize,
-            maxsize=settings.mysql.agent_pool_maxsize,
-            pool_recycle=3600,
-        )
-        return _agent_mysql_pool
-
-
-async def close_agent_pool() -> None:
-    """关闭 agent 连接池（在 lifespan 关闭时调用）"""
-    global _agent_mysql_pool
-    if _agent_mysql_pool is not None:
-        _agent_mysql_pool.terminate()
-        await _agent_mysql_pool.wait_closed()
-        _agent_mysql_pool = None

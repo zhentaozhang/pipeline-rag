@@ -18,13 +18,6 @@ from app.db.models.document import (
     PipelineRAGDocumentTask,
 )
 from app.db.models.knowledge import KnowledgeScope, KnowledgeTopic, TopicDocumentRelation
-from app.db.models.langgraph import (
-    Checkpoint,
-    CheckpointBlob,
-    CheckpointWrite,
-    GraphCheckpoint,
-    GraphThread,
-)
 from app.db.models.rag_observability import (
     ChatModelUsageTrace,
     ConversationChannelExecution,
@@ -40,9 +33,6 @@ __all__ = [
     "AdminUser",
     "ChatDialogue",
     "ChatModelUsageTrace",
-    "Checkpoint",
-    "CheckpointBlob",
-    "CheckpointWrite",
     "ConversationChannelExecution",
     "ConversationExchange",
     "ConversationMemory",
@@ -59,8 +49,6 @@ __all__ = [
     "DocumentStructureNode",
     "DocumentTask",
     "DocumentTaskLog",
-    "GraphCheckpoint",
-    "GraphThread",
     "KnowledgeRouteTrace",
     "KnowledgeScope",
     "KnowledgeTopic",

@@ -30,7 +30,6 @@ class TestDBSettings:
         )
         assert s.url == "mysql+aiomysql://u:p@h:1234/d"
         assert s.sync_url == "mysql+pymysql://u:p@h:1234/d"
-        assert s.checkpoint_url == "mysql://u:p@h:1234/d"
 
     def test_postgres_urls(self):
         s = PostgresSettings(user="u", password="p", host="h", port=5432, db="d")
@@ -122,7 +121,6 @@ class TestPipelineSettings:
         assert s.max_sub_questions == 4
         assert s.no_evidence_reply.startswith("当前没有")
         assert s.knowledge_route_confidence_threshold == 0.40
-        assert s.checkpoint_keep_latest == 50
         assert s.evaluation_sample_rate == 0.0
 
     def test_agent_defaults(self):

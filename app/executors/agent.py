@@ -69,31 +69,23 @@ class ReactAgentExecutor(ConversationExecutor):
 
         import sys as _sys
 
-        from langgraph.checkpoint.mysql.aio import AIOMySQLSaver
-
-        from app.db.session import get_agent_pool
-
-        pool = await get_agent_pool()
         span_active = False
         if tracer is not None:
             span_mgr = tracer.span("react_agent", kind=SpanKind.AGENT)
             await span_mgr.__aenter__()
             span_active = True
         try:
-            checkpointer = AIOMySQLSaver(pool)
-            await checkpointer.setup()
-
             agent_question = plan.agent_question
             if not agent_question:
                 agent_question = plan.rewritten_question
-            config = {"configurable": {"thread_id": self.task.conversation_id}}
             messages = [SystemMessage(content=system_prompt), HumanMessage(content=agent_question)]
 
-            graph = workflow.compile(checkpointer=checkpointer)
+            # P2-1：彻底移除 LangGraph checkpoint 持久化（AIOMySQLSaver）——
+            # 每次请求都是单轮一次性执行，从不跨请求恢复，checkpoint 写后即弃；
+            # 改用无 checkpointer 编译，终态从最后一次节点更新累积。
+            graph = workflow.compile()
 
-            async for event in graph.astream(
-                {"messages": messages}, config=config, stream_mode="updates"
-            ):
+            async for event in graph.astream({"messages": messages}, stream_mode="updates"):
                 for node_name, state_update in event.items():
                     if node_name == "agent":
                         msgs = state_update.get("messages", [])
@@ -123,6 +115,10 @@ class ReactAgentExecutor(ConversationExecutor):
                                     self.task.thinking_steps.append(tool_think)
                                     yield self._emit(SSEEventType.THINKING, tool_think)
 
+                        model_count = state_update.get("model_call_count")
+                        if model_count:
+                            self.task.model_call_count = model_count
+
                     elif node_name == "tools":
                         tool_count = state_update.get("tool_call_count")
                         if tool_count:
@@ -130,14 +126,9 @@ class ReactAgentExecutor(ConversationExecutor):
                             tool_result_think = "获取信息完成，正在分析结果..."
                             self.task.thinking_steps.append(tool_result_think)
                             yield self._emit(SSEEventType.THINKING, tool_result_think)
-
-            state = await graph.aget_state(config)
-            if isinstance(state, dict):
-                self.task.model_call_count = state.get("model_call_count", 0)
-                self.task.tool_call_count = state.get("tool_call_count", 0)
-                session_tool_count = state.values.get("session_tool_call_count", 0)
-                if session_tool_count:
-                    self.task.tool_call_count = session_tool_count
+                        session_tool_count = state_update.get("session_tool_call_count")
+                        if session_tool_count:
+                            self.task.tool_call_count = session_tool_count
         except Exception as e:
             logger.error("agent execution failed", error=str(e), exc_info=True)
             raise

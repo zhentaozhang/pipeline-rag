@@ -16,7 +16,6 @@ class ConversationSessionVO(CamelModel):
     exchange_count: int = 0
     memory_summary: str = ""
     running: bool = False
-    checkpoint_count: int = 0
     message_count: int = 0
     latest_user_message: str = ""
     latest_assistant_message: str = ""
@@ -62,7 +61,6 @@ class SessionDetailVO(CamelModel):
     memory_summary: str = ""
     created_at: str | None = None
     chat_mode: str = "auto"
-    checkpoint_count: int = 0
     exchange_count: int = 0
     running: bool = False
     message_count: int = 0

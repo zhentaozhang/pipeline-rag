@@ -151,7 +151,8 @@ class RedisLeaseManager:
                 current_owner = await r.get(self.key)
             self._consecutive_failures = 0
             self._first_failure_time = 0.0
-            return current_owner == self.owner_id
+            # redis 客户端 get 返回 Any，显式转 str 后比较（None → "None"，恒不等于持有者）
+            return str(current_owner) == self.owner_id
         except Exception:
             now = time.monotonic()
             if self._first_failure_time == 0.0:

@@ -5,7 +5,7 @@ from app.config.base import _ENV_FILE
 
 
 class MySQLSettings(BaseSettings):
-    """MySQL 配置（业务数据库 + LangGraph Checkpointer）"""
+    """MySQL 配置（业务数据库）"""
 
     host: str = "localhost"
     port: int = 3306
@@ -14,8 +14,6 @@ class MySQLSettings(BaseSettings):
     password: str = "5656"
     pool_size: int = 10
     max_overflow: int = 20
-    agent_pool_minsize: int = 1
-    agent_pool_maxsize: int = 5
 
     @computed_field  # type: ignore[misc]
     @property
@@ -26,11 +24,6 @@ class MySQLSettings(BaseSettings):
     @property
     def sync_url(self) -> str:
         return f"mysql+pymysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}"
-
-    @computed_field  # type: ignore[misc]
-    @property
-    def checkpoint_url(self) -> str:
-        return f"mysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}"
 
     model_config = SettingsConfigDict(env_prefix="MYSQL_", env_file=_ENV_FILE, extra="ignore")
 
