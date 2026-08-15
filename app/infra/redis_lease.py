@@ -104,6 +104,8 @@ class RedisLeaseManager:
         self._renew_task: asyncio.Task | None = None
         self._consecutive_failures: int = 0
         self._first_failure_time: float = 0.0
+        # 体检 C7：续期放弃（锁已过期/他人抢占）后立即判失，收敛双实例并发窗口
+        self._lease_give_up: bool = False
 
     @property
     def lock_name(self) -> str:
@@ -136,9 +138,13 @@ class RedisLeaseManager:
     async def is_owned(self) -> bool:
         """检查锁是否仍由当前实例持有。
 
-        引入连续失败计数 + 时间窗口，仅在 60 秒内连续失败 10 次后才认定锁丢失。
+        优先检查本地 give-up 标志（续期已放弃 → 立即判失）；
+        否则采用连续失败计数 + 时间窗口，仅在 60 秒内连续失败 10 次后认定锁丢失。
         避免瞬时的 Redis 网络抖动或断路器短暂开启导致对话中断。
         """
+        if self._lease_give_up:
+            logger.warning("lease ownership given up (renew abandoned)", key=self.key)
+            return False
         try:
             r = get_redis()
             async with _redis_breaker:
@@ -205,6 +211,7 @@ class RedisLeaseManager:
                     logger.debug("lease renewed", key=self.key)
                 else:
                     logger.warning("lease renew failed (owner mismatch)", key=self.key)
+                    self._lease_give_up = True
                     break
             except asyncio.CancelledError:
                 break
@@ -223,6 +230,7 @@ class RedisLeaseManager:
                         key=self.key,
                         renew_failures=renew_failures,
                     )
+                    self._lease_give_up = True
                     break
 
     @classmethod
