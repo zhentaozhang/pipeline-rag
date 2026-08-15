@@ -134,6 +134,22 @@ class RecommendationSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="RECOMMEND_", env_file=_ENV_FILE, extra="ignore")
 
 
+class S3ConnectorSettings(BaseSettings):
+    """S3 数据源连接器（P3-3）：扫描 S3 bucket 并导入文档处理流水线"""
+
+    enabled: bool = False
+    endpoint: str = "https://s3.amazonaws.com"
+    access_key: str = ""
+    secret_key: str = ""
+    bucket: str = ""
+    prefix: str = ""  # 对象前缀过滤（如 "documents/rag/"）
+    file_types: str = ".pdf,.docx,.doc,.txt,.md,.pptx,.xlsx"  # 逗号分隔扩展名
+    batch_size: int = 10
+    temp_dir: str = "/tmp/rag-connector-s3"
+
+    model_config = SettingsConfigDict(env_prefix="CONNECTOR_S3_", env_file=_ENV_FILE, extra="ignore")
+
+
 class MinerUSettings(BaseSettings):
     """MinerU 文档解析增强通道（P2-4）：复杂版式（扫描件/表格/多栏）走 MinerU，失败降级 unstructured"""
 

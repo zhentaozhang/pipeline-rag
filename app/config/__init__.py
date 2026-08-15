@@ -26,6 +26,7 @@ from app.config.pipeline import (
     RAGSettings,
     RateLimitSettings,
     RecommendationSettings,
+    S3ConnectorSettings,
     StructureParsingSettings,
 )
 from app.config.security import JWTSettings
@@ -56,6 +57,7 @@ class Settings:
         self.agent: AgentSettings = AgentSettings()  # type: ignore[call-arg]
         self.memory: MemorySettings = MemorySettings()  # type: ignore[call-arg]
         self.mineru: MinerUSettings = MinerUSettings()  # type: ignore[call-arg]
+        self.s3_connector: S3ConnectorSettings = S3ConnectorSettings()  # type: ignore[call-arg]
         self.structure: StructureParsingSettings = StructureParsingSettings()  # type: ignore[call-arg]
         self.preview: PreviewModeSettings = PreviewModeSettings()  # type: ignore[call-arg]
         self.chunk: ChunkSettings = ChunkSettings()  # type: ignore[call-arg]
