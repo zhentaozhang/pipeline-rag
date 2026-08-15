@@ -4,6 +4,7 @@ from app.orchestrator.knowledge_router import route_by_document
 from app.orchestrator.navigation_analyzer import (
     RetrievalQuestionPlan,
     RewriteResult,
+    has_navigation_intent,
     _asks_adjacency,
     _asks_item_lookup,
     _asks_outline,
@@ -305,3 +306,19 @@ class TestRouteByDocument:
         assert decision is not None
         assert decision.execution_mode == "RETRIEVAL"
         assert decision.doc_ids == ["doc1"]
+
+
+class TestNavigationIntentPrefilter:
+    """P0-3：导航意图快速预筛"""
+
+    def test_navigation_hints_hit(self):
+        assert has_navigation_intent("上一节讲了什么")          # 邻接
+        assert has_navigation_intent("文档包含哪些章节")        # 大纲
+        assert has_navigation_intent("第 2 步是什么")           # 条目
+        assert has_navigation_intent("3.2.1 节的配置说明")      # 章节号
+        assert has_navigation_intent("这两节有什么区别")        # 分析
+
+    def test_plain_questions_miss(self):
+        assert not has_navigation_intent("你好")
+        assert not has_navigation_intent("如何配置数据库连接")
+        assert not has_navigation_intent("什么是 JWT 认证")

@@ -384,6 +384,26 @@ def _asks_adjacency(question: str) -> bool:
     return any(h in question for h in _ADJACENCY_HINTS)
 
 
+def has_navigation_intent(question: str) -> bool:
+    """P0-3: 导航意图快速预筛——命中任一导航特征即认为可能涉及文档内导航。
+
+    用于 stage 层零成本跳过：绝大多数查询不涉及导航，无需执行完整 analyze（正则全量）。
+    """
+    normalized = safe_text(question)
+    if not normalized:
+        return False
+    return (
+        _asks_adjacency(normalized)
+        or _asks_outline(normalized)
+        or _asks_item_lookup(normalized)
+        or _looks_analytic_question(normalized)
+        or _mentions_structure(normalized)
+        # 步骤/条目序号（如“第 2 步”“第 3 条”）——_asks_item_lookup 只覆盖中文量词形式
+        or bool(_STEP_REFERENCE_PATTERN.search(normalized))
+        or bool(_ORDINAL_REFERENCE_PATTERN.search(normalized))
+    )
+
+
 def _asks_outline(question: str) -> bool:
     return any(h in question for h in _OUTLINE_HINTS)
 

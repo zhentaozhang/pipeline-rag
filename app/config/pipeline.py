@@ -53,6 +53,8 @@ class RAGSettings(BaseSettings):
     knowledge_route_confidence_threshold: float = 0.40
     checkpoint_keep_latest: int = 50
     vectorize_batch_size: int = 10
+    # P0-2: Contextual Chunking——embedding 文本附加文档名+章节路径（重索引后生效，可回退关闭）
+    contextual_chunking_enabled: bool = True
     supervisor_enabled: bool = True
     # P0-1c: LLM 分解前规则预筛——仅复合/分析类/长问题触发分解，简单问题零 LLM 成本
     supervisor_rule_prefilter: bool = True

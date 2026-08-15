@@ -53,7 +53,12 @@ class VectorizerService:
         child_embeddings = []
         for i in range(0, len(child_chunks), self._batch_size):
             batch = child_chunks[i : i + self._batch_size]
-            texts = [c.content for c in batch]
+            texts = [
+                self._build_contextual_text(c, document_name)
+                if settings.rag.contextual_chunking_enabled
+                else c.content
+                for c in batch
+            ]
             embs = await self._embed_batch(texts)
             child_embeddings.extend(embs)
             logger.info("batch vectorized", batch=i // self._batch_size + 1, count=len(batch))
@@ -69,6 +74,22 @@ class VectorizerService:
         )
 
         return len(child_chunks)
+
+    def _build_contextual_text(self, chunk: Chunk, document_name: str) -> str:
+        """P0-2: Contextual Chunking（Anthropic 方法）——embedding 文本附加文档名 + 章节路径。
+
+        解决"查询词与 chunk 字面不匹配"的召回失败（如查询用简称/术语，chunk 只含全称）。
+        仅影响 embedding 输入，不改存储内容（document_chunk 仍存纯文本供 ParentBlock 反查）。
+        已索引数据需重新向量化后生效（reindex）。
+        """
+        parts: list[str] = []
+        if document_name:
+            parts.append(f"文档：《{document_name}》")
+        section = chunk.section_path or chunk.section_title or ""
+        if section:
+            parts.append(f"章节：{section}")
+        parts.append(chunk.content)
+        return "\n".join(parts)
 
     async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
         """批量调用嵌入提供者（支持 provider 切换）"""
