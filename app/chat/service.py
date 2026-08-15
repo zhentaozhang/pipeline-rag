@@ -158,27 +158,80 @@ class BusinessChatService:
 
         state = _StreamState()
 
+        # ── 响应缓存（第二轮架构评审·可以优化 3）：命中跳过执行，未命中收集回写 ──
+        cached_hit = None
+        collected_events: list[str] = []
+        if settings.chat_cache.enabled:
+            from app.chat.response_cache import lookup as cache_lookup
+
+            cached_hit = await cache_lookup(
+                self.db, conversation_id, question, chat_mode, request.doc_ids
+            )
+
         try:
-            timeout = settings.rag.stream_timeout_seconds
-            async for event in _async_generator_with_timeout(
-                execute_stream(
-                    db=self.db,
-                    task=task,
-                    conversation_id=conversation_id,
-                    temp_exchange_id=temp_exchange_id,
-                    question=question,
-                    request=request,
-                    chat_mode=chat_mode,
-                    current_date_text=current_date_text,
-                    memory_service=memory_service,
-                    archive_store=archive_store,
-                    session=session,
-                    lease_mgr=lease_mgr,
-                    state=state,
-                ),
-                timeout=timeout,
-            ):
-                yield event
+            if cached_hit is not None:
+                # 命中：回放缓存事件（替换 exchange_id 为本次真实值）
+                import json as _json
+
+                for raw in cached_hit.events:
+                    line = raw.strip()
+                    if line.startswith("data:"):
+                        payload_str = line[len("data:"):].strip()
+                        try:
+                            payload = _json.loads(payload_str)
+                            if payload.get("type") == "done" and payload.get("exchangeId") is not None:
+                                payload["exchangeId"] = temp_exchange_id
+                                raw = "data: " + _json.dumps(payload, ensure_ascii=False)
+                        except ValueError:
+                            pass
+                    yield raw
+                state.full_answer = [cached_hit.answer]
+            else:
+                timeout = settings.rag.stream_timeout_seconds
+                async for event in _async_generator_with_timeout(
+                    execute_stream(
+                        db=self.db,
+                        task=task,
+                        conversation_id=conversation_id,
+                        temp_exchange_id=temp_exchange_id,
+                        question=question,
+                        request=request,
+                        chat_mode=chat_mode,
+                        current_date_text=current_date_text,
+                        memory_service=memory_service,
+                        archive_store=archive_store,
+                        session=session,
+                        lease_mgr=lease_mgr,
+                        state=state,
+                    ),
+                    timeout=timeout,
+                ):
+                    collected_events.append(event)
+                    yield event
+
+            # 正常结束（非失败/停止）→ 写缓存（仅确定性问答 + 无历史，store 内部校验）
+            if settings.chat_cache.enabled and not state.turn_failed and not state.turn_stopped:
+                from app.chat.response_cache import (
+                    store as cache_store,
+                )
+
+                cacheable_events = [
+                    e
+                    for e in collected_events
+                    if '"type": "text"' in e
+                    or '"type": "reference"' in e
+                    or '"type": "recommend"' in e
+                    or '"type": "done"' in e
+                ]
+                await cache_store(
+                    self.db,
+                    conversation_id,
+                    question,
+                    chat_mode,
+                    request.doc_ids,
+                    cacheable_events,
+                    "".join(state.full_answer),
+                )
 
         except asyncio.CancelledError:
             state.turn_stopped = True

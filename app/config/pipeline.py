@@ -133,6 +133,15 @@ class RecommendationSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="RECOMMEND_", env_file=_ENV_FILE, extra="ignore")
 
 
+class ChatCacheSettings(BaseSettings):
+    """对话响应缓存（第二轮架构评审·可以优化 3）：缓存无历史上下文的确定性问答"""
+
+    enabled: bool = False
+    ttl_hours: int = 24
+
+    model_config = SettingsConfigDict(env_prefix="CHAT_CACHE_", env_file=_ENV_FILE, extra="ignore")
+
+
 class FeishuSettings(BaseSettings):
     """飞书机器人渠道（P3-4）：长连接事件订阅 + 卡片流式回复"""
 
