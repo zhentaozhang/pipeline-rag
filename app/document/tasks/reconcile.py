@@ -169,6 +169,18 @@ def reconcile_indexes() -> dict:
     return run_async(_do())  # type: ignore[no-any-return]
 
 
+@celery_app.task(name="document.import_web")
+def import_web_documents() -> dict:
+    """网页数据源导入（P3-3）：发现站点页面 → 抓取转 Markdown → 触发文档流水线"""
+
+    async def _do() -> dict:
+        from app.document.connectors.web_connector import import_from_web
+
+        return await import_from_web()
+
+    return run_async(_do())  # type: ignore[no-any-return]
+
+
 @celery_app.task(name="document.import_s3")
 def import_s3_documents() -> dict:
     """S3 数据源导入（P3-3）：扫描 bucket → 下载 → 触发文档流水线"""

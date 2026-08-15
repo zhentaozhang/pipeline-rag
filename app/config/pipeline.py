@@ -150,6 +150,22 @@ class S3ConnectorSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CONNECTOR_S3_", env_file=_ENV_FILE, extra="ignore")
 
 
+class WebConnectorSettings(BaseSettings):
+    """网页爬虫连接器（P3-3）：抓取公开站点内容导入文档流水线"""
+
+    enabled: bool = False
+    seed_urls: str = ""  # 逗号分隔种子页（无 sitemap 时从此递归发现）
+    sitemap_url: str = ""  # sitemap.xml 地址（企业站标配，优先）
+    max_pages: int = 50
+    max_depth: int = 2  # 种子递归抓取深度
+    concurrency: int = 4
+    delay_seconds: float = 0.5  # 请求间隔，避免对目标站点造成压力
+    respect_robots: bool = True
+    user_agent: str = ""
+
+    model_config = SettingsConfigDict(env_prefix="CONNECTOR_WEB_", env_file=_ENV_FILE, extra="ignore")
+
+
 class MinerUSettings(BaseSettings):
     """MinerU 文档解析增强通道（P2-4）：复杂版式（扫描件/表格/多栏）走 MinerU，失败降级 unstructured"""
 
