@@ -45,7 +45,7 @@ class EvaluationPipeline:
 
         final: list[MetricResult] = []
         for r in results:
-            if isinstance(r, Exception):
+            if isinstance(r, BaseException):
                 final.append(MetricResult(metric_name="error", value=0.0, reason=str(r)))
             else:
                 final.append(r)

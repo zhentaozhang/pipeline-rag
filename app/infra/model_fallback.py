@@ -63,7 +63,7 @@ class ModelFallbackManager:
 
     async def chat_completion(
         self,
-        messages: list[dict],
+        messages: Any,
         model: str | None = None,
         max_retries_per_model: int = 2,
         **kwargs: Any,

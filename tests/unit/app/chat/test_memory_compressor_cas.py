@@ -11,7 +11,6 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy.sql.dml import Update
 
-from app.chat.memory import ConversationSummaryPayload
 from app.chat.memory_compressor import ConversationMemoryCompressor
 
 

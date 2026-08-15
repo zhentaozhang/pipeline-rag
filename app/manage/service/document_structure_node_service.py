@@ -140,6 +140,8 @@ async def _sync_to_neo4j(doc_id: str, db_nodes: list[DocumentStructureNode]) -> 
         from app.db.models.document import Document as DocModel
         from app.db.session import _session_factory as async_session_maker
 
+        if async_session_maker is None:
+            raise RuntimeError("db session factory not initialized")
         async with async_session_maker() as db:
             stmt = select(DocModel.document_name).where(DocModel.doc_id == doc_id)
             res = await db.execute(stmt)
@@ -166,10 +168,11 @@ async def _sync_to_neo4j(doc_id: str, db_nodes: list[DocumentStructureNode]) -> 
             # 2. 创建 Document 节点 (含 parseTaskId + currentVersion)
             parse_task_val = 0
             if db_nodes and db_nodes[0].parse_task_id:
-                try:
-                    parse_task_val = int(db_nodes[0].parse_task_id)
-                except (ValueError, TypeError):
-                    parse_task_val = db_nodes[0].parse_task_id
+                raw_task_id = db_nodes[0].parse_task_id
+                parsed_task_id = (
+                    safe_int(raw_task_id, default=None) if raw_task_id is not None else None
+                )
+                parse_task_val = parsed_task_id if parsed_task_id is not None else 0
             await session.run(
                 """
                     CREATE (d:Document {

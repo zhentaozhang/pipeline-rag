@@ -89,7 +89,7 @@ def count_indent_level(text: str) -> int:
 
 
 def build_line_frequency(logical_lines: list[DocumentStructureLogicalLine]) -> dict[str, int]:
-    freq = defaultdict(int)
+    freq: dict[str, int] = defaultdict(int)
     for ll in logical_lines:
         if ll.normalized_text:
             freq[ll.normalized_text] += 1

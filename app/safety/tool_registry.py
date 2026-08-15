@@ -151,5 +151,5 @@ async def _maybe_awaitable(func: Callable, *args: Any, **kwargs: Any) -> bool:
     """统一处理 sync/async callable"""
     result = func(*args, **kwargs)
     if hasattr(result, "__await__"):
-        return await result
+        return bool(await result)
     return bool(result)

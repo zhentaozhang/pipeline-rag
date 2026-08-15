@@ -18,6 +18,10 @@ class StructureChunker:
         from app.db.session import _session_factory as mysql_session_factory
         from app.infra.id_generator import next_id_str
 
+        if mysql_session_factory is None:
+            logger.warning("db session factory not initialized, skip structure chunking")
+            return []
+
         candidates = []
         try:
             async with mysql_session_factory() as session:

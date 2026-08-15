@@ -36,7 +36,9 @@ def _get_tavily_client() -> httpx.AsyncClient:
             if _tavily_client is None:
                 s = settings.tavily
                 _tavily_client = httpx.AsyncClient(
-                    timeout=(s.connect_timeout_ms / 1000, s.read_timeout_ms / 1000)
+                    timeout=httpx.Timeout(
+                        s.read_timeout_ms / 1000, connect=s.connect_timeout_ms / 1000
+                    )
                 )
     return _tavily_client
 
@@ -301,7 +303,7 @@ async def tavily_search(
                 result_count=len(data.get("results", [])),
                 duration_ms=duration_ms,
             )
-            return data
+            return {k: v for k, v in data.items()}
 
         except (httpx.TimeoutException, httpx.HTTPStatusError) as e:
             if attempt >= max_retries:

@@ -54,7 +54,7 @@ class IntentClassifier:
             import json
 
             data = json.loads(content)
-            intent = data.get("intent", "knowledge")
+            intent: str = data.get("intent", "knowledge")
             if intent not in ["knowledge", "open", "ambiguous"]:
                 intent = "knowledge"
             return intent

@@ -10,6 +10,7 @@ MCP Skill 抽象基类
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 from app.safety.enums import ToolRisk
 
@@ -43,6 +44,8 @@ class BaseSkill(ABC):
     description: str = ""
     risk: ToolRisk = ToolRisk.MEDIUM
     system_prompt_fragment: str = ""
+    # 运行时标记：是否已注册到 SkillRegistry（由 skill_registry 维护）
+    _registered: ClassVar[bool] = False
 
     @abstractmethod
     def get_tools(self) -> list[SkillTool]:

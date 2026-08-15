@@ -355,7 +355,7 @@ class PresidioPiiDetector(RegexPiiDetector):
             text=text,
             analyzer_results=presidio_results,
         )
-        return anonymized.text
+        return str(anonymized.text)
 
     @staticmethod
     def _deduplicate(entities: list[PiiEntity]) -> list[PiiEntity]:

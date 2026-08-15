@@ -122,4 +122,5 @@ async def list_by_doc(db: AsyncSession, doc_id: str) -> list:
     from app.db.models.document import DocumentTask as DocTask
 
     stmt = select(DocTask).where(DocTask.doc_id == doc_id).order_by(DocTask.id.desc())
-    return (await db.execute(stmt)).scalars().all()
+    rows = (await db.execute(stmt)).scalars().all()
+    return list(rows)

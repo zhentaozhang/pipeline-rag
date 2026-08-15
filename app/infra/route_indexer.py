@@ -194,7 +194,7 @@ def _extract_entity_terms(text: str) -> list[str]:
         return []
     # 使用 TextRank 或 TF-IDF 提取关键词
     keywords = jieba.analyse.extract_tags(text, topK=10)
-    return keywords
+    return [str(k) for k in keywords]
 
 
 from datetime import datetime

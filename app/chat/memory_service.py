@@ -57,7 +57,7 @@ class PersistentConversationMemoryService:
         )
         result = await self.db.execute(stmt)
         memory = result.scalar_one_or_none()
-        return memory.summary_text if memory else ""
+        return (memory.summary_text or "") if memory else ""
 
     async def delete_memory(self, conversation_id: str) -> None:
         await self.db.execute(

@@ -166,6 +166,7 @@ def task_parse_document(self, doc_id: str, file_path: str) -> dict:
     from app.manage.service.document_async_service import save_log as _save_log_fn
 
     async def _recommend_and_confirm_strategy():
+        doc_internal_id: int | None = None
         try:
             from sqlalchemy import select as sa_select
 
@@ -198,7 +199,7 @@ def task_parse_document(self, doc_id: str, file_path: str) -> dict:
                 await _save_log_fn(
                     db,
                     self.request.id,
-                    doc_id,
+                    doc_internal_id or 0,
                     DocumentTaskStageEnum.STRATEGY_ROUTE.value,
                     DocumentTaskEventTypeEnum.RECOMMEND_STRATEGY.value,
                     DocumentLogLevelEnum.INFO.value,

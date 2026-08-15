@@ -56,6 +56,7 @@ async def bucket_exists(bucket_name: str) -> bool:
     client = get_minio()
     async with _minio_breaker:
         return await asyncio.to_thread(client.bucket_exists, bucket_name)
+    return False
 
 
 async def upload_bytes(
@@ -112,12 +113,13 @@ async def download_bytes(object_name: str) -> bytes:
 
     try:
         async with _minio_breaker:
-            return await asyncio.to_thread(_do_download)
+            data = await asyncio.to_thread(_do_download)
     except Exception as e:
         logger.error(
             "minio download_bytes failed", object_name=object_name, error=str(e), exc_info=True
         )
         raise
+    return data
 
 
 async def delete_object(object_name: str) -> None:

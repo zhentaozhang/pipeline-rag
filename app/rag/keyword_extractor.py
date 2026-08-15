@@ -54,7 +54,7 @@ def _add_sliding_ngrams(tokens: list[str]) -> list[str]:
 
 def _add_character_ngrams(token: str) -> list[str]:
     """字符级 head/tail/sliding n-grams（前缀/后缀/滑动，最大长度 4）"""
-    ngrams = []
+    ngrams: list[str] = []
     n = len(token)
     if n < 2:
         return ngrams

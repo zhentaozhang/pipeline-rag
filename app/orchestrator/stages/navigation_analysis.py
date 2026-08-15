@@ -36,9 +36,13 @@ class NavigationAnalysisStage(Stage[PrepareContext, ExecutionPlan]):
         )
 
         if nav_result:
-            try:
-                ctx.execution_mode = ExecutionMode(nav_result.execution_mode)
-            except ValueError:
+            mode_raw = nav_result.execution_mode
+            if mode_raw:
+                try:
+                    ctx.execution_mode = ExecutionMode(mode_raw)
+                except ValueError:
+                    ctx.execution_mode = ExecutionMode.RETRIEVAL
+            else:
                 ctx.execution_mode = ExecutionMode.RETRIEVAL
             ctx.navigation_decision = nav_result
             ctx.retrieval_question = ctx.rewritten_question

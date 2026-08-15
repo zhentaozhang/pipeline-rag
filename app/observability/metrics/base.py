@@ -36,10 +36,14 @@ def parse_json_safe(text: str, default: Any = None) -> dict[str, Any] | list[Any
     for start, end in candidates:
         candidate = text[start:end]
         try:
-            return json.loads(candidate)
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+            if isinstance(parsed, list):
+                return parsed
         except json.JSONDecodeError:
             continue
-    return default
+        return default
 
 
 class MetricResult(BaseModel):

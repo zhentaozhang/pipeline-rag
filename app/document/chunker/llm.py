@@ -31,7 +31,7 @@ class LLMChunker:
                     temperature=0.1,
                     response_format={"type": "json_object"},
                 )
-            content = resp.choices[0].message.content.strip()
+            content = (resp.choices[0].message.content or "").strip()
             if content.startswith("```"):
                 content = content.split("\n", 1)[1]
                 if content.endswith("```"):

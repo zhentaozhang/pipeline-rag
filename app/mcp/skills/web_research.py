@@ -23,7 +23,7 @@ class WebResearchSkill(BaseSkill):
         return [
             SkillTool(
                 name="tavily_search",
-                fn=_tavily_tool,
+                fn=_tavily_tool.func,
                 description="联网搜索最新信息、事实资料和网页来源。"
                 "调用时必须传 JSON 参数，且至少包含非空 query；"
                 "可选 topic 和 maxResults，其中 topic 仅允许 general、news、finance。",

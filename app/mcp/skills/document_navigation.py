@@ -56,7 +56,7 @@ class DocumentNavigationSkill(BaseSkill):
         return [
             SkillTool(
                 name="get_document_structure",
-                fn=get_document_structure,
+                fn=get_document_structure.func,
                 description="获取文档的章节结构（目录导航树）。传入 doc_id。",
             )
         ]

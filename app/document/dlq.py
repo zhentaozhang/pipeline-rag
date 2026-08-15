@@ -47,7 +47,7 @@ def _extract_doc_id(task_name: str, args: tuple | None) -> str | None:
     if not args:
         return None
     if task_name == "document.parse":
-        return args[0] if len(args) > 0 else None
+        return str(args[0]) if len(args) > 0 else None
     if len(args) >= 2:
-        return args[1]
+        return str(args[1])
     return None

@@ -199,7 +199,7 @@ class DocumentParser:
 
         loop = asyncio.get_event_loop()
 
-        def _do_parse() -> list[object]:
+        def _do_parse():
             return partition_docx(filename=str(path))
 
         elements = await loop.run_in_executor(None, _do_parse)
@@ -212,7 +212,7 @@ class DocumentParser:
 
         loop = asyncio.get_event_loop()
 
-        def _do_parse() -> list[object]:
+        def _do_parse():
             return partition_pptx(filename=str(path))
 
         elements = await loop.run_in_executor(None, _do_parse)

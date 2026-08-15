@@ -62,7 +62,8 @@ class RecommendationService:
                 return []
 
             data = json.loads(content)
-            return data.get("recommendations", [])[:3]
+            recommendations: list[str] = data.get("recommendations", [])
+            return recommendations[:3]
         except Exception as e:
             logger.warning("failed to generate recommendations", error=str(e))
             return []

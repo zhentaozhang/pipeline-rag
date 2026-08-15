@@ -121,7 +121,7 @@ async def upload_document(
 
     await save_log(
         db,
-        task.id,
+        str(task.id),
         doc_internal_id,
         stage_type=DocumentTaskStageEnum.FILE_UPLOAD.value,
         event_type=DocumentTaskEventTypeEnum.COMPLETE.value,

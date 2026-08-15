@@ -99,7 +99,7 @@ class Neo4jGraphService:
     async def _run_query(
         self,
         query: str,
-        params: dict = None,
+        params: dict | None = None,
         description: str = "query",
         fetch_mode: str = "single",
     ) -> Any:

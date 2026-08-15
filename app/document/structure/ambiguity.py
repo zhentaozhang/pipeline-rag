@@ -50,7 +50,7 @@ class DocumentStructureAmbiguityResolver:
         try:
             prompt = self._build_prompt(document_title, ambiguous_signals, all_lines)
             async with llm_breaker():
-                response = await self._openai.chat.completions.create(
+                response = await self._openai.chat.completions.create(  # type: ignore[call-overload]
                     model=self.model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.1,
@@ -128,7 +128,8 @@ class DocumentStructureAmbiguityResolver:
 
         json_array = normalized[start : end + 1]
         try:
-            return json.loads(json_array)
+            parsed = json.loads(json_array)
+            return parsed if isinstance(parsed, list) else []
         except json.JSONDecodeError:
             return []
 

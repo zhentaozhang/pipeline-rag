@@ -4,7 +4,7 @@ import random
 import uuid
 from collections import deque
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from prometheus_client import Counter, Gauge, Histogram
@@ -232,7 +232,7 @@ class Tracer:
         self, name: str, kind: SpanKind = SpanKind.PIPELINE, *, input: Any = None
     ) -> _SpanManager:
         if not self._active:
-            return _DUMMY_SPAN
+            return cast(_SpanManager, _DUMMY_SPAN)
         parent = self._stack[-1] if self._stack else self._root_span
         span = SpanContext(
             span_id=next_id_str(),

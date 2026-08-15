@@ -499,7 +499,7 @@ async def build_chunks(db: AsyncSession, doc_id: str, text: str, task_id: str) -
     import dataclasses
 
     for c in child_chunks:
-        c.document_id = doc_internal_id
+        c.document_id = doc_internal_id or 0
 
     return [dataclasses.asdict(c) for c in child_chunks]
 
