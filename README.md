@@ -40,6 +40,7 @@
 | **文档处理** | 异步 Pipeline：解析（MinerU 增强）→ 分块（4 策略 + Contextual Chunking）→ 向量化 → 索引 |
 | **数据源接入** | 手动上传 + S3 / 网页爬虫连接器自动导入（飞书/网页多渠道） |
 | **引用溯源** | 回答附来源引用（chunk_id / 章节 / 原文），前端可展开查看 |
+| **响应缓存** | 无历史上下文的确定性问答走 Redis 缓存，命中省全链路 LLM |
 | **MCP 插件** | 基于 FastMCP 的 Skills 插件系统，工具自动发现与注册 |
 | **安全控制** | PII 检测、输入/输出过滤、风险分级审批、沙箱执行 |
 | **可观测性** | 自研 Trace 链路（span 瀑布 + 评估分数）+ Prometheus 指标 + LLM-as-Judge 质量评估 |
@@ -171,6 +172,18 @@ Supervisor 利用 LLM 自动分解复杂问题生成带依赖关系的子任务�
 - 连接器统一基于 `DocumentConnector` 抽象（list / fetch / 触发流水线），新增数据源按同一模式扩展
 - 飞书渠道按 (chat_id, open_id) 映射独立平台会话：私聊一人一会话，群聊每人独立上下文
 - 所有渠道共享同一编排/检索/记忆/评估链路，可观测性 Trace 统一可查
+
+### 响应缓存与断线续传
+
+**响应缓存**：企业知识问答中「无历史上下文的确定性提问」（FAQ/制度/手册）重复率极高。
+- 仅当会话**无历史上下文**（摘要为空）且模式为 auto/retrieval 时缓存——多轮上下文永不污染缓存
+- 缓存键 = 规范化问题 + 模式 + 文档集（**跨会话复用**），TTL 默认 24h
+- 命中时跳过编排/检索/生成，直接回放缓存答案与引用；会话记录仍正常落库
+- 配置：`CHAT_CACHE_ENABLED` / `CHAT_CACHE_TTL_HOURS`
+
+**SSE 断线续传**：流式回答期间网络抖动/服务发布不会丢失回答。
+- 服务端将事件写入 Redis 缓冲（TTL 180s），客户端断线后自动重连（指数退避 ×3）并携带 `resume` 计数
+- 服务端重放未消费事件（**不重复渲染**）：已完成则正常收尾；原流仍在执行则提示「执行中」
 
 ### 长期记忆架构
 
@@ -465,6 +478,9 @@ docker compose up -d
 ```bash
 # 安装依赖
 uv sync
+# 可选：完整文档解析（unstructured 增强通道，复杂 PDF/Word/PPT 版式）
+# 不装时自动降级 markitdown，复杂版式可启用 MinerU 增强通道
+uv sync --extra full-parsing
 
 # 数据库迁移
 alembic upgrade head
@@ -499,6 +515,18 @@ npm run dev
 | Admin 后台 | `http://localhost:5173/admin` |
 | API 文档 | `http://localhost:8080/docs` |
 | Prometheus 指标 | `http://localhost:8080/metrics` |
+
+### 关键配置（.env）
+
+| 配置项 | 说明 |
+|--------|------|
+| `CHAT_CACHE_ENABLED` / `CHAT_CACHE_TTL_HOURS` | 响应缓存开关与 TTL（默认关 / 24h） |
+| `CONNECTOR_S3_*` | S3 数据源连接器（扫描 bucket 自动导入） |
+| `CONNECTOR_WEB_*` | 网页爬虫连接器（sitemap/种子递归抓取） |
+| `FEISHU_*` | 飞书机器人渠道（长连接事件订阅 + 卡片流式回复） |
+| `MINERU_*` | MinerU 复杂版式解析增强通道（失败自动降级） |
+
+完整变量清单见 `.env.example`。
 
 ### 开发命令
 
