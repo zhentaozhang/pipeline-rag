@@ -8,6 +8,7 @@ from typing import Any
 class SSEEventType:
     THINKING = "thinking"
     TEXT = "text"
+    # 历史别名（deprecated，勿用于新代码；与 TEXT 同值，仅兼容旧消费方）
     MESSAGE = "text"
     REFERENCE = "reference"
     RECOMMENDATION = "recommend"

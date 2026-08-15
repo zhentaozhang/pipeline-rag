@@ -1,3 +1,5 @@
+from typing import cast
+
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,9 +15,8 @@ from app.common.exceptions import (
 logger = structlog.get_logger(__name__)
 
 
-async def pipeline_rag_exception_handler(
-    request: Request, exc: PipelineRAGBaseException
-) -> JSONResponse:
+async def pipeline_rag_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    exc = cast(PipelineRAGBaseException, exc)
     logger.warning("business exception", code=exc.code, message=exc.message)
     headers = None
     if isinstance(exc, AuthException):
@@ -27,7 +28,8 @@ async def pipeline_rag_exception_handler(
     elif isinstance(exc, ArgumentException):
         status_code = 400
     else:
-        status_code = 200
+        # 体检 C2 决策：业务失败至少返回 4xx，避免监控/告警对 200 全盲
+        status_code = 400
     return JSONResponse(
         status_code=status_code,
         content={"code": exc.code, "message": exc.message, "data": getattr(exc, "errors", None)},
@@ -35,9 +37,8 @@ async def pipeline_rag_exception_handler(
     )
 
 
-async def validation_exception_handler(
-    request: Request, exc: RequestValidationError
-) -> JSONResponse:
+async def validation_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    exc = cast(RequestValidationError, exc)
     logger.warning("validation error", errors=exc.errors())
 
     formatted_errors = []
