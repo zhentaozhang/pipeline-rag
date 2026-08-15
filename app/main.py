@@ -76,6 +76,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ── 启动阶段 ──────────────────────────────────────────────────────────
     logger.info("pipeline-rag starting", env=settings.app.env)
 
+    # 事件总线默认监听者（指标 + 结构化日志），先于业务启动注册
+    from app.eventbus.listeners.metrics_listener import register_listeners
+
+    register_listeners()
+
     # 可观测性（最先初始化，确保后续日志/Trace 可用）
     if settings.otel.enabled:
         init_tracing()

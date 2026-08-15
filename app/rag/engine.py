@@ -124,6 +124,10 @@ class RagRetrievalEngine:
                     timeout=per_sub_timeout,
                 )
             except Exception as e:
+                # 体检 C5：静默降级可见化
+                from app.observability.metrics import DEGRADATION_TOTAL
+
+                DEGRADATION_TOTAL.labels(reason="sub_question_timeout").inc()
                 logger.warning(
                     "子问题检索失败或超时，已自动忽略",
                     sub_question_index=idx + 1,
@@ -388,6 +392,10 @@ class RagRetrievalEngine:
             try:
                 docs = await asyncio.wait_for(channel_fn(sub_q), timeout=channel_timeout)
             except Exception as e:
+                # 体检 C5：静默降级可见化
+                from app.observability.metrics import DEGRADATION_TOTAL
+
+                DEGRADATION_TOTAL.labels(reason="retrieval_channel_failed").inc()
                 logger.warning(
                     "检索通道失败",
                     sub_question_index=sub_question_index,

@@ -1,6 +1,11 @@
 """
 OpenTelemetry 全链路追踪初始化
 
+⚠️ DEPRECATED（体检 C1 决策）：生产可观测性以自研体系为准
+（app/observability/ 下的 MySQL Trace + LLM-as-Judge），OTEL 默认关闭
+（OTEL_ENABLED=false）。本模块与 opentelemetry 依赖保留为预留，不再迭代；
+如需接入 OTLP Collector 再重新启用。
+
 通过 OTLP gRPC 导出 Trace 到 OpenTelemetry Collector。
 支持自动 instrument FastAPI / httpx / Redis / SQLAlchemy / aiohttp。
 """

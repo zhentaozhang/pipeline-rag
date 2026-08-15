@@ -414,5 +414,9 @@ def create_memory_strategy(strategy: str | None = None) -> MemoryStrategy:
     elif s == "summary_compression":
         return SummaryCompressionStrategy()
     else:
+        # 体检 C5：静默降级可见化
+        from app.observability.metrics import DEGRADATION_TOTAL
+
+        DEGRADATION_TOTAL.labels(reason="invalid_memory_strategy").inc()
         logger.warning("unknown memory strategy, fallback to sliding_window", strategy=s)
         return SlidingWindowStrategy()

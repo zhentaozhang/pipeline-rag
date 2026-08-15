@@ -5,7 +5,11 @@ from app.config.base import _ENV_FILE
 
 
 class OTelSettings(BaseSettings):
-    """OpenTelemetry 可观测性配置"""
+    """OpenTelemetry 可观测性配置
+
+    ⚠️ DEPRECATED（体检 C1 决策）：生产标准为自研 Trace（app/observability），
+    OTEL 默认关闭且不再迭代，仅保留接入 OTLP Collector 的预留入口。
+    """
 
     enabled: bool = False
     service_name: str = "pipeline-rag"

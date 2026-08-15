@@ -26,3 +26,10 @@ LLM_FINISH_REASON_TOTAL = _Counter(
 # Context subsystem
 CONTEXT_WINDOW_UTILIZATION = _Gauge("context_window_utilization", "上下文窗口利用率")
 CONTEXT_TRUNCATION_TOTAL = _Counter("context_truncation_total", "上下文截断次数", ["reason"])
+
+# Degradation subsystem（体检 C5）：功能降级统一观测
+DEGRADATION_TOTAL = _Counter(
+    "degradation_total",
+    "功能降级次数（静默降级可见化）",
+    ["reason"],
+)

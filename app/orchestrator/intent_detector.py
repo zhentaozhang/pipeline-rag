@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import structlog
+
 from app.common.enums import ChatQueryMode
 from app.common.enums import normalize_chat_mode as _normalize_chat_mode
 from app.common.text_utils import safe_text
 from app.config import get_settings
+
+logger = structlog.get_logger(__name__)
 
 _CAPABILITY_HINTS = {
     "你都能干什么",
@@ -35,6 +39,11 @@ def normalize_chat_mode(chat_mode: str) -> ChatQueryMode:
     try:
         return _normalize_chat_mode(chat_mode)
     except ValueError:
+        # 体检 C5：静默降级可见化
+        from app.observability.metrics import DEGRADATION_TOTAL
+
+        DEGRADATION_TOTAL.labels(reason="invalid_chat_mode").inc()
+        logger.warning("chat_mode degraded to AUTO_DOCUMENT", raw=chat_mode)
         return ChatQueryMode.AUTO_DOCUMENT
 
 
