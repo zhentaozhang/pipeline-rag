@@ -48,19 +48,15 @@ class VectorizerService:
         )
 
         # 先获取 embeddings，仅针对 child_chunks
+        # 注：批次失败时直接抛出，由 Celery 任务层标记失败并重试（max_retries=3），
+        # 不写入全零向量——零向量会污染向量库并被检索命中（cosine 相似度对零向量无定义）。
         child_embeddings = []
         for i in range(0, len(child_chunks), self._batch_size):
             batch = child_chunks[i : i + self._batch_size]
             texts = [c.content for c in batch]
-            try:
-                embs = await self._embed_batch(texts)
-                child_embeddings.extend(embs)
-                logger.info("batch vectorized", batch=i // self._batch_size + 1, count=len(batch))
-            except Exception:
-                logger.exception(
-                    "vectorize batch failed, falling back to zero embeddings", batch_start=i
-                )
-                child_embeddings.extend([[0.0] * 1536] * len(batch))
+            embs = await self._embed_batch(texts)
+            child_embeddings.extend(embs)
+            logger.info("batch vectorized", batch=i // self._batch_size + 1, count=len(batch))
 
         # 落盘：全量存 document_chunk，部分存 embedding
         await self._write_to_pgvector(
@@ -131,7 +127,7 @@ class VectorizerService:
         """
 
         datetime.now(UTC)
-        embedding_model_name = getattr(settings, "embedding_model_name", "default")
+        embedding_model_name = settings.llm.embedding_model
 
         # Convert task_id to BIGINT for the embedding table
         # Use stable hash (Python builtin hash() is randomized per process)

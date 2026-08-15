@@ -77,6 +77,14 @@ def _parse_required_chat_mode(value: str | None) -> ChatQueryMode:
         raise PipelineRAGBaseException(BaseCode.BAD_REQUEST, f"chatMode 非法: {value}") from None
 
 
+class StreamChunkTimeoutError(Exception):
+    """流式生成单个 chunk 超时（空闲超时）。
+
+    抛出以触发失败收尾（ERROR + DONE + turn_status=失败），
+    避免静默截断后被记为成功轮次。
+    """
+
+
 async def _async_generator_with_timeout(
     gen: AsyncIterator[str], timeout: int
 ) -> AsyncIterator[str]:
@@ -85,6 +93,8 @@ async def _async_generator_with_timeout(
             yield await asyncio.wait_for(anext(gen), timeout=timeout)
     except StopAsyncIteration:
         return
-    except TimeoutError:
-        logger.warning("generator chunk timed out, stopping stream gracefully")
-        return
+    except TimeoutError as e:
+        logger.warning("generator chunk timed out, aborting stream")
+        raise StreamChunkTimeoutError(
+            f"流式生成超时（{timeout}s 内无输出），已中断"
+        ) from e

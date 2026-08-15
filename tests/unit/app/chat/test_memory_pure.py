@@ -17,6 +17,7 @@ from app.chat.memory import (
     extract_retrieval_hints,
 )
 from app.chat.service_utils import (
+    StreamChunkTimeoutError,
     _async_generator_with_timeout,
     _build_error_message,
     _estimate_tokens,
@@ -207,12 +208,16 @@ class TestAsyncGeneratorWithTimeout:
         out = [item async for item in _async_generator_with_timeout(gen(), 5)]
         assert out == []
 
-    async def test_timeout_stops_stream_gracefully(self):
+    async def test_timeout_raises_stream_chunk_timeout(self):
+        """单块超时不再静默截断，而是抛出 StreamChunkTimeoutError 触发失败收尾"""
         async def gen():
             yield "a"
             await asyncio.sleep(10)
 
-        out = [item async for item in _async_generator_with_timeout(gen(), 0.05)]
+        with pytest.raises(StreamChunkTimeoutError):
+            out = []
+            async for item in _async_generator_with_timeout(gen(), 0.05):
+                out.append(item)
         assert out == ["a"]
 
 

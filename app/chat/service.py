@@ -18,6 +18,7 @@ from app.chat.schema import StreamLaunchPlan
 from app.chat.service_executor import execute_stream
 from app.chat.service_finalizer import finalize_stream, handle_cancelled_stream, handle_error_stream
 from app.chat.service_utils import (
+    StreamChunkTimeoutError,
     _async_generator_with_timeout,
     _format_current_date,
     _normalize_conversation_id,
@@ -184,6 +185,14 @@ class BusinessChatService:
             state.last_error_message = "已停止生成"
             async for event in handle_cancelled_stream(
                 task, task.plan, conversation_id, temp_exchange_id
+            ):
+                yield event
+
+        except StreamChunkTimeoutError as exc:
+            state.turn_failed = True
+            state.last_error_message = str(exc) or "生成超时"
+            async for event in handle_error_stream(
+                task, task.plan, exc, conversation_id, temp_exchange_id
             ):
                 yield event
 

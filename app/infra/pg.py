@@ -130,6 +130,14 @@ async def _ensure_pg_tables() -> None:
                     f"CREATE INDEX IF NOT EXISTS idx_embedding_{idx_col} ON public.pipeline_rag_document_embedding ({idx_col})"
                 )
 
+        # vectorizer.py 使用 ON CONFLICT (document_id, chunk_no) DO UPDATE 做 UPSERT，
+        # PostgreSQL 要求冲突目标必须匹配唯一索引，否则执行期报 42P10（历史 Bug A1，实测确认）。
+        with contextlib.suppress(Exception):
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uk_embedding_document_chunk "
+                "ON public.pipeline_rag_document_embedding (document_id, chunk_no)"
+            )
+
 
 async def close_pg() -> None:
     global _pool, _engine
