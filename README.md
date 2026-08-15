@@ -472,7 +472,9 @@ alembic upgrade head
 # 启动 API 服务
 # ⚠️ 必须单 worker 运行：SSE 会话状态为进程内实现（ChatRuntimeRegistry），
 #    多 worker / 多副本会导致「停止会话 / 状态查询」失效；启动时会自动检测并告警。
-fastapi dev app/main.py --port 8080
+fastapi dev app/main.py --port 8080        # 开发
+# 生产部署（Docker 默认）：uvicorn app.main:app --host 0.0.0.0 --port 8080 \
+#   --timeout-graceful-shutdown 60   # SSE 长连接优雅停机
 
 # 启动 Celery Worker（新终端）
 # 两种等价入口：`python worker.py` 或 `celery -A app.celery_app worker`
