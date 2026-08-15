@@ -4,7 +4,6 @@ from app.orchestrator.knowledge_router import route_by_document
 from app.orchestrator.navigation_analyzer import (
     RetrievalQuestionPlan,
     RewriteResult,
-    has_navigation_intent,
     _asks_adjacency,
     _asks_item_lookup,
     _asks_outline,
@@ -16,6 +15,7 @@ from app.orchestrator.navigation_analyzer import (
     _parse_chinese_number,
     _resolve_by_section_code,
     analyze,
+    has_navigation_intent,
 )
 
 

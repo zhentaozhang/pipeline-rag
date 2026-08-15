@@ -22,6 +22,7 @@ from app.config.pipeline import (
     CelerySettings,
     ChunkSettings,
     MemorySettings,
+    MinerUSettings,
     RAGSettings,
     RateLimitSettings,
     RecommendationSettings,
@@ -54,6 +55,7 @@ class Settings:
         self.rag: RAGSettings = RAGSettings()  # type: ignore[call-arg]
         self.agent: AgentSettings = AgentSettings()  # type: ignore[call-arg]
         self.memory: MemorySettings = MemorySettings()  # type: ignore[call-arg]
+        self.mineru: MinerUSettings = MinerUSettings()  # type: ignore[call-arg]
         self.structure: StructureParsingSettings = StructureParsingSettings()  # type: ignore[call-arg]
         self.preview: PreviewModeSettings = PreviewModeSettings()  # type: ignore[call-arg]
         self.chunk: ChunkSettings = ChunkSettings()  # type: ignore[call-arg]

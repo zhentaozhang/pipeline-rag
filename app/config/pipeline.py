@@ -134,6 +134,20 @@ class RecommendationSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="RECOMMEND_", env_file=_ENV_FILE, extra="ignore")
 
 
+class MinerUSettings(BaseSettings):
+    """MinerU 文档解析增强通道（P2-4）：复杂版式（扫描件/表格/多栏）走 MinerU，失败降级 unstructured"""
+
+    enabled: bool = False
+    base_url: str = "https://mineru.net"
+    api_key: str = ""
+    mode: str = "agent"  # agent（免 token，≤10MB/20页）| extract（需 token，≤200MB/200页）
+    timeout_seconds: int = 60
+    poll_interval_seconds: int = 2
+    max_poll_retries: int = 30
+
+    model_config = SettingsConfigDict(env_prefix="MINERU_", env_file=_ENV_FILE, extra="ignore")
+
+
 class RateLimitSettings(BaseSettings):
     """Redis 滑动窗口限流配置"""
 

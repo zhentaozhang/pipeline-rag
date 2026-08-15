@@ -171,7 +171,33 @@ class DocumentParser:
         return 3  # HIGH
 
     async def _parse_pdf(self, path: Path) -> ParseResult:
-        """使用 Unstructured 解析 PDF"""
+        """解析 PDF：MinerU 增强通道（P2-4，启用时优先，失败降级 unstructured）"""
+        from app.config import get_settings
+
+        if get_settings().mineru.enabled:
+            try:
+                from app.document.mineru_parser import MineruParser
+
+                result = await MineruParser().parse_pdf(path)
+                if result.markdown and result.markdown.strip():
+                    metadata = dict(result.metadata or {})
+                    logger.info(
+                        "pdf parsed via mineru", file=str(path), chars=len(result.markdown)
+                    )
+                    return ParseResult(
+                        text=result.markdown.strip(),
+                        metadata=metadata,
+                        file_type="pdf",
+                    )
+                logger.warning("mineru returned empty result, falling back", file=str(path))
+            except Exception as e:
+                logger.warning(
+                    "mineru parse failed, falling back to unstructured",
+                    file=str(path),
+                    error=str(e),
+                )
+
+        # ── 默认：Unstructured ──
         from unstructured.partition.pdf import partition_pdf
 
         loop = asyncio.get_event_loop()
