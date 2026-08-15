@@ -33,14 +33,16 @@
 
 | 维度 | 能力 |
 |------|------|
-| **对话编排** | 10 阶段 Pipeline，三态信号（CONTINUE / SKIP / TERMINATE）驱动短路执行 |
+| **对话编排** | 9 阶段 Pipeline，三态信号（CONTINUE / SKIP / TERMINATE）驱动短路执行 |
 | **知识召回** | PGVector 向量 + Elasticsearch 关键词双通道，RRF 融合 + Reranker |
 | **多 Agent** | Supervisor 问题分解 + 6 种执行模式 + 异步并发子任务 |
 | **长期记忆** | Summary Compression 结构化摘要 + 滑动窗口，支持 50+ 轮会话 |
-| **文档处理** | 异步 Pipeline：解析 → 分块（4 策略） → 向量化 → 索引 |
+| **文档处理** | 异步 Pipeline：解析（MinerU 增强）→ 分块（4 策略 + Contextual Chunking）→ 向量化 → 索引 |
+| **数据源接入** | 手动上传 + S3 / 网页爬虫连接器自动导入（飞书/网页多渠道） |
+| **引用溯源** | 回答附来源引用（chunk_id / 章节 / 原文），前端可展开查看 |
 | **MCP 插件** | 基于 FastMCP 的 Skills 插件系统，工具自动发现与注册 |
 | **安全控制** | PII 检测、输入/输出过滤、风险分级审批、沙箱执行 |
-| **可观测性** | OpenTelemetry 追踪 + LLM-as-Judge 质量评估（faithfulness/relevancy/precision） |
+| **可观测性** | 自研 Trace 链路（span 瀑布 + 评估分数）+ Prometheus 指标 + LLM-as-Judge 质量评估 |
 
 ---
 
@@ -61,13 +63,12 @@ flowchart LR
     G[🛡️ Guardrail]:::stage
     V[✅ Validation]:::stage
     O[⚡ Open Chat Shortcut]:::shortcut
-    I[🏷️ Intent Classification]:::stage
-    Q[✏️ Query Rewrite]:::stage
+    Q[🏷️ Intent + Query Rewrite]:::stage
     K[🗺️ Knowledge Routing]:::shortcut
     N[🧭 Navigation Analysis]:::stage
     F[📐 Final Plan Building]:::terminal
 
-    H --> T --> G --> V --> O --> I --> Q --> K --> N --> F
+    H --> T --> G --> V --> O --> Q --> K --> N --> F
 
     G -.->|TERMINATE| R1([⛔ Refusal Executor]):::terminal
     O -.->|TERMINATE| R2([🤖 React Agent]):::terminal
@@ -113,6 +114,7 @@ flowchart TB
 - **RRF 融合** — 将 Top-K 召回准确率从纯向量的 72% 提升至 91%
 - **Reranker** — 可配置 BGE Reranker V2 重排序
 - **Parent-Child** — Chunk 级别上下文补全，解决分块断裂问题
+- **Contextual Chunking** — 分块时注入文档级上下文窗口（可开关，需重索引生效）
 
 ### 多 Agent Supervisor 架构
 
@@ -154,6 +156,21 @@ flowchart TB
 ```
 
 Supervisor 利用 LLM 自动分解复杂问题生成带依赖关系的子任务，结合拓扑分层与异步并发执行机制，完成多阶段任务协同处理。
+
+### 数据源连接器与多渠道
+
+平台支持多种内容接入方式，统一汇入文档处理流水线：
+
+| 方式 | 说明 | 配置 |
+|------|------|------|
+| **手动上传** | Web 端直接上传文件（PDF/Word/TXT/MD/PPT/Excel） | — |
+| **S3 连接器** | 扫描 S3 兼容存储（含 MinIO）的 bucket/prefix，按扩展名过滤后自动导入 | `CONNECTOR_S3_*`，任务 `document.import_s3` |
+| **网页爬虫** | 通过 sitemap 或种子 URL 递归发现站点页面，trafilatura 提取正文转 Markdown 导入 | `CONNECTOR_WEB_*`，任务 `document.import_web` |
+| **飞书机器人** | 长连接事件订阅，群里 @ 机器人提问，卡片流式回答 + 引用链接 | `FEISHU_*`（lark-oapi 长连接，无需公网回调） |
+
+- 连接器统一基于 `DocumentConnector` 抽象（list / fetch / 触发流水线），新增数据源按同一模式扩展
+- 飞书渠道按 (chat_id, open_id) 映射独立平台会话：私聊一人一会话，群聊每人独立上下文
+- 所有渠道共享同一编排/检索/记忆/评估链路，可观测性 Trace 统一可查
 
 ### 长期记忆架构
 
@@ -206,6 +223,7 @@ flowchart TB
     subgraph Clients[👤 客户端]
         UI[💬 Chat SPA<br/>React 19 + Zustand]:::client
         ADMIN[📊 Admin Dashboard<br/>React 19 + Recharts]:::client
+        FEISHU[💬 飞书机器人<br/>长连接事件]:::client
     end
 
     subgraph API[🌐 API 层]
@@ -214,7 +232,7 @@ flowchart TB
     end
 
     subgraph Orchestration[⚙️ 编排层]
-        ORC[📋 Pre-Orchestrator<br/>10-Stage Pipeline]:::core
+        ORC[📋 Pre-Orchestrator<br/>9-Stage Pipeline]:::core
         SUP[🧠 Supervisor Agent<br/>LLM 任务分解]:::core
         REG[📦 Executor Registry<br/>6 种执行模式]:::core
     end
@@ -249,12 +267,13 @@ flowchart TB
     subgraph Infrastructure[🏗️ 基础设施]
         DOC[📄 DOC Pipeline<br/>Parse → Chunk → Vectorize → Index]:::infra
         MCP[🔌 MCP Skills<br/>插件系统]:::infra
-        OBS[📊 OpenTelemetry<br/>Tracing + Metrics]:::obs
+        OBS[📊 自研可观测性<br/>Trace + Prometheus]:::obs
         EVAL[📈 Evaluation<br/>LLM-as-Judge]:::obs
     end
 
     UI -->|HTTP/SSE| FW
     ADMIN -->|HTTP/SSE| FW
+    FEISHU -->|流式卡片| FW
     FW --> MID
     MID --> ORC
     ORC --> SUP
@@ -305,10 +324,12 @@ flowchart TB
 | **Prompt 模板** | Jinja2 | — |
 | **MCP** | FastMCP | — |
 | **PII 检测** | Microsoft Presidio | — |
-| **追踪** | OpenTelemetry | — |
+| **追踪** | 自研 Trace（span 树 + MySQL 落库） | — |
 | **指标** | Prometheus | — |
 | **日志** | structlog | — |
-| **文档解析** | Unstructured + MarkItDown | — |
+| **文档解析** | Unstructured + MarkItDown + MinerU（可选增强） | — |
+| **IM 渠道** | 飞书（lark-oapi 长连接） | — |
+| **网页提取** | trafilatura | — |
 
 ### 前端
 
@@ -331,7 +352,7 @@ pipeline-rag/
 │   │   ├── chat_stream.py            # SSE 流式对话 API
 │   │   └── manage_*.py              # 管理后台 API
 │   ├── orchestrator/                 # 主编排器
-│   │   ├── orchestrator.py           # 10-Stage Pipeline
+│   │   ├── orchestrator.py           # 9-Stage Pipeline
 │   │   ├── supervisor.py            # LLM 任务分解
 │   │   ├── stages/                  # 各 Stage 实现
 │   │   └── classifier.py            # 意图分类
@@ -339,7 +360,8 @@ pipeline-rag/
 │   │   ├── service.py               # 对话业务逻辑
 │   │   ├── memory.py                # 3 种记忆策略
 │   │   ├── memory_compressor.py     # 异步摘要压缩
-│   │   └── store.py                 # LangGraph Checkpointer
+│   │   ├── store.py                 # 会话仓储
+│   │   └── channels/                # 多渠道适配（飞书机器人）
 │   ├── executors/                    # 执行器集群
 │   │   ├── registry.py              # 执行器注册表
 │   │   ├── rag.py                   # RAG Chat 执行器
@@ -355,9 +377,11 @@ pipeline-rag/
 │   │   └── parent_block.py         # Parent-Child 上下文
 │   ├── document/                     # 文档处理
 │   │   ├── pipeline.py              # 文档处理编排
-│   │   ├── parser.py                # 文档解析
+│   │   ├── parser.py                # 文档解析（含 MinerU 增强通道）
+│   │   ├── mineru_parser.py         # MinerU 复杂版式解析（可选）
 │   │   ├── chunker/                 # 4 种分块策略
-│   │   ├── vectorizer.py            # 向量化
+│   │   ├── connectors/              # 数据源连接器（S3 / 网页爬虫）
+│   │   ├── vectorizer.py            # 向量化（Contextual Chunking）
 │   │   └── indexer.py               # 索引写入
 │   ├── mcp/                          # MCP 插件系统
 │   │   ├── server.py                # MCP 服务器
@@ -368,16 +392,17 @@ pipeline-rag/
 │   │   ├── output.py                # 输出过滤
 │   │   ├── presidio_pii.py          # PII 检测
 │   │   └── tool_registry.py         # 工具审批
-│   ├── observability/               # 可观测性
-│   │   ├── tracer.py                # OpenTelemetry 追踪
-│   │   ├── metrics/                 # RAG 质量评估
+│   ├── observability/               # 可观测性（自研体系）
+│   │   ├── tracer.py                # Trace 追踪（span 树 + 采样）
+│   │   ├── storage.py               # Trace 落库（trace/span/score）
+│   │   ├── metrics/                 # RAG 质量评估（LLM-as-Judge）
 │   │   └── models.py               # 评估数据模型
 │   ├── infra/                        # 基础设施
 │   │   ├── pg.py                    # PostgreSQL 连接
 │   │   ├── es.py                    # Elasticsearch 连接
 │   │   ├── neo4j.py                 # Neo4j 连接
 │   │   ├── minio.py                 # MinIO 存储
-│   │   └── tracing.py              # OTel 初始化
+│   │   └── tracing.py              # OTel 初始化（deprecated，默认关闭）
 │   ├── common/                       # 共享基础库
 │   │   ├── pipeline.py              # 泛型 Pipeline 模式
 │   │   ├── llm_client.py            # LLM 客户端
@@ -414,8 +439,10 @@ pipeline-rag/
 | **Chunk 管理** | 分块结果查看、策略对比、质量分析 |
 | **知识路由** | 查询→知识域映射管理、路由轨迹追踪 |
 | **RAG 评估** | Faithfulness / Relevancy / Precision / Recall / Correctness |
-| **可观测性** | 对话级追踪、OTel Span 查看、Session 详情 |
-| **评估数据集** | 离线评估运行、Regression 测试 |
+| **对话观测** | 会话列表 → 单轮执行链路（通道召回/检索结果） |
+| **Trace 链路** | span 瀑布 + 评估分数 + 指标卡片（自研 trace 三表） |
+| **观测指标** | Prometheus 指标看板（时延/Token/成本/降级） |
+| **评估数据集** | 离线评估运行、Regression 测试（--min-* 阈值门禁） |
 
 ---
 
@@ -480,4 +507,7 @@ mypy app/
 
 # 测试
 pytest tests/ -v
+
+# 集成测试（需先 docker compose up -d 起基础设施，不可达自动 skip）
+pytest tests/integration -v
 ```
