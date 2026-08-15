@@ -50,7 +50,7 @@
 
 ### Pipeline 对话编排引擎
 
-泛型 Pipeline 模式，请求拆分为 10 个独立 Stage：
+泛型 Pipeline 模式，请求拆分为 9 个独立 Stage：
 
 ```mermaid
 flowchart LR
