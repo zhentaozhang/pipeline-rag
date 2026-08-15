@@ -12,6 +12,37 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
     ],
+    build: {
+      chunkSizeWarningLimit: 900, // vendor chunk 按需加载，非首屏
+      // P3-1: vendor 分包——共享依赖单独 chunk，首屏只加载核心 React
+      rollupOptions: {
+        output: {
+          manualChunks(id: string) {
+            if (!id.includes('node_modules')) return undefined;
+            if (
+              id.includes('react-markdown') ||
+              id.includes('remark-') ||
+              id.includes('react-syntax-highlighter') ||
+              id.includes('refractor')
+            ) {
+              return 'vendor-markdown';
+            }
+            if (id.includes('recharts') || id.includes('victory') || id.includes('/d3-')) {
+              return 'vendor-charts';
+            }
+            if (
+              id.includes('/react/') ||
+              id.includes('react-router') ||
+              id.includes('zustand') ||
+              id.includes('scheduler')
+            ) {
+              return 'vendor-react';
+            }
+            return undefined;
+          },
+        },
+      },
+    },
     server: {
       port: 5173,
       proxy: {
