@@ -179,6 +179,23 @@ services:
       MINIO_ENDPOINT: minio:9000
     command: celery -A app.celery_app worker -l info -c 4 --without-gossip --without-mingle
 
+  # ── Celery Beat（定时调度：文档孤儿清理等）─────────────────────────────
+  celery-beat:
+    build: .
+    container_name: pipeline-rag-celery-beat
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      MYSQL_HOST: mysql
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      ES_HOST: elasticsearch
+      MINIO_ENDPOINT: minio:9000
+    command: celery -A app.celery_app beat -l info --schedule=/tmp/celerybeat-schedule
+
 volumes:
   mysql_data:
   postgres_data:

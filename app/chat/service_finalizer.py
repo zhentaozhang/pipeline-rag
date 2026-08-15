@@ -1,6 +1,5 @@
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any
 
 import structlog
 
@@ -100,30 +99,20 @@ async def finalize_stream(
         logger.exception("persist exchange failed")
 
     if turn_status == 2 and state.full_answer and session.title == question:
+        # 标题生成改为 Celery 异步执行（体检 B5）：避免流式请求收尾被 LLM 调用阻塞。
+        # 任务内部会用独立 DB session，并二次校验标题未被用户重命名。
         try:
-            from app.common.llm_client import get_chat_client
-            from app.config import get_settings
-            from app.infra.model_fallback import ModelFallbackManager
+            from app.chat.tasks import task_generate_session_title
 
-            settings = get_settings()
-            if settings.llm.model:
-                fallback = ModelFallbackManager(client=get_chat_client())
-                title_prompt = (
-                    "基于以下对话内容，生成一个简短精准的会话标题（不超过 30 个字），"
-                    "直接输出标题，不要多余内容：\n"
-                    f"用户：{question[:200]}\n助手：{''.join(state.full_answer)[:300]}"
-                )
-                title_resp: Any = await fallback.chat_completion(
-                    model=None,
-                    messages=[{"role": "user", "content": title_prompt}],
-                    max_tokens=64,
-                    temperature=0.3,
-                )
-                title = title_resp.choices[0].message.content.strip().strip('"').strip("'")[:256]
-                if title:
-                    await archive_store.update_session_title(conversation_id, title)
+            task_generate_session_title.delay(
+                conversation_id, question, "".join(state.full_answer)[:1000]
+            )
         except Exception as title_err:
-            logger.warning("session title generation failed", error=str(title_err), exc_info=True)
+            logger.warning(
+                "session title task dispatch failed",
+                error=str(title_err),
+                exc_info=True,
+            )
 
     if task.tracer:
         await task.tracer.flush()

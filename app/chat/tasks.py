@@ -52,6 +52,67 @@ def task_compress_conversation_memory(
 
 @celery_app.task(
     bind=True,
+    name="chat.generate_session_title",
+)
+def task_generate_session_title(self, conversation_id: str, question: str, answer: str) -> dict:
+    """异步生成会话标题（B5：从流式请求收尾中移出，避免 LLM 调用阻塞 SSE 收尾）。
+
+    仅当会话标题仍等于原始问题时才生成（避免覆盖用户手动重命名）；
+    标题是锦上添花，任何失败都降级为放弃，不重试、不抛异常。
+    """
+    from app.common.llm_client import get_chat_client
+    from app.config import get_settings
+    from app.infra.model_fallback import ModelFallbackManager
+
+    logger.info("task generate session title started", conversation_id=conversation_id)
+
+    async def _do():
+        from app.db.session import get_session_factory
+
+        sf = get_session_factory()
+        if sf is None:
+            raise RuntimeError("Session factory not initialized")
+        async with sf() as session:
+            from app.chat.store import ConversationArchiveStore
+
+            store = ConversationArchiveStore(session)
+            current = await store.get_session(conversation_id)
+            if not current or current.title != question:
+                return None  # 已被用户重命名或会话不存在，跳过
+
+            settings = get_settings()
+            if not settings.llm.model:
+                return None
+            fallback = ModelFallbackManager(client=get_chat_client())
+            title_prompt = (
+                "基于以下对话内容，生成一个简短精准的会话标题（不超过 30 个字），"
+                "直接输出标题，不要多余内容：\n"
+                f"用户：{question[:200]}\n助手：{answer[:300]}"
+            )
+            title_resp = await fallback.chat_completion(
+                model=None,
+                messages=[{"role": "user", "content": title_prompt}],
+                max_tokens=64,
+                temperature=0.3,
+            )
+            title = (
+                title_resp.choices[0].message.content.strip().strip('"').strip("'")
+            )[:256]
+            if title:
+                await store.update_session_title(conversation_id, title)
+            return title
+
+    try:
+        result = run_async(_do())
+        logger.info("task generate session title completed", conversation_id=conversation_id, title=result)
+        return {"conversation_id": conversation_id, "title": result}
+    except Exception as e:
+        logger.warning("session title generation failed", error=str(e), exc_info=True)
+        return {"conversation_id": conversation_id, "title": None}
+
+
+@celery_app.task(
+    bind=True,
     name="chat.evaluate_dataset_item",
     max_retries=2,
     default_retry_delay=5,
