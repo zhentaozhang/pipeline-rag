@@ -6,7 +6,6 @@ from app.config.infra import (
     ElasticsearchSettings,
     MinIOSettings,
     Neo4jSettings,
-    OTelSettings,
     RedisSettings,
 )
 from app.config.llm import LLMSettings, RerankSettings, TavilySettings
@@ -69,12 +68,6 @@ class TestInfraSettings:
         assert s.bucket == "pipeline-rag-document"
         assert s.object_prefix == "rag/document"
         assert s.parsed_text_prefix == "rag/parsed-text"
-
-    def test_otel_defaults(self):
-        s = OTelSettings()
-        assert not s.enabled
-        assert s.service_name == "pipeline-rag"
-        assert s.exporter_otlp_endpoint == "http://localhost:4317"
 
 
 class TestLLMSettings:

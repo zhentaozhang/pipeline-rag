@@ -470,6 +470,8 @@ uv sync
 alembic upgrade head
 
 # 启动 API 服务
+# ⚠️ 必须单 worker 运行：SSE 会话状态为进程内实现（ChatRuntimeRegistry），
+#    多 worker / 多副本会导致「停止会话 / 状态查询」失效；启动时会自动检测并告警。
 fastapi dev app/main.py --port 8080
 
 # 启动 Celery Worker（新终端）

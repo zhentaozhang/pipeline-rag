@@ -39,15 +39,8 @@ dependencies = [
     "pyjwt>=2.8.0",
     "passlib[bcrypt]>=1.7.4",
     # 可观测性
-    # 可观测性（预留：体检 C1 决策——生产标准为自研 MySQL Trace + LLM-as-Judge，
-    # OTEL 默认关闭不再迭代，保留接入 OTLP Collector 的入口）
-    "opentelemetry-api>=1.25.0",
-    "opentelemetry-sdk>=1.25.0",
-    "opentelemetry-instrumentation-fastapi>=0.46b0",
-    "opentelemetry-instrumentation-httpx>=0.46b0",
-    "opentelemetry-instrumentation-redis>=0.46b0",
-    "opentelemetry-instrumentation-sqlalchemy>=0.46b0",
-    "opentelemetry-instrumentation-aiohttp-client>=0.46b0",
+    # 自研 Trace（app/observability）为唯一生产标准；如需接入 OTLP Collector，
+    # 按需安装 opentelemetry-sdk + otlp exporter 后自建初始化模块。
     # 工具
     "python-dotenv>=1.0.0",
     "tenacity>=8.3.0",

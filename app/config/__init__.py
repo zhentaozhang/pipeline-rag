@@ -13,7 +13,6 @@ from app.config.infra import (
     ElasticsearchSettings,
     MinIOSettings,
     Neo4jSettings,
-    OTelSettings,
     RedisSettings,
 )
 from app.config.llm import LLMSettings, RerankSettings, TavilySettings
@@ -45,7 +44,6 @@ class Settings:
         self.app: AppSettings = AppSettings()  # type: ignore[call-arg]
         self.mysql: MySQLSettings = MySQLSettings()  # type: ignore[call-arg]
         self.postgres: PostgresSettings = PostgresSettings()  # type: ignore[call-arg]
-        self.otel: OTelSettings = OTelSettings()  # type: ignore[call-arg]
         self.redis: RedisSettings = RedisSettings()  # type: ignore[call-arg]
         self.es: ElasticsearchSettings = ElasticsearchSettings()  # type: ignore[call-arg]
         self.neo4j: Neo4jSettings = Neo4jSettings()  # type: ignore[call-arg]

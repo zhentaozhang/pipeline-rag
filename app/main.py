@@ -19,7 +19,6 @@ from app.infra.health import mark_startup_complete
 from app.infra.middleware import request_id_middleware
 from app.infra.minio import close_minio, init_minio
 from app.infra.redis_lease import close_redis, init_redis
-from app.infra.tracing import init_tracing
 
 # ── 全局 structlog 配置 ──────────────────────────────────────────────────
 structlog.configure(
@@ -80,10 +79,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.eventbus.listeners.metrics_listener import register_listeners
 
     register_listeners()
-
-    # 可观测性（最先初始化，确保后续日志/Trace 可用）
-    if settings.otel.enabled:
-        init_tracing()
 
     from app.infra.pg import close_pg, init_pg
 

@@ -4,20 +4,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.config.base import _ENV_FILE
 
 
-class OTelSettings(BaseSettings):
-    """OpenTelemetry 可观测性配置
-
-    ⚠️ DEPRECATED（体检 C1 决策）：生产标准为自研 Trace（app/observability），
-    OTEL 默认关闭且不再迭代，仅保留接入 OTLP Collector 的预留入口。
-    """
-
-    enabled: bool = False
-    service_name: str = "pipeline-rag"
-    exporter_otlp_endpoint: str = "http://localhost:4317"
-
-    model_config = SettingsConfigDict(env_prefix="OTEL_", env_file=_ENV_FILE, extra="ignore")
-
-
 class RedisSettings(BaseSettings):
     """Redis 配置（缓存 + 分布式锁 + Celery Broker）"""
 
