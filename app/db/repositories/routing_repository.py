@@ -30,4 +30,5 @@ class RoutingRepository:
             .offset((page - 1) * size)
             .limit(size)
         )
-        return (await db.execute(stmt)).scalars().all(), total or 0
+        rows = (await db.execute(stmt)).scalars().all()
+        return list(rows), total or 0

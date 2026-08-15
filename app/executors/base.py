@@ -25,8 +25,12 @@ class ConversationExecutor(ABC):
         return sse_event(event_type, content, conversation_id=conv_id, exchange_id=exch_id)
 
     @abstractmethod
-    async def execute(self, plan: ExecutionPlan) -> AsyncIterator[str]:
-        """执行对话任务，返回 SSE 事件流"""
+    def execute(self, plan: ExecutionPlan) -> AsyncIterator[str]:
+        """执行对话任务，返回 SSE 事件流
+
+        子类以 async def 实现（异步生成器，调用返回 AsyncGenerator）；
+        基类不声明 async，使 mypy 正确识别返回 AsyncIterator。
+        """
 
     async def execute_structured(self, plan: ExecutionPlan) -> WorkerResult:
         """执行任务并以结构化 WorkerResult 返回（默认实现：从 SSE 流提取 text）"""

@@ -55,7 +55,7 @@ async def delete_objects(object_name_list: list[str]) -> None:
     valid_names = [n.strip() for n in object_name_list if n and n.strip()]
     if not valid_names:
         return
-    if not bucket_exists(settings.minio.bucket):
+    if not await bucket_exists(settings.minio.bucket):
         return
     import asyncio as _asyncio
 
