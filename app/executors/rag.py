@@ -183,6 +183,10 @@ class RagChatExecutor(ConversationExecutor):
                         "source_type": ev.source_type,
                         "url": ev.url,
                         "doc_id": ev.doc_id,
+                        # P1-1 引用溯源：携带 chunk 定位与原文（点击引用 → 原文段落）
+                        "chunk_id": ev.chunk_id,
+                        "section_title": ev.section_title or "",
+                        "content": (ev.content or "")[:2000],
                     }
                 )
 

@@ -53,6 +53,8 @@ export interface ExchangeReference {
   section_title?: string;
   source_type?: string;
   doc_id?: string;
+  chunk_id?: string;
+  content?: string;
   [key: string]: unknown;
 }
 

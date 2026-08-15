@@ -164,22 +164,37 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
                 const isClickable = !!ref.url;
                 const Component = isClickable ? 'a' : 'div';
                 const props = isClickable ? { href: ref.url, target: "_blank", rel: "noopener noreferrer" } : {};
+                const hasContent = !!ref.content;
+                const [expanded, setExpanded] = React.useState(false);
                 return (
-                  <Component 
-                    key={idx}
-                    {...props}
-                    className={`flex flex-col gap-1.5 p-3 bg-secondary/30 border border-border/50 rounded-xl text-xs hover:bg-secondary/50 transition-colors ${isClickable ? 'cursor-pointer hover:border-primary/50 shadow-sm hover:shadow' : 'cursor-default shadow-sm'} min-w-[220px] max-w-[280px]`}
-                  >
-                    <div className="flex items-center gap-2 font-medium text-foreground">
-                      <FileText size={14} className="text-primary/70 shrink-0" />
-                      <span className="truncate">{ref.title || ref.name || `[${idx + 1}] Reference`}</span>
-                    </div>
-                    {ref.section_title && <div className="text-muted-foreground/80 truncate">章节: {ref.section_title}</div>}
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {ref.source_type && <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[9px] uppercase tracking-wider font-semibold">{ref.source_type}</span>}
-                      {ref.doc_id && <span className="text-muted-foreground/60 text-[10px] font-mono bg-secondary/80 px-1.5 py-0.5 rounded">ID: {ref.doc_id}</span>}
-                    </div>
-                  </Component>
+                  <div key={idx} className="flex flex-col gap-1">
+                    <Component
+                      {...props}
+                      onClick={hasContent && !isClickable ? () => setExpanded((v) => !v) : undefined}
+                      className={`flex flex-col gap-1.5 p-3 bg-secondary/30 border border-border/50 rounded-xl text-xs hover:bg-secondary/50 transition-colors ${isClickable ? 'cursor-pointer hover:border-primary/50 shadow-sm hover:shadow' : hasContent ? 'cursor-pointer hover:border-primary/50 shadow-sm' : 'cursor-default shadow-sm'} min-w-[220px] max-w-[280px]`}
+                    >
+                      <div className="flex items-center gap-2 font-medium text-foreground">
+                        <FileText size={14} className="text-primary/70 shrink-0" />
+                        <span className="truncate">{ref.title || ref.name || `[${idx + 1}] Reference`}</span>
+                        {hasContent && !isClickable && (
+                          <span className="ml-auto text-muted-foreground/60 flex items-center">
+                            {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                          </span>
+                        )}
+                      </div>
+                      {ref.section_title && <div className="text-muted-foreground/80 truncate">章节: {ref.section_title}</div>}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {ref.source_type && <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[9px] uppercase tracking-wider font-semibold">{ref.source_type}</span>}
+                        {ref.doc_id && <span className="text-muted-foreground/60 text-[10px] font-mono bg-secondary/80 px-1.5 py-0.5 rounded">ID: {ref.doc_id}</span>}
+                      </div>
+                    </Component>
+                    {/* P1-1 引用溯源：点击展开原文段落 */}
+                    {expanded && hasContent && (
+                      <div className="max-w-[280px] p-3 bg-card border border-border/40 rounded-xl text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">
+                        {ref.content}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
