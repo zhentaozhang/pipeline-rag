@@ -10,7 +10,7 @@ from app.db.session import get_db
 
 
 class ChatRequest(BaseModel):
-    """流式对话请求体 (与前端 Vue 3 约定格式完全一致)"""
+    """流式对话请求体 (与前端 React 约定格式完全一致)"""
 
     question: str = Field(..., min_length=1, max_length=4000)
     conversation_id: str | None = Field(default=None, alias="conversationId")

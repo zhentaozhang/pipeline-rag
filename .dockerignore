@@ -23,8 +23,8 @@ tmp/
 .coverage
 htmlcov/
 .tox/
-vue/node_modules/
-vue/dist/
+frontend/node_modules/
+frontend/dist/
 .docker/
 docker-compose.yml
 Dockerfile

@@ -235,13 +235,14 @@ flowchart TB
         PG[(PostgreSQL 16<br/>PGVector)]:::store
         ES[(Elasticsearch 8.13<br/>IK Analyzer)]:::store
         MYSQL[(MySQL 8.4<br/>Business Data)]:::store
-        NEO4J[(Neo4j 5.20<br/>Document Graph)]:::store
+        NEO4J[(Neo4j 5.20<br/>Document Graph<br/>可选·默认关闭)]:::store
         MINIO[(📦 MinIO<br/>Document Storage)]:::store
         RD[(⚡ Redis 7.2<br/>Cache + Lock)]:::store
     end
 
     subgraph Async[⏳ 异步任务]
         CL[⚙️ Celery Worker<br/>文档处理]:::async
+        BEAT[⏰ Celery Beat<br/>定时清理]:::async
         EB[📨 Event Bus<br/>内存事件总线]:::async
     end
 
@@ -296,7 +297,7 @@ flowchart TB
 | **数据库迁移** | Alembic | — |
 | **向量数据库** | PostgreSQL 16 + PGVector | — |
 | **搜索引擎** | Elasticsearch | 8.13.4 |
-| **图数据库** | Neo4j | 5.20 |
+| **图数据库** | Neo4j（可选，默认关闭） | 5.20 |
 | **缓存/锁** | Redis 7.2 + Redisson | — |
 | **消息队列** | Celery + Redis | — |
 | **对象存储** | MinIO | — |
@@ -445,6 +446,8 @@ alembic upgrade head
 fastapi dev app/main.py --port 8080
 
 # 启动 Celery Worker（新终端）
+# 两种等价入口：`python worker.py` 或 `celery -A app.celery_app worker`
+# （与 docker-compose 中 celery-worker 服务一致；含 beat 调度需另起 celery beat）
 uv run python worker.py
 ```
 
