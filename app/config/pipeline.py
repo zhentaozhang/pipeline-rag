@@ -133,6 +133,19 @@ class RecommendationSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="RECOMMEND_", env_file=_ENV_FILE, extra="ignore")
 
 
+class FeishuSettings(BaseSettings):
+    """飞书机器人渠道（P3-4）：长连接事件订阅 + 卡片流式回复"""
+
+    enabled: bool = False
+    app_id: str = ""
+    app_secret: str = ""
+    stream_update_interval_ms: int = 500  # 卡片流式更新节流间隔（飞书更新接口有限频）
+    bot_open_id: str = ""  # 可选：机器人 open_id（群聊 @ 精确判断，不配则 mentions 非空即响应）
+    web_base_url: str = "http://localhost:5173"  # 平台 Web 地址（引用溯源跳转）
+
+    model_config = SettingsConfigDict(env_prefix="FEISHU_", env_file=_ENV_FILE, extra="ignore")
+
+
 class S3ConnectorSettings(BaseSettings):
     """S3 数据源连接器（P3-3）：扫描 S3 bucket 并导入文档处理流水线"""
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.models.base import TimestampMixin
@@ -92,3 +92,20 @@ class ConversationMemory(Base, TimestampMixin):
     summary_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_source_edit_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[int | None] = mapped_column(Integer, default=1, nullable=True)
+
+
+class FeishuBinding(Base):
+    """飞书 IM 会话 ↔ 平台会话映射（P3-4）：(chat_id, open_id) 维度独立上下文"""
+
+    __tablename__ = "feishu_binding"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    chat_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    open_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    conversation_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (UniqueConstraint("chat_id", "open_id", name="uk_feishu_binding_chat_open"),)

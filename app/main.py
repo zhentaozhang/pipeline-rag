@@ -126,6 +126,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_minio()
     logger.info("minio client initialized")
 
+    # 飞书机器人渠道（P3-4）：长连接事件订阅
+    feishu_gateway = None
+    if settings.feishu.enabled:
+        from app.chat.channels.feishu_client import get_gateway
+        from app.chat.channels.feishu_event_handler import handle_message_event
+
+        feishu_gateway = get_gateway()
+        feishu_gateway.set_handler(handle_message_event)
+        feishu_gateway.start()
+
     logger.info("pipeline-rag started", host=settings.app.host, port=settings.app.port)
     mark_startup_complete()
 
@@ -133,6 +143,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # ── 关闭阶段 ──────────────────────────────────────────────────────────
     logger.info("pipeline-rag shutting down")
+    if feishu_gateway is not None:
+        feishu_gateway.stop()
     close_minio()
     if settings.neo4j.enabled:
         from app.infra.neo4j import close_neo4j

@@ -21,6 +21,7 @@ from app.config.pipeline import (
     AgentSettings,
     CelerySettings,
     ChunkSettings,
+    FeishuSettings,
     MemorySettings,
     MinerUSettings,
     RAGSettings,
@@ -59,6 +60,7 @@ class Settings:
         self.memory: MemorySettings = MemorySettings()  # type: ignore[call-arg]
         self.mineru: MinerUSettings = MinerUSettings()  # type: ignore[call-arg]
         self.s3_connector: S3ConnectorSettings = S3ConnectorSettings()  # type: ignore[call-arg]
+        self.feishu: FeishuSettings = FeishuSettings()  # type: ignore[call-arg]
         self.web_connector: WebConnectorSettings = WebConnectorSettings()  # type: ignore[call-arg]
         self.structure: StructureParsingSettings = StructureParsingSettings()  # type: ignore[call-arg]
         self.preview: PreviewModeSettings = PreviewModeSettings()  # type: ignore[call-arg]

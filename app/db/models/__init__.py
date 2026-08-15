@@ -5,6 +5,7 @@ from app.db.models.conversation import (
     ConversationExchange,
     ConversationMemory,
     ConversationSession,
+    FeishuBinding,
 )
 from app.db.models.document import (
     Document,
@@ -49,6 +50,7 @@ __all__ = [
     "DocumentStructureNode",
     "DocumentTask",
     "DocumentTaskLog",
+    "FeishuBinding",
     "KnowledgeRouteTrace",
     "KnowledgeScope",
     "KnowledgeTopic",
