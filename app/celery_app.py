@@ -31,6 +31,11 @@ def make_celery() -> Celery:
                 "task": "document.cleanup_orphans",
                 "schedule": crontab(hour=2, minute=0),
             },
+            # P1-2: 索引对账——清理各存储孤儿文档（与 cleanup 互补：cleanup 补偿状态，reconcile 清理残留）
+            "reconcile-indexes": {
+                "task": "document.reconcile_indexes",
+                "schedule": crontab(hour=3, minute=30),
+            },
         },
     )
     return app

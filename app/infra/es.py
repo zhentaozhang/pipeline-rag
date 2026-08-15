@@ -4,7 +4,7 @@ import structlog
 from elasticsearch import AsyncElasticsearch
 
 from app.config import get_settings
-from app.infra.circuit_breaker import CircuitBreakerConfig, CircuitBreakerRegistry
+from app.infra.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
@@ -66,7 +66,7 @@ def get_es() -> AsyncElasticsearch:
     return _es
 
 
-def get_es_breaker() -> object:
+def get_es_breaker() -> CircuitBreaker:
     return _es_breaker
 
 
