@@ -1,10 +1,12 @@
 import React from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
+import { errorMessage } from '../../../lib/utils';
+import type { KnowledgeScope, KnowledgeTopic } from '../../../types/api';
 
 interface AdminKnowledgeTopicViewProps {
-  scopes: any[];
-  topics: any[];
+  scopes: KnowledgeScope[];
+  topics: KnowledgeTopic[];
   onRefresh: () => void;
 }
 
@@ -31,8 +33,8 @@ export const AdminKnowledgeTopicView: React.FC<AdminKnowledgeTopicViewProps> = (
               scopeCode: scope
             });
             onRefresh();
-          } catch (e: any) {
-            alert(e.message || '新建失败');
+          } catch (e) {
+            alert(errorMessage(e, '新建失败'));
           }
         }}>
           新建主题
@@ -61,7 +63,7 @@ export const AdminKnowledgeTopicView: React.FC<AdminKnowledgeTopicViewProps> = (
                     <td className="px-4 py-3 text-sm text-muted-foreground">
                       {scope ? scope.scopeName : topic.scopeCode}
                     </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground max-w-xs truncate" title={topic.description}>
+                    <td className="px-4 py-3 text-sm text-muted-foreground max-w-xs truncate" title={topic.description || undefined}>
                       {topic.description || '-'}
                     </td>
                     <td className="px-4 py-3">
@@ -72,8 +74,8 @@ export const AdminKnowledgeTopicView: React.FC<AdminKnowledgeTopicViewProps> = (
                             const m = await import('../../../lib/api');
                             await m.manageApi.deleteKnowledgeTopic({ topicCode: topic.topicCode });
                             onRefresh();
-                          } catch (e: any) {
-                            alert(e.message || '删除失败');
+                          } catch (e) {
+                            alert(errorMessage(e, '删除失败'));
                           }
                         }}
                         className="text-destructive hover:text-destructive/80 text-sm transition-colors"

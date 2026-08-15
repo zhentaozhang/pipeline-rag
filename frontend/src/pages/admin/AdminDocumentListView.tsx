@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { manageApi, APIError } from '../../lib/api';
+import type { ManageDocument } from '../../types/api';
 import { formatDateTime, formatFileSize, hasCode } from '../../lib/manageFormat';
 import { AdminStatusBadge } from '../../components/admin/AdminStatusBadge';
 
@@ -23,7 +24,7 @@ export const AdminDocumentListView: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [listLoading, setListLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<ManageDocument[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = useState(0);
@@ -59,7 +60,7 @@ export const AdminDocumentListView: React.FC = () => {
     }
   };
 
-  const normalizeError = (error: any, fallbackMessage: string) => {
+  const normalizeError = (error: unknown, fallbackMessage: string) => {
     if (error instanceof APIError && error.message) return error.message;
     if (error instanceof Error && error.message) return error.message;
     return fallbackMessage;
@@ -109,19 +110,19 @@ export const AdminDocumentListView: React.FC = () => {
     return String(deletingDocumentId) === String(documentId || '');
   };
 
-  const hasRunningDocumentTask = (item: any) => {
+  const hasRunningDocumentTask = (item: ManageDocument) => {
     return hasCode(item?.latestTaskStatus, 1)
       || hasCode(item?.latestTaskStatus, 2)
       || hasCode(item?.parseStatus, 2)
       || hasCode(item?.indexStatus, 2);
   };
 
-  const canDeleteDocument = (item: any) => {
+  const canDeleteDocument = (item: ManageDocument) => {
     if (!item?.documentId) return false;
     return !listLoading && !deletingDocumentId && !hasRunningDocumentTask(item);
   };
 
-  const buildDeleteTitle = (item: any) => {
+  const buildDeleteTitle = (item: ManageDocument) => {
     if (hasRunningDocumentTask(item)) return '请等待当前任务完成后再删除';
     if (deletingDocumentId) return '当前有文档正在删除';
     return '删除文档以及关联的索引、存储文件';
@@ -147,9 +148,9 @@ export const AdminDocumentListView: React.FC = () => {
         documentTags: uploadForm.documentTags.trim()
       });
       clearSelectedFile();
-      showNotice(`文档已上传，任务 ${result.taskId} 已进入解析与策略推荐队列。`, 'success');
+      showNotice(`文档已上传，任务 ${String(result?.taskId ?? '')} 已进入解析与策略推荐队列。`, 'success');
       await loadDocuments(1);
-      openDocumentDetail(result.documentId);
+      openDocumentDetail(String(result?.documentId ?? ''));
     } catch (error) {
       console.error('上传文档失败', error);
       showNotice(normalizeError(error, '上传文档失败'), 'danger');
@@ -158,7 +159,7 @@ export const AdminDocumentListView: React.FC = () => {
     }
   };
 
-  const deleteDocument = async (item: any) => {
+  const deleteDocument = async (item: ManageDocument) => {
     if (!item?.documentId) return;
 
     if (hasRunningDocumentTask(item)) {
@@ -443,7 +444,7 @@ export const AdminDocumentListView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {documents.map((item: any) => (
+                {documents.map((item) => (
                   <tr key={item.documentId} className="hover:bg-primary/5 transition-colors group">
                     <td className="px-6 py-4">
                       <button 

@@ -40,7 +40,7 @@ export const AdminLoginPage: React.FC = () => {
       } else {
         navigate('/admin/dashboard', { replace: true });
       }
-    } catch (error: any) {
+    } catch (error) {
       setErrorMessage(
         error instanceof APIError || error instanceof Error
           ? error.message

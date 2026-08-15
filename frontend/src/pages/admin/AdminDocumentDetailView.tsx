@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { manageApi, APIError } from '../../lib/api';
+import type { ManageDocument } from '../../types/api';
 import { formatDateTime, formatFileSize } from '../../lib/manageFormat';
 import { AdminStatusBadge } from '../../components/admin/AdminStatusBadge';
 import { AdminDocumentStrategyView } from '../../components/admin/AdminDocumentStrategyView';
@@ -13,7 +14,7 @@ export const AdminDocumentDetailView: React.FC = () => {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [documentDetail, setDocumentDetail] = useState<any>(null);
+  const [documentDetail, setDocumentDetail] = useState<ManageDocument | null>(null);
   const [activeSection, setActiveSection] = useState<'overview' | 'strategy' | 'execution' | 'chunk'>('overview');
   const [pageNotice, setPageNotice] = useState({ type: 'info', message: '' });
 
@@ -111,7 +112,7 @@ export const AdminDocumentDetailView: React.FC = () => {
           {sections.map((section) => (
             <button
               key={section.key}
-              onClick={() => setActiveSection(section.key as any)}
+              onClick={() => setActiveSection(section.key as 'overview' | 'strategy' | 'execution' | 'chunk')}
               className={`flex flex-col items-start p-4 rounded-xl border text-left transition-all ${
                 activeSection === section.key
                   ? 'bg-primary/5 border-primary/20'

@@ -13,6 +13,21 @@ import {
   statusTone,
   truncate
 } from '../../lib/observabilityHelpers';
+import type { SessionDetail } from '../../types/api';
+
+interface ModelUsageTrace {
+  totalTokens?: number;
+  estimatedCost?: number;
+  [key: string]: unknown;
+}
+
+interface MemorySummaryMeta {
+  compressionApplied?: boolean;
+  coveredExchangeCount?: number;
+  summaryVersion?: number;
+  compressionCount?: number;
+  [key: string]: unknown;
+}
 
 export const AdminObservabilitySessionView: React.FC = () => {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -20,7 +35,7 @@ export const AdminObservabilitySessionView: React.FC = () => {
 
   const [loadingSession, setLoadingSession] = useState(false);
   const [pollingSession, setPollingSession] = useState(false);
-  const [activeSession, setActiveSession] = useState<any>(null);
+  const [activeSession, setActiveSession] = useState<SessionDetail | null>(null);
   const [pageError, setPageError] = useState('');
   const [rebuildingSummary, setRebuildingSummary] = useState(false);
 
@@ -85,7 +100,7 @@ export const AdminObservabilitySessionView: React.FC = () => {
     try {
       const summary = await chatApi.rebuildConversationSummary(conversationId);
       if (activeSession?.conversationId === conversationId) {
-        setActiveSession({ ...activeSession, memorySummary: summary });
+        setActiveSession({ ...activeSession, memorySummary: summary as unknown as string });
       }
     } catch (error) {
       setPageError(normalizeError(error, '重建记忆摘要失败'));
@@ -94,15 +109,17 @@ export const AdminObservabilitySessionView: React.FC = () => {
     }
   };
 
-  const exchangeTokenCount = (exchange: any) => {
-    const traces = exchange?.debugTrace?.modelUsageTraces || [];
-    const total = traces.reduce((sum: number, item: any) => sum + Number(item?.totalTokens || 0), 0);
+  const exchangeTokenCount = (exchange: Record<string, unknown>) => {
+    const traces = (exchange?.debugTrace as { modelUsageTraces?: ModelUsageTrace[] } | undefined)
+      ?.modelUsageTraces || [];
+    const total = traces.reduce((sum, item) => sum + Number(item.totalTokens || 0), 0);
     return total || '无';
   };
 
-  const exchangeCost = (exchange: any) => {
-    const traces = exchange?.debugTrace?.modelUsageTraces || [];
-    const total = traces.reduce((sum: number, item: any) => sum + Number(item?.estimatedCost || 0), 0);
+  const exchangeCost = (exchange: Record<string, unknown>) => {
+    const traces = (exchange?.debugTrace as { modelUsageTraces?: ModelUsageTrace[] } | undefined)
+      ?.modelUsageTraces || [];
+    const total = traces.reduce((sum, item) => sum + Number(item.estimatedCost || 0), 0);
     return total > 0 ? `¥ ${total.toFixed(4)}` : '无';
   };
 
@@ -219,7 +236,7 @@ export const AdminObservabilitySessionView: React.FC = () => {
               </div>
             </dl>
 
-            {activeSession.memorySummary?.compressionApplied ? (
+            {(activeSession.memorySummary as unknown as MemorySummaryMeta | null | undefined)?.compressionApplied ? (
               <div className="mt-6 pt-6 border-t border-border/50">
                 <h4 className="text-base font-semibold font-heading text-foreground mb-4">
                   <span className="block text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">记忆摘要</span>
@@ -227,17 +244,17 @@ export const AdminObservabilitySessionView: React.FC = () => {
                 </h4>
                 <div className="flex flex-wrap gap-2 mb-4">
                   <span className="px-2 py-1 bg-secondary border border-border/50 text-muted-foreground rounded text-xs font-mono">
-                    覆盖 {activeSession.memorySummary?.coveredExchangeCount ?? 0} 轮
+                    覆盖 {(activeSession.memorySummary as unknown as MemorySummaryMeta | null | undefined)?.coveredExchangeCount ?? 0} 轮
                   </span>
                   <span className="px-2 py-1 bg-secondary border border-border/50 text-muted-foreground rounded text-xs font-mono">
-                    版本 {activeSession.memorySummary?.summaryVersion ?? 0}
+                    版本 {(activeSession.memorySummary as unknown as MemorySummaryMeta | null | undefined)?.summaryVersion ?? 0}
                   </span>
                   <span className="px-2 py-1 bg-secondary border border-border/50 text-muted-foreground rounded text-xs font-mono">
-                    压缩 {activeSession.memorySummary?.compressionCount ?? 0} 次
+                    压缩 {(activeSession.memorySummary as unknown as MemorySummaryMeta | null | undefined)?.compressionCount ?? 0} 次
                   </span>
                 </div>
                 <pre className="bg-card p-4 rounded-lg text-sm text-foreground whitespace-pre-wrap font-mono border border-border/60 shadow-sm leading-relaxed">
-                  {activeSession.memorySummary?.summaryText || '无'}
+                  {String((activeSession.memorySummary as unknown as MemorySummaryMeta | null | undefined)?.summaryText || '无')}
                 </pre>
               </div>
             ) : (
@@ -261,10 +278,10 @@ export const AdminObservabilitySessionView: React.FC = () => {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                {assistantExchanges.map((exchange: any, index: number) => {
+                {assistantExchanges.map((exchange: Record<string, unknown>, index: number) => {
                   const tone = statusTone(exchange.status);
                   return (
-                    <div key={exchange.exchangeId} className="flex gap-4">
+                    <div key={String(exchange.exchangeId ?? index)} className="flex gap-4">
                       {/* Timeline dot */}
                       <div className="flex flex-col items-center pt-2">
                         <div className={`w-3 h-3 rounded-full shrink-0 z-10 ${
@@ -288,9 +305,11 @@ export const AdminObservabilitySessionView: React.FC = () => {
                             <span className={`px-2 py-1 text-xs font-medium rounded ${getStatusColor(tone)}`}>
                               {formatStatusLabel(exchange.status)}
                             </span>
-                            {exchange.debugTrace?.executionMode && (
+                            {(exchange.debugTrace as { executionMode?: string } | undefined)?.executionMode && (
                               <span className="px-2 py-1 text-xs font-medium rounded bg-secondary border border-border/50 text-foreground">
-                                {formatExecutionMode(exchange.debugTrace.executionMode)}
+                                {formatExecutionMode(
+                                  (exchange.debugTrace as { executionMode?: string } | undefined)?.executionMode || ''
+                                )}
                               </span>
                             )}
                           </div>
@@ -300,7 +319,7 @@ export const AdminObservabilitySessionView: React.FC = () => {
                         <div className="flex flex-col gap-2 mb-4">
                           <p className="text-sm text-foreground leading-relaxed">
                             <strong className="text-muted-foreground select-none">问：</strong>
-                            {exchange.question || '未记录问题'}
+                            {String(exchange.question || '未记录问题')}
                           </p>
                           <p className="text-sm text-foreground/80 leading-relaxed">
                             <strong className="text-muted-foreground/80 select-none">答：</strong>
@@ -310,8 +329,8 @@ export const AdminObservabilitySessionView: React.FC = () => {
 
                         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground mb-4 font-mono">
                           <span>耗时 {exchange.totalResponseTimeMs ? `${exchange.totalResponseTimeMs} ms` : '无'}</span>
-                          <span>引用 {exchange.references?.length || 0}</span>
-                          <span>推荐 {exchange.recommendations?.length || 0}</span>
+                          <span>引用 {(exchange.references as unknown[] | undefined)?.length || 0}</span>
+                          <span>推荐 {(exchange.recommendations as unknown[] | undefined)?.length || 0}</span>
                           <span>Token {exchangeTokenCount(exchange)}</span>
                           <span>成本 {exchangeCost(exchange)}</span>
                         </div>

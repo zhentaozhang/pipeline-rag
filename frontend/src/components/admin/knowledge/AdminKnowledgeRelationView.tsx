@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
 import { manageApi, APIError } from '../../../lib/api';
+import type { TopicDocument } from '../../../types/api';
+import type { KnowledgeScope, KnowledgeTopic, ManageDocument } from '../../../types/api';
 import { formatDateTime } from '../../../lib/manageFormat';
+import { errorMessage } from '../../../lib/utils';
 
 interface AdminKnowledgeRelationViewProps {
-  scopes: any[];
-  topics: any[];
+  scopes: KnowledgeScope[];
+  topics: KnowledgeTopic[];
   onRefresh: () => void;
 }
 
@@ -14,11 +17,11 @@ export const AdminKnowledgeRelationView: React.FC<AdminKnowledgeRelationViewProp
   const [selectedScope, setSelectedScope] = useState('');
   const [selectedTopic, setSelectedTopic] = useState('');
   const [loading, setLoading] = useState(false);
-  const [relations, setRelations] = useState<any[]>([]);
+  const [relations, setRelations] = useState<TopicDocument[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
   const [showBindDialog, setShowBindDialog] = useState(false);
   const [searchDocKeyword, setSearchDocKeyword] = useState('');
-  const [searchDocs, setSearchDocs] = useState<any[]>([]);
+  const [searchDocs, setSearchDocs] = useState<ManageDocument[]>([]);
   const [searchDocLoading, setSearchDocLoading] = useState(false);
   const [bindScore, setBindScore] = useState('1.0');
   const [bindReason, setBindReason] = useState('');
@@ -32,7 +35,7 @@ export const AdminKnowledgeRelationView: React.FC<AdminKnowledgeRelationViewProp
     setErrorMsg('');
     try {
       const data = await manageApi.listTopicDocuments({ topicCode });
-      setRelations(Array.isArray(data) ? data : (data?.records || []));
+      setRelations(data);
     } catch (error) {
       setErrorMsg(error instanceof APIError ? error.message : '查询关联文档失败');
       setRelations([]);
@@ -55,8 +58,8 @@ export const AdminKnowledgeRelationView: React.FC<AdminKnowledgeRelationViewProp
       await manageApi.removeTopicDocumentRelation({ topicCode: selectedTopic, documentId: docId });
       loadRelations(selectedTopic);
       onRefresh();
-    } catch (e: any) {
-      alert(e.message || '解除关联失败');
+    } catch (e) {
+      alert(errorMessage(e, '解除关联失败'));
     }
   };
 
@@ -66,7 +69,7 @@ export const AdminKnowledgeRelationView: React.FC<AdminKnowledgeRelationViewProp
     try {
       const data = await manageApi.queryDocumentPage({ pageNo: 1, pageSize: 20, keyword: searchDocKeyword.trim() });
       setSearchDocs(data?.records || []);
-    } catch (e) {
+    } catch {
       setSearchDocs([]);
     } finally {
       setSearchDocLoading(false);
@@ -89,8 +92,8 @@ export const AdminKnowledgeRelationView: React.FC<AdminKnowledgeRelationViewProp
       setSearchDocs([]);
       loadRelations(selectedTopic);
       onRefresh();
-    } catch (e: any) {
-      alert(e.message || '关联失败');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '关联失败');
     }
   };
 
@@ -159,7 +162,7 @@ export const AdminKnowledgeRelationView: React.FC<AdminKnowledgeRelationViewProp
               <div className="py-8 text-center text-muted-foreground text-sm">搜索中...</div>
             ) : searchDocs.length > 0 ? (
               <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
-                {searchDocs.map((doc: any) => {
+                {searchDocs.map((doc) => {
                   const alreadyBound = relations.some(r => r.docId === doc.documentId || r.documentId === doc.documentId);
                   return (
                     <div key={doc.documentId} className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg border border-border/50">
@@ -227,7 +230,7 @@ export const AdminKnowledgeRelationView: React.FC<AdminKnowledgeRelationViewProp
           </div>
         ) : (
           <div className="divide-y divide-border/50">
-            {relations.map((rel: any, idx: number) => (
+            {relations.map((rel, idx) => (
               <div key={idx} className="p-4 flex items-center justify-between hover:bg-secondary/20 transition-colors">
                 <div className="flex flex-col">
                   <span className="font-bold text-foreground text-sm mb-1">{rel.documentName || rel.documentId}</span>
@@ -241,7 +244,7 @@ export const AdminKnowledgeRelationView: React.FC<AdminKnowledgeRelationViewProp
                     {rel.createTime ? formatDateTime(rel.createTime) : ''}
                   </span>
                   <button
-                    onClick={() => handleRemove(rel.docId || rel.documentId)}
+                    onClick={() => handleRemove(rel.docId || rel.documentId || '')}
                     className="text-destructive hover:text-destructive/80 text-xs transition-colors"
                   >
                     解除

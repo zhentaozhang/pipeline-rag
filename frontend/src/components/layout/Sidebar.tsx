@@ -5,6 +5,7 @@ import { useChatStore, CHAT_MODES } from '../../store/chatStore';
 import { sortSessions, sessionTitle } from '../../lib/sessionUtils';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../lib/useTheme';
+import type { ChatSession } from '../../types/api';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -12,7 +13,7 @@ interface SidebarProps {
 }
 
 const SessionItem: React.FC<{
-  session: any;
+  session: ChatSession;
   currentConversationId: string;
   isStreaming: boolean;
   onSelect: (id: string) => void;

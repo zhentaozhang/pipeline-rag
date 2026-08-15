@@ -1,10 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { manageApi, APIError } from '../../../lib/api';
+import type { DocumentProfile, ManageDocument } from '../../../types/api';
 
 const QUALITY_LABELS = ['未知', '低', '中', '高'];
 
-function ProfileDetailView({ profile, onBack }: { profile: any; onBack: () => void }) {
+function ProfileDetailView({
+  profile,
+  onBack,
+}: {
+  profile: DocumentProfile;
+  onBack: () => void;
+}) {
   return (
     <div className="flex flex-col gap-6">
       <button onClick={onBack} className="text-sm text-primary hover:underline self-start">
@@ -16,7 +23,7 @@ function ProfileDetailView({ profile, onBack }: { profile: any; onBack: () => vo
           <p className="text-sm text-muted-foreground mt-1">Doc ID: {profile.documentId}</p>
         </div>
         <div className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
-          内容质量: {QUALITY_LABELS[profile.contentQualityLevel] || '未知'}
+          内容质量: {QUALITY_LABELS[Number(profile.contentQualityLevel)] || '未知'}
         </div>
       </div>
 
@@ -46,7 +53,7 @@ function ProfileDetailView({ profile, onBack }: { profile: any; onBack: () => vo
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between p-3 bg-secondary/10 rounded-lg border border-border/50">
                 <span className="text-sm text-foreground">结构清晰度</span>
-                <span className="text-xs font-mono">{QUALITY_LABELS[profile.structureLevel] || '未知'}</span>
+                <span className="text-xs font-mono">{QUALITY_LABELS[Number(profile.structureLevel)] || '未知'}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-secondary/10 rounded-lg border border-border/50">
                 <span className="text-sm text-foreground">图谱友好</span>
@@ -70,10 +77,10 @@ function ProfileDetailView({ profile, onBack }: { profile: any; onBack: () => vo
 
 export const AdminKnowledgeProfileView: React.FC = () => {
   const [keyword, setKeyword] = useState('');
-  const [docs, setDocs] = useState<any[]>([]);
+  const [docs, setDocs] = useState<ManageDocument[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<DocumentProfile | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
   const loadDocs = async () => {
@@ -81,7 +88,7 @@ export const AdminKnowledgeProfileView: React.FC = () => {
     try {
       const data = await manageApi.queryDocumentPage({ pageNo: 1, pageSize: 50 });
       setDocs(data?.records || []);
-    } catch (e) {
+    } catch {
       setErrorMsg('加载文档列表失败');
     } finally {
       setLoading(false);
@@ -93,7 +100,7 @@ export const AdminKnowledgeProfileView: React.FC = () => {
   const filteredDocs = useMemo(() => {
     if (!keyword.trim()) return docs;
     const q = keyword.trim().toLowerCase();
-    return docs.filter((d: any) =>
+    return docs.filter((d) =>
       (d.documentName || '').toLowerCase().includes(q) ||
       (d.documentId || '').toLowerCase().includes(q) ||
       (d.originalFileName || '').toLowerCase().includes(q)
@@ -154,7 +161,7 @@ export const AdminKnowledgeProfileView: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredDocs.map((doc: any) => {
+          {filteredDocs.map((doc) => {
             const isComplete = doc.indexStatus === 3;
             return (
               <Card

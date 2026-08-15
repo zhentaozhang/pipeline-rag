@@ -2,9 +2,9 @@ import React from 'react';
 import { normalizeCode } from '../../lib/manageFormat';
 
 interface AdminStatusBadgeProps {
-  label?: string;
+  label?: string | null;
   type?: 'parse' | 'strategy' | 'index' | 'task' | 'default';
-  code?: string | number;
+  code?: string | number | null;
 }
 
 export const AdminStatusBadge: React.FC<AdminStatusBadgeProps> = ({ 

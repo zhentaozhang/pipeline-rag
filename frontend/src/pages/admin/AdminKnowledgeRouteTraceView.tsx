@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { manageApi } from '../../lib/api';
+import type { RouteTrace } from '../../types/api';
 
 export const AdminKnowledgeRouteTraceView: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [records, setRecords] = useState<any[]>([]);
+  const [records, setRecords] = useState<RouteTrace[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   
   const [filters, setFilters] = useState({

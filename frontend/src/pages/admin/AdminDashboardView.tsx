@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { manageApi } from '../../lib/api';
+import type { ManageDocument } from '../../types/api';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
+import { Badge, type BadgeProps } from '../../components/ui/Badge';
 
 interface DashboardSummary {
   total: number;
@@ -15,7 +16,7 @@ interface DashboardSummary {
 export const AdminDashboardView: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<ManageDocument[]>([]);
   const [summary, setSummary] = useState<DashboardSummary>({
     total: 0,
     parseSuccess: 0,
@@ -34,13 +35,13 @@ export const AdminDashboardView: React.FC = () => {
       const docs = Array.isArray(data?.records) ? data.records : [];
       setDocuments(docs);
 
-      const hasCode = (status: any, code: number) => String(status) === String(code);
+      const hasCode = (status: unknown, code: number) => String(status) === String(code);
 
       setSummary({
         total: Number(data?.total || docs.length || 0),
-        parseSuccess: docs.filter((item: any) => hasCode(item.parseStatus, 3)).length,
-        strategyConfirmed: docs.filter((item: any) => hasCode(item.strategyStatus, 3)).length,
-        indexSuccess: docs.filter((item: any) => hasCode(item.indexStatus, 3)).length,
+        parseSuccess: docs.filter((item) => hasCode(item.parseStatus, 3)).length,
+        strategyConfirmed: docs.filter((item) => hasCode(item.strategyStatus, 3)).length,
+        indexSuccess: docs.filter((item) => hasCode(item.indexStatus, 3)).length,
       });
     } catch (error) {
       console.error('加载后台概览失败', error);
@@ -57,7 +58,7 @@ export const AdminDashboardView: React.FC = () => {
 
   const formatCount = (count: number) => count.toLocaleString();
 
-  const getStatusVariant = (code: string | number) => {
+  const getStatusVariant = (code: string | number | null): BadgeProps['variant'] => {
     const c = String(code);
     if (c === '3') return 'success';
     if (c === '4') return 'destructive';
@@ -164,10 +165,10 @@ export const AdminDashboardView: React.FC = () => {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2 items-start shrink-0">
-                      <Badge variant={getStatusVariant(item.parseStatus) as any} className="font-medium text-[11px] px-2 py-0.5">
+                      <Badge variant={getStatusVariant(item.parseStatus)} className="font-medium text-[11px] px-2 py-0.5">
                         解析: {item.parseStatusName || '未知'}
                       </Badge>
-                      <Badge variant={getStatusVariant(item.indexStatus) as any} className="font-medium text-[11px] px-2 py-0.5">
+                      <Badge variant={getStatusVariant(item.indexStatus)} className="font-medium text-[11px] px-2 py-0.5">
                         索引: {item.indexStatusName || '未知'}
                       </Badge>
                     </div>

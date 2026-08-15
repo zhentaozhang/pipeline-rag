@@ -4,26 +4,26 @@
  * <p>由于当前项目的 MVC 层会把数字写成字符串，
  * 前端在做状态判断时统一走这里，避免 `0 !== "0"` 这种问题。</p>
  */
-export function normalizeCode(value: any): string {
+export function normalizeCode(value: unknown): string {
   return value == null ? '' : String(value);
 }
 
 /**
  * 判断某个状态值是否等于目标值。
  */
-export function hasCode(value: any, expected: any): boolean {
+export function hasCode(value: unknown, expected: unknown): boolean {
   return normalizeCode(value) === String(expected);
 }
 
 /**
  * 统一格式化日期时间字符串。
  */
-export function formatDateTime(value: any): string {
+export function formatDateTime(value: unknown): string {
   if (!value) {
     return '-';
   }
 
-  const date = new Date(value);
+  const date = new Date(String(value));
   if (Number.isNaN(date.getTime())) {
     return String(value);
   }
@@ -41,7 +41,7 @@ export function formatDateTime(value: any): string {
 /**
  * 文件大小格式化。
  */
-export function formatFileSize(value: any): string {
+export function formatFileSize(value: unknown): string {
   const size = Number(value || 0);
   if (!Number.isFinite(size) || size <= 0) {
     return '-';
@@ -65,7 +65,7 @@ export function formatFileSize(value: any): string {
 /**
  * 计数类展示兼容字符串数字。
  */
-export function formatCount(value: any): string {
+export function formatCount(value: unknown): string {
   const count = Number(value || 0);
   if (!Number.isFinite(count)) {
     return '0';

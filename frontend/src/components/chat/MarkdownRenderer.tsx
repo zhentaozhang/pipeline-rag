@@ -4,6 +4,12 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './CodeBlock';
 
+interface CodeProps extends React.HTMLAttributes<HTMLElement> {
+  inline?: boolean;
+  className?: string;
+  children?: React.ReactNode;
+}
+
 interface MarkdownRendererProps {
   content: string;
 }
@@ -21,7 +27,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
   const safeContent = fixStreamingMarkdown(content);
   
   const components: Components = {
-    code({ node, inline, className, children, ...props }: any) {
+    code({ inline, className, children, ...props }: CodeProps) {
       const match = /language-(\w+)/.exec(className || '');
       const language = match ? match[1] : '';
       

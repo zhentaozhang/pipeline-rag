@@ -1,9 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { manageApi } from '../../lib/api';
+import type { ManageDocument } from '../../types/api';
+
+interface ChunkItem {
+  chunkId?: string | number;
+  chunkNo?: number;
+  parentBlockNo?: number;
+  sectionPath?: string;
+  chunkText?: string;
+  charCount?: number;
+  tokenCount?: number;
+  [key: string]: unknown;
+}
 
 interface AdminDocumentChunkViewProps {
   documentId: string;
-  documentDetail: any;
+  documentDetail: ManageDocument | null;
   showNotice: (msg: string, type?: 'info' | 'success' | 'danger') => void;
 }
 
@@ -13,7 +25,7 @@ export const AdminDocumentChunkView: React.FC<AdminDocumentChunkViewProps> = ({
   showNotice
 }) => {
   const [loading, setLoading] = useState(false);
-  const [chunks, setChunks] = useState<any[]>([]);
+  const [chunks, setChunks] = useState<ChunkItem[]>([]);
   const [pageNo, setPageNo] = useState(1);
   const [total, setTotal] = useState(0);
 
@@ -28,7 +40,7 @@ export const AdminDocumentChunkView: React.FC<AdminDocumentChunkViewProps> = ({
         pageNo: String(page),
         pageSize: '50'
       });
-      setChunks(data?.records || []);
+      setChunks((data?.records || []) as ChunkItem[]);
       setTotal(Number(data?.total || 0));
       setPageNo(page);
     } catch (error) {

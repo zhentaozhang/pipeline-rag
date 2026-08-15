@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { manageApi, APIError } from '../../lib/api';
+import type { ManageDocument, StrategyPlanResponse } from '../../types/api';
 import { 
   STRATEGY_LIBRARY, 
   STRATEGY_PIPELINE_LIBRARY,
@@ -10,7 +11,7 @@ import {
 
 interface AdminDocumentStrategyViewProps {
   documentId: string;
-  documentDetail: any;
+  documentDetail: ManageDocument | null;
   showNotice: (msg: string, type?: 'info' | 'success' | 'danger') => void;
   onStrategyConfirmed: () => void;
 }
@@ -21,7 +22,7 @@ export const AdminDocumentStrategyView: React.FC<AdminDocumentStrategyViewProps>
   onStrategyConfirmed
 }) => {
   const [loading, setLoading] = useState(false);
-  const [strategyPlan, setStrategyPlan] = useState<any>(null);
+  const [strategyPlan, setStrategyPlan] = useState<StrategyPlanResponse | null>(null);
   const [selectedParentTypes, setSelectedParentTypes] = useState<string[]>([]);
   const [selectedChildTypes, setSelectedChildTypes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);

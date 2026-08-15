@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
+import type { ChannelExecution, RetrievalResult } from '../../types/api';
 
 interface RAGSankeyViewProps {
-  channelExecutions: any[];
-  retrievalResults: any[];
-  activeExchange: any;
+  channelExecutions: ChannelExecution[];
+  retrievalResults: RetrievalResult[];
+  activeExchange: Record<string, unknown> | null;
 }
 
 export const RAGSankeyView: React.FC<RAGSankeyViewProps> = ({ 
@@ -24,12 +25,12 @@ export const RAGSankeyView: React.FC<RAGSankeyViewProps> = ({
     // Fallback if phase string is missing or different
     if (fusionCount === 0 && rerankCount === 0) {
       fusionCount = retrievalResults.filter(r => r.gate_passed).length;
-      rerankCount = retrievalResults.filter(r => r.score > 0).length;
+      rerankCount = retrievalResults.filter((r) => (r.score ?? 0) > 0).length;
     }
     
     // Total from vector + keyword might be greater or equal to fusion depending on deduplication
     const sourceTotal = vectorRecall + keywordRecall;
-    const finalCount = activeExchange?.references?.length || 0;
+    const finalCount = (activeExchange?.references as unknown[] | undefined)?.length || 0;
 
     // 2. Adaptive Layout Math
     const maxFlow = Math.max(sourceTotal, fusionCount, rerankCount, finalCount, 1);

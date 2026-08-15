@@ -1,17 +1,18 @@
 import React from 'react';
 import { ChatMessageItem } from './ChatMessageItem';
+import type { ExchangeReference } from '../../types/api';
 
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   thinkingSteps?: string[];
-  references?: any[];
+  references?: ExchangeReference[];
   recommendations?: string[];
   status?: string;
   statusText?: string;
   errorMessage?: string;
-  routeExplain?: any;
+  routeExplain?: Record<string, unknown> | null;
   createdAt?: string;
   updatedAt?: string;
 }

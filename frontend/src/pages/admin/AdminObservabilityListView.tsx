@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { chatApi } from '../../lib/api';
+import type { ChatSession } from '../../types/api';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
+import { Badge, type BadgeProps } from '../../components/ui/Badge';
 import {
   formatChatMode,
   formatStatusLabel,
@@ -17,7 +18,7 @@ import {
 } from '../../lib/observabilityHelpers';
 
 export const AdminObservabilityListView: React.FC = () => {
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [pageError, setPageError] = useState('');
   const [keyword, setKeyword] = useState('');
@@ -33,17 +34,17 @@ export const AdminObservabilityListView: React.FC = () => {
   const canPrev = currentPageNumber > 1;
   const canNext = totalPagesCount > 0 && currentPageNumber < totalPagesCount;
 
-  const loadSessions = async (options: any = {}) => {
+  const loadSessions = async (options: Record<string, unknown> = {}) => {
     setLoadingSessions(true);
     setPageError('');
 
     try {
       const page = await chatApi.listSessionsPage({
-        keyword: options.keyword ?? keyword,
-        chatMode: options.chatMode ?? modeFilter,
-        turnStatus: options.turnStatus ?? statusFilter,
-        pageNo: options.pageNo || pageNo,
-        pageSize: options.pageSize || pageSize
+        keyword: typeof options.keyword === 'string' ? options.keyword : keyword,
+        chatMode: typeof options.chatMode === 'string' ? options.chatMode : modeFilter,
+        turnStatus: typeof options.turnStatus === 'string' ? options.turnStatus : statusFilter,
+        pageNo: typeof options.pageNo === 'number' ? options.pageNo : typeof options.pageNo === 'string' ? options.pageNo : pageNo,
+        pageSize: typeof options.pageSize === 'number' ? options.pageSize : typeof options.pageSize === 'string' ? options.pageSize : pageSize
       });
       setSessions(page.sessions || []);
       setPageNo(page.pageNo || '1');
@@ -104,7 +105,7 @@ export const AdminObservabilityListView: React.FC = () => {
     loadSessions({ pageNo: '1', pageSize: newSize });
   };
 
-  const getStatusVariant = (tone: string) => {
+  const getStatusVariant = (tone: string): BadgeProps['variant'] => {
     if (tone === 'running') return 'default';
     if (tone === 'completed') return 'success';
     if (tone === 'failed') return 'destructive';
@@ -226,7 +227,7 @@ export const AdminObservabilityListView: React.FC = () => {
                           实时执行中
                         </Badge>
                       ) : session.latestTurnStatus ? (
-                        <Badge variant={getStatusVariant(tone) as any}>
+                        <Badge variant={getStatusVariant(tone)}>
                           {formatStatusLabel(session.latestTurnStatus)}
                         </Badge>
                       ) : null}

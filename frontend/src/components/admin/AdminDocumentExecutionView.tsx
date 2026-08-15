@@ -1,9 +1,20 @@
 import React, { useState } from 'react';
 import { manageApi, APIError } from '../../lib/api';
+import type { ManageDocument } from '../../types/api';
+
+interface TaskLogItem {
+  id?: string | number;
+  stageTypeName?: string;
+  eventTypeName?: string;
+  createTime?: string;
+  content?: string;
+  detailJson?: string;
+  [key: string]: unknown;
+}
 
 interface AdminDocumentExecutionViewProps {
   documentId: string;
-  documentDetail: any;
+  documentDetail: ManageDocument | null;
   showNotice: (msg: string, type?: 'info' | 'success' | 'danger') => void;
   onRefresh: () => void;
 }
@@ -15,11 +26,12 @@ export const AdminDocumentExecutionView: React.FC<AdminDocumentExecutionViewProp
   onRefresh
 }) => {
   const [building, setBuilding] = useState(false);
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<TaskLogItem[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
 
   const hasStrategyConfirmed = documentDetail?.strategyStatus === 3;
-  const hasIndexStarted = [1, 2, 3].includes(documentDetail?.indexStatus);
+  const hasIndexStarted =
+    documentDetail?.indexStatus != null && [1, 2, 3].includes(documentDetail.indexStatus);
   const hasIndexSuccess = documentDetail?.indexStatus === 3;
 
   const submitBuildIndex = async () => {
@@ -43,7 +55,7 @@ export const AdminDocumentExecutionView: React.FC<AdminDocumentExecutionViewProp
         pageNo: '1',
         pageSize: '50'
       });
-      setLogs(data?.logs || []);
+      setLogs((data?.logs || []) as TaskLogItem[]);
     } catch (error) {
       console.error('加载任务日志失败', error);
     } finally {

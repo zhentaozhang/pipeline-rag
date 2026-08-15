@@ -4,22 +4,22 @@ import { Button } from '../../components/ui/Button';
 import { manageApi } from '../../lib/api';
 import { Database, Search, Beaker, CheckCircle2, Play, Trash2, Loader2 } from 'lucide-react';
 import { formatDateTime } from '../../lib/manageFormat';
+import { errorMessage } from '../../lib/utils';
 
 interface DatasetItem {
-  id: string;
-  question: string;
-  groundTruth: string;
-  status: number;
-  sourceType: string;
-  conversationId: string;
-  createdAt: string;
-  faithfulnessScore?: number;
-  answerRelevancyScore?: number;
-  contextPrecisionScore?: number;
-  contextRecallScore?: number;
-  answerCorrectnessScore?: number;
-  evalMessage?: string;
-  evaluatedAt?: string;
+  id: number;
+  question?: string;
+  groundTruth?: string;
+  status?: number;
+  sourceType?: string;
+  conversationId?: string;
+  createdAt?: string | null;
+  faithfulnessScore?: number | null;
+  answerRelevancyScore?: number | null;
+  contextPrecisionScore?: number | null;
+  contextRecallScore?: number | null;
+  answerCorrectnessScore?: number | null;
+  [key: string]: unknown;
 }
 
 export const AdminEvaluationDatasetView: React.FC = () => {
@@ -48,29 +48,29 @@ export const AdminEvaluationDatasetView: React.FC = () => {
     loadData(1);
   }, []);
 
-  const handleRunEvaluation = async (id?: string) => {
+  const handleRunEvaluation = async (id?: number) => {
     try {
       setRunning(true);
-      const res = await manageApi.runEvaluation(id ? [parseInt(id)] : undefined);
+      const res = await manageApi.runEvaluation(id ? [id] : undefined);
       alert(res?.message || '已触发评估任务，请等待后台执行完毕刷新页面查看结果。');
       await loadData(pageNo); // refresh
-    } catch (e: any) {
-      alert(`触发失败: ${e.message}`);
+    } catch (e) {
+      alert(`触发失败: ${errorMessage(e)}`);
       console.error('Failed to run evaluation:', e);
     } finally {
       setRunning(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: number) => {
     if (!confirm('确定要删除这条测试数据吗？')) return;
     try {
       setLoading(true);
-      const res = await manageApi.deleteEvaluationDataset(parseInt(id));
+      const res = await manageApi.deleteEvaluationDataset(id);
       alert(res?.message || '删除成功');
       await loadData(pageNo);
-    } catch (e: any) {
-      alert(`删除失败: ${e.message}`);
+    } catch (e) {
+      alert(`删除失败: ${errorMessage(e)}`);
       console.error('Failed to delete:', e);
       setLoading(false);
     }

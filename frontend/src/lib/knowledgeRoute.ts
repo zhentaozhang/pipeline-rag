@@ -1,7 +1,6 @@
-export interface RouteTrace {
-  exchangeId: string | number;
-  [key: string]: any;
-}
+import type { RouteTrace } from '../types/api';
+
+export type { RouteTrace };
 
 export function buildRouteTraceLookup(records: RouteTrace[]): Record<string, RouteTrace> {
   const lookup: Record<string, RouteTrace> = {};
@@ -13,7 +12,11 @@ export function buildRouteTraceLookup(records: RouteTrace[]): Record<string, Rou
   return lookup;
 }
 
-export function buildChatRouteExplain(traceRecord?: RouteTrace): any {
+export function buildChatRouteExplain(traceRecord?: RouteTrace): {
+  topDocument: unknown;
+  routeReason: string;
+  routeType: string;
+} | null {
   if (!traceRecord) {
     return null;
   }
@@ -22,7 +25,7 @@ export function buildChatRouteExplain(traceRecord?: RouteTrace): any {
   // We can expand this with explicit interfaces if needed based on the backend
   return {
     topDocument: traceRecord.topDocument || null,
-    routeReason: traceRecord.routeReason || '',
-    routeType: traceRecord.routeType || 'UNKNOWN'
+    routeReason: String(traceRecord.routeReason || ''),
+    routeType: String(traceRecord.routeType || 'UNKNOWN')
   };
 }

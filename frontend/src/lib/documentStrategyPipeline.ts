@@ -1,4 +1,14 @@
+import type { StrategyPlan, StrategyPipeline } from '../types/api';
 import { normalizeCode } from './manageFormat';
+
+export interface StrategyPreviewItem {
+  type: string;
+  label?: string;
+  description?: string;
+  index: number;
+  order: string;
+  [key: string]: unknown;
+}
 
 export const STRATEGY_LIBRARY = [
   {
@@ -61,24 +71,31 @@ export function buildStrategyPreview(selectedTypes: string[], strategyLibrary = 
       const strategy = strategyLibrary.find((item) => item.type === type);
       return strategy ? { ...strategy, index, order: String(index + 1).padStart(2, '0') } : null;
     })
-    .filter(Boolean) as any[];
+    .filter(Boolean) as StrategyPreviewItem[];
 }
 
 export function buildStrategySignature(selectedTypes: string[], strategyLibrary = STRATEGY_LIBRARY) {
   return normalizeStrategyTypeList(selectedTypes, strategyLibrary).join('|');
 }
 
-export function resolvePlanPipeline(plan: any, pipelineKey: string) {
+export function resolvePlanPipeline(
+  plan: StrategyPlan | null | undefined,
+  pipelineKey: string
+): StrategyPipeline | null {
   if (!plan || !pipelineKey) {
     return null;
   }
   return pipelineKey === 'parent' ? plan.parentPipeline || null : plan.childPipeline || null;
 }
 
-export function extractPipelineStrategyTypes(plan: any, pipelineKey: string, strategyLibrary = STRATEGY_LIBRARY) {
+export function extractPipelineStrategyTypes(
+  plan: StrategyPlan | null | undefined,
+  pipelineKey: string,
+  strategyLibrary = STRATEGY_LIBRARY
+) {
   const pipeline = resolvePlanPipeline(plan, pipelineKey);
   return Array.isArray(pipeline?.steps)
-    ? normalizeStrategyTypeList(pipeline.steps.map((item: any) => item.strategyType), strategyLibrary)
+    ? normalizeStrategyTypeList(pipeline.steps.map((item) => String(item.strategyType)), strategyLibrary)
     : [];
 }
 

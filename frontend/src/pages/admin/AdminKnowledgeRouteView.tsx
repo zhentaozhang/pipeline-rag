@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { manageApi } from '../../lib/api';
+import type { KnowledgeScope, KnowledgeTopic } from '../../types/api';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent } from '../../components/ui/Card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Tabs';
 import { AdminKnowledgeTopicView } from '../../components/admin/knowledge/AdminKnowledgeTopicView';
 import { AdminKnowledgeProfileView } from '../../components/admin/knowledge/AdminKnowledgeProfileView';
 import { AdminKnowledgeRelationView } from '../../components/admin/knowledge/AdminKnowledgeRelationView';
+import { errorMessage } from '../../lib/utils';
 
 const TAB_LIST = [
   { key: 'scope', label: '知识范围', step: '01', hint: '系统划定的大领域划分' },
@@ -17,8 +19,8 @@ const TAB_LIST = [
 export const AdminKnowledgeRouteView: React.FC = () => {
   const [activeTab, setActiveTab] = useState('scope');
   const [loading, setLoading] = useState(false);
-  const [scopes, setScopes] = useState<any[]>([]);
-  const [topics, setTopics] = useState<any[]>([]);
+  const [scopes, setScopes] = useState<KnowledgeScope[]>([]);
+  const [topics, setTopics] = useState<KnowledgeTopic[]>([]);
   const [documentTotal, setDocumentTotal] = useState<number | null>(null);
   const [relationCount, setRelationCount] = useState<number | null>(null);
 
@@ -77,8 +79,8 @@ export const AdminKnowledgeRouteView: React.FC = () => {
             try {
               await manageApi.batchRegenerateDocumentProfiles({ documentIds: [] });
               alert('批量重建任务已发起');
-            } catch (e: any) {
-              alert(e.message || '发起失败');
+            } catch (e) {
+              alert(errorMessage(e, '发起失败'));
             }
           }}>
             批量重建画像
@@ -152,8 +154,8 @@ export const AdminKnowledgeRouteView: React.FC = () => {
                     await manageApi.saveKnowledgeScope({ scopeCode: code, scopeName: name });
                     alert('新建成功');
                     loadData();
-                } catch (e: any) {
-                    alert(e.message || '新建失败');
+                } catch (e) {
+                    alert(errorMessage(e, '新建失败'));
                 }
               }}>新建范围</Button>
             </div>
@@ -175,8 +177,8 @@ export const AdminKnowledgeRouteView: React.FC = () => {
                         try {
                           await manageApi.deleteKnowledgeScope({ scopeCode: item.scopeCode });
                           loadData();
-                        } catch (e: any) {
-                          alert(e.message || '删除失败');
+                        } catch (e) {
+                          alert(errorMessage(e, '删除失败'));
                         }
                       }}
                       className="text-destructive hover:text-destructive/80 transition-colors"

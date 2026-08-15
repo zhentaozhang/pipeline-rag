@@ -1,4 +1,6 @@
-export function latestExchangeQuestion(session: any): string {
+import type { ChatSession, SessionDetail } from '../types/api';
+
+export function latestExchangeQuestion(session?: SessionDetail | null): string {
   const exchanges = session?.exchanges || [];
   for (let index = exchanges.length - 1; index >= 0; index -= 1) {
     const question = exchanges[index]?.question;
@@ -9,7 +11,7 @@ export function latestExchangeQuestion(session: any): string {
   return '';
 }
 
-export function latestExchangeAnswer(session: any): string {
+export function latestExchangeAnswer(session?: SessionDetail | null): string {
   const exchanges = session?.exchanges || [];
   for (let index = exchanges.length - 1; index >= 0; index -= 1) {
     const answer = exchanges[index]?.answer;
@@ -27,20 +29,31 @@ export function truncate(value: string, maxLength: number): string {
   return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
 }
 
-export function sessionTitle(session: any): string {
+export function sessionTitle(session?: ChatSession | SessionDetail | null): string {
+  if (!session) {
+    return '新的对话';
+  }
   // 优先使用后端 AI 生成的标题
   if (session.title && session.title !== '新的对话') {
     return truncate(session.title, 22);
   }
-  const latestUserMessage = session.latestUserMessage || latestExchangeQuestion(session);
-  const latestAssistantMessage = session.latestAssistantMessage || latestExchangeAnswer(session);
+  const latestUserMessage =
+    session.latestUserMessage || ('exchanges' in session ? latestExchangeQuestion(session as SessionDetail) : '');
+  const latestAssistantMessage =
+    session.latestAssistantMessage || ('exchanges' in session ? latestExchangeAnswer(session as SessionDetail) : '');
   return truncate(latestUserMessage || latestAssistantMessage || '新的对话', 22);
 }
 
-export function sortSessions(sessions: any[]): any[] {
-  return [...sessions].sort((left, right) => {
-    const leftTime = new Date(left.updatedAt || left.editTime || left.createTime || 0).getTime();
-    const rightTime = new Date(right.updatedAt || right.editTime || right.createTime || 0).getTime();
-    return rightTime - leftTime;
-  });
+interface SortableSession {
+  updatedAt?: string | null;
+  editTime?: string | null;
+  createTime?: string | null;
+}
+
+function sessionTime(s: SortableSession): number {
+  return new Date(s.updatedAt || s.editTime || s.createTime || 0).getTime();
+}
+
+export function sortSessions<T extends SortableSession>(sessions: T[]): T[] {
+  return [...sessions].sort((left, right) => sessionTime(right) - sessionTime(left));
 }

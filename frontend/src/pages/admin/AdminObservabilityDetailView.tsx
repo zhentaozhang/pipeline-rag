@@ -1,6 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { chatApi } from '../../lib/api';
+import type { ChannelExecution, RetrievalResult, SessionDetail } from '../../types/api';
+interface ModelUsageTrace {
+  totalTokens?: number;
+  estimatedCost?: number;
+  [key: string]: unknown;
+}
+
+interface StageTrace {
+  stageId?: string | number;
+  stageName?: string;
+  stageState?: string;
+  [key: string]: unknown;
+}
 import {
   buildExchangeStatusNarrative,
   formatChatMode,
@@ -16,14 +29,18 @@ export const AdminObservabilityDetailView: React.FC = () => {
   const { conversationId, exchangeId } = useParams<{ conversationId: string; exchangeId: string }>();
 
   const [loadingPage, setLoadingPage] = useState(false);
-  const [activeSession, setActiveSession] = useState<any>(null);
-  const [activeExchangeDetail, setActiveExchangeDetail] = useState<any>(null);
-  const [channelExecutions, setChannelExecutions] = useState<any[]>([]);
-  const [retrievalResults, setRetrievalResults] = useState<any[]>([]);
+  const [activeSession, setActiveSession] = useState<SessionDetail | null>(null);
+  const [activeExchangeDetail, setActiveExchangeDetail] = useState<Record<string, unknown> | null>(null);
+  const [channelExecutions, setChannelExecutions] = useState<ChannelExecution[]>([]);
+  const [retrievalResults, setRetrievalResults] = useState<RetrievalResult[]>([]);
   const [pageError, setPageError] = useState('');
 
-  const activeExchange = activeExchangeDetail?.exchange || null;
-  const stageTraces = activeExchangeDetail?.stageTraces || [];
+  const activeExchange: Record<string, unknown> | null =
+    (activeExchangeDetail?.exchange as Record<string, unknown> | undefined) || null;
+  const stageTraces: StageTrace[] =
+    activeExchangeDetail && Array.isArray(activeExchangeDetail.stageTraces)
+      ? (activeExchangeDetail.stageTraces as StageTrace[])
+      : [];
 
   const loadPage = async () => {
     if (!conversationId || !exchangeId) return;
@@ -38,9 +55,9 @@ export const AdminObservabilityDetailView: React.FC = () => {
         chatApi.getRetrievalResults(conversationId, exchangeId).catch(() => [])
       ]);
       setActiveSession(session);
-      setActiveExchangeDetail(exchangeDetail);
-      setChannelExecutions(executions || []);
-      setRetrievalResults(results || []);
+      setActiveExchangeDetail((exchangeDetail as Record<string, unknown> | null) ?? null);
+      setChannelExecutions(Array.isArray(executions) ? (executions as ChannelExecution[]) : []);
+      setRetrievalResults(Array.isArray(results) ? (results as RetrievalResult[]) : []);
     } catch (error) {
       setActiveSession(null);
       setActiveExchangeDetail(null);
@@ -61,13 +78,15 @@ export const AdminObservabilityDetailView: React.FC = () => {
   }, [activeExchange]);
 
   const totalTokenCount = useMemo(() => {
-    const traces = activeExchange?.debugTrace?.modelUsageTraces || [];
-    return traces.reduce((sum: number, item: any) => sum + Number(item?.totalTokens || 0), 0) || '无';
+    const traces = (activeExchange?.debugTrace as { modelUsageTraces?: ModelUsageTrace[] } | undefined)
+      ?.modelUsageTraces || [];
+    return traces.reduce((sum, item) => sum + Number(item.totalTokens || 0), 0) || '无';
   }, [activeExchange]);
 
   const totalCostText = useMemo(() => {
-    const traces = activeExchange?.debugTrace?.modelUsageTraces || [];
-    const total = traces.reduce((sum: number, item: any) => sum + Number(item?.estimatedCost || 0), 0);
+    const traces = (activeExchange?.debugTrace as { modelUsageTraces?: ModelUsageTrace[] } | undefined)
+      ?.modelUsageTraces || [];
+    const total = traces.reduce((sum, item) => sum + Number(item.estimatedCost || 0), 0);
     return total > 0 ? `¥ ${total.toFixed(4)}` : '无';
   }, [activeExchange]);
 
@@ -124,7 +143,7 @@ export const AdminObservabilityDetailView: React.FC = () => {
           <div className="border-b border-border/50 pb-6">
             <span className="text-xs font-mono text-muted-foreground uppercase tracking-widest">轮次详情</span>
             <h2 className="text-2xl font-bold font-heading text-foreground mt-2 mb-3">
-              {activeExchange.question || '未记录问题'}
+              {String(activeExchange?.question || '未记录问题')}
             </h2>
             <p className="text-sm text-muted-foreground max-w-3xl leading-relaxed mb-4">
               {currentExchangeNarrative}
@@ -136,9 +155,11 @@ export const AdminObservabilityDetailView: React.FC = () => {
               <span className="px-2 py-1 text-xs font-medium rounded bg-secondary border border-border/50 text-foreground">
                 {formatChatMode(activeSession?.chatMode)}
               </span>
-              {activeExchange.debugTrace?.executionMode && (
+              {(activeExchange.debugTrace as { executionMode?: string } | undefined)?.executionMode && (
                 <span className="px-2 py-1 text-xs font-medium rounded bg-secondary border border-border/50 text-muted-foreground">
-                  {formatExecutionMode(activeExchange.debugTrace.executionMode)}
+                  {formatExecutionMode(
+                    (activeExchange.debugTrace as { executionMode?: string } | undefined)?.executionMode || ''
+                  )}
                 </span>
               )}
               <span className="px-2 py-1 text-xs font-medium rounded bg-secondary border border-border/50 text-muted-foreground font-mono">
@@ -171,7 +192,9 @@ export const AdminObservabilityDetailView: React.FC = () => {
               <div className="flex flex-col gap-1">
                 <dt className="text-xs text-muted-foreground uppercase tracking-wider">引用 / 推荐</dt>
                 <dd className="text-sm font-medium text-foreground">
-                  {activeExchange.references?.length || 0} / {activeExchange.recommendations?.length || 0}
+                  {(activeExchange.references as unknown[] | undefined)?.length || 0} / {
+                    (activeExchange.recommendations as unknown[] | undefined)?.length || 0
+                  }
                 </dd>
               </div>
               <div className="flex flex-col gap-1">
@@ -204,8 +227,8 @@ export const AdminObservabilityDetailView: React.FC = () => {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                {stageTraces.map((trace: any, index: number) => {
-                  const tone = statusTone(trace.stageState);
+                {stageTraces.map((trace, index) => {
+                  const tone = statusTone(trace.stageState || '');
                   return (
                     <div key={trace.stageId} className="flex gap-4">
                       {/* Timeline dot */}
@@ -233,7 +256,7 @@ export const AdminObservabilityDetailView: React.FC = () => {
                           <span className="text-xs text-muted-foreground font-mono">{formatDateTime(trace.startTime)}</span>
                         </div>
                         <p className="text-sm text-foreground/80 mb-3 leading-relaxed">
-                          {trace.summaryText || '当前阶段已记录。'}
+                          {String(trace.summaryText || '当前阶段已记录。')}
                         </p>
                         <div className="text-xs text-muted-foreground font-mono">
                           耗时 {trace.durationMs ? `${trace.durationMs} ms` : '无'}
@@ -252,7 +275,7 @@ export const AdminObservabilityDetailView: React.FC = () => {
                最终回答
             </h3>
             <div className="p-5 bg-card rounded-xl text-foreground leading-relaxed text-sm whitespace-pre-wrap border border-border/40 shadow-sm">
-              {activeExchange.answer || '没有回答。'}
+              {String(activeExchange.answer || '没有回答。')}
             </div>
           </section>
         </>

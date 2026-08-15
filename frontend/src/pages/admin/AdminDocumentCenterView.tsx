@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { manageApi } from '../../lib/api';
+import type { ManageDocument } from '../../types/api';
 import { formatDateTime, formatFileSize, normalizeCode } from '../../lib/manageFormat';
 import { AdminStatusBadge } from '../../components/admin/AdminStatusBadge';
 import { AdminDocumentStrategyView } from '../../components/admin/AdminDocumentStrategyView';
@@ -9,7 +10,7 @@ import { AdminDocumentChunkView } from '../../components/admin/AdminDocumentChun
 type TabType = 'strategy' | 'execution' | 'chunk';
 
 export const AdminDocumentCenterView: React.FC = () => {
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<ManageDocument[]>([]);
   const [keyword, setKeyword] = useState('');
   const [listLoading, setListLoading] = useState(false);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>('');

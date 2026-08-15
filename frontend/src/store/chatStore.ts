@@ -1,5 +1,18 @@
 import { create } from 'zustand';
 import type { Message } from '../components/chat/MessageList';
+import type { ExchangeReference } from '../types/api';
+import type {
+  ChatSession,
+  DocumentOption,
+  ExchangeItem,
+  RouteTrace,
+} from '../types/api';
+
+interface StreamHandle {
+  controller: AbortController;
+  done: Promise<void>;
+}
+import { errorMessage } from '../lib/utils';
 import { chatApi, createConversationId } from '../lib/api';
 import { buildRouteTraceLookup, buildChatRouteExplain } from '../lib/knowledgeRoute';
 import { manageApi } from '../lib/api';
@@ -13,17 +26,17 @@ export const CHAT_MODES = {
 export type ChatMode = typeof CHAT_MODES[keyof typeof CHAT_MODES];
 
 interface ChatState {
-  sessions: any[];
+  sessions: ChatSession[];
   currentConversationId: string;
   messages: Message[];
   isStreaming: boolean;
   isStopping: boolean;
   chatMode: ChatMode;
-  documentOptions: any[];
+  documentOptions: DocumentOption[];
   selectedDocumentId: string;
   selectedDocumentName: string;
   currentAssistantMessageId: string;
-  currentStreamHandle: any | null;
+  currentStreamHandle: StreamHandle | null;
   loadingSessions: boolean;
   loadingConversation: boolean;
   pageError: string;
@@ -70,7 +83,10 @@ function createAssistantMessage(): Message {
   };
 }
 
-function mapExchangesToMessages(exchanges: any[] = [], routeTraceLookup: any = {}): Message[] {
+function mapExchangesToMessages(
+  exchanges: ExchangeItem[] = [],
+  routeTraceLookup: Record<string, RouteTrace> = {}
+): Message[] {
   return exchanges.flatMap((exchange) => {
     const createdAt = exchange.createdAt || exchange.createTime || null;
     const updatedAt = exchange.updatedAt || exchange.editTime || createdAt;
@@ -79,7 +95,7 @@ function mapExchangesToMessages(exchanges: any[] = [], routeTraceLookup: any = {
       id: `exchange-${exchange.exchangeId}-user`,
       role: 'user',
       content: exchange.question || '',
-      createdAt
+      createdAt: createdAt ?? undefined
     };
 
     const assistantMessage: Message = {
@@ -93,8 +109,8 @@ function mapExchangesToMessages(exchanges: any[] = [], routeTraceLookup: any = {
       statusText: '',
       errorMessage: exchange.errorMessage || '',
       routeExplain: buildChatRouteExplain(routeTraceLookup[String(exchange.exchangeId)]),
-      createdAt,
-      updatedAt
+      createdAt: createdAt ?? undefined,
+      updatedAt: updatedAt ?? undefined
     };
 
     return [userMessage, assistantMessage];
@@ -124,8 +140,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const data = await chatApi.listSessions();
       set({ sessions: Array.isArray(data) ? data : [] });
-    } catch (error: any) {
-      set({ pageError: error.message || '加载会话列表失败' });
+    } catch (error) {
+      set({ pageError: errorMessage(error, '加载会话列表失败') });
     } finally {
       set({ loadingSessions: false });
     }
@@ -136,8 +152,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const data = await chatApi.listKnowledgeDocumentOptions();
       const options = Array.isArray(data) ? data : [];
       set({ documentOptions: options });
-    } catch (error: any) {
-      set({ pageError: error.message || '加载可选知识文档失败' });
+    } catch (error) {
+      set({ pageError: errorMessage(error, '加载可选知识文档失败') });
     }
   },
 
@@ -195,7 +211,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({
         currentConversationId: conversationId,
         messages: mapExchangesToMessages(session.exchanges || [], routeTraceLookup),
-        chatMode: session.chatMode || CHAT_MODES.OPEN_CHAT,
+        chatMode: (session.chatMode as ChatMode) || CHAT_MODES.OPEN_CHAT,
         selectedDocumentId: session.selectedDocumentId || '',
         selectedDocumentName: session.selectedDocumentName || ''
       });
@@ -210,8 +226,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       set({ sessions });
 
-    } catch (error: any) {
-      set({ pageError: error.message || '加载会话详情失败' });
+    } catch (error) {
+      set({ pageError: errorMessage(error, '加载会话详情失败') });
     } finally {
       set({ loadingConversation: false });
     }
@@ -232,8 +248,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           get().startNewConversation();
         }
       }
-    } catch (error: any) {
-      set({ pageError: error.message || '删除会话失败' });
+    } catch (error) {
+      set({ pageError: errorMessage(error, '删除会话失败') });
     }
   },
 
@@ -246,8 +262,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           s.conversationId === conversationId ? { ...s, title: title.trim() } : s
         )
       }));
-    } catch (error: any) {
-      set({ pageError: error.message || '重命名失败' });
+    } catch (error) {
+      set({ pageError: errorMessage(error, '重命名失败') });
     }
   },
 
@@ -262,8 +278,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             : s
         )
       }));
-    } catch (error: any) {
-      set({ pageError: error.message || (pinned ? '置顶失败' : '取消置顶失败') });
+    } catch (error) {
+      set({ pageError: errorMessage(error, pinned ? '置顶失败' : '取消置顶失败') });
     }
   },
 
@@ -288,10 +304,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const result = await chatApi.stopSession(state.currentConversationId);
       get().updateCurrentAssistant((msg) => {
-        msg.statusText = result?.message || '用户已停止生成';
+        msg.statusText = String(result?.message || '用户已停止生成');
       });
-    } catch (error: any) {
-      set({ pageError: error.message || '停止会话失败', isStopping: false });
+    } catch (error) {
+      set({ pageError: errorMessage(error, '停止会话失败'), isStopping: false });
       return;
     }
     
@@ -329,15 +345,46 @@ export const useChatStore = create<ChatState>((set, get) => ({
       {
         onEvent: (event) => {
           get().updateCurrentAssistant((msg) => {
-            if (event.type === 'text') msg.content += event.content || '';
-            if (event.type === 'thinking' && event.content && !msg.thinkingSteps?.includes(event.content)) {
+            if (event.type === 'text' && typeof event.content === 'string') {
+              msg.content += event.content;
+            }
+            if (
+              event.type === 'thinking' &&
+              typeof event.content === 'string' &&
+              !msg.thinkingSteps?.includes(event.content)
+            ) {
               msg.thinkingSteps = [...(msg.thinkingSteps || []), event.content];
             }
-            if (event.type === 'reference') msg.references = Array.isArray(event.content) ? event.content : [];
-            if (event.type === 'recommend') msg.recommendations = Array.isArray(event.content) ? event.content : [];
-            if (event.type === 'status') msg.statusText = event.content || '';
+            if (event.type === 'reference' && Array.isArray(event.content)) {
+              msg.references = event.content as ExchangeReference[];
+            }
+            if (event.type === 'recommend' && Array.isArray(event.content)) {
+              msg.recommendations = event.content as string[];
+            }
+            if (event.type === 'status' && typeof event.content === 'string') {
+              msg.statusText = event.content;
+            }
+            if (event.type === 'review' && event.content) {
+              const info = event.content as {
+                round?: number;
+                maxRounds?: number;
+                score?: number;
+                message?: string;
+              };
+              msg.statusText = `回答质量审核中（第 ${info.round}/${info.maxRounds} 轮，得分 ${info.score}）`;
+              if (info.message && !msg.thinkingSteps?.includes(info.message)) {
+                msg.thinkingSteps = [...(msg.thinkingSteps || []), info.message];
+              }
+            }
+            if (event.type === 'review_result' && event.content) {
+              const info = event.content as { passed?: boolean; message?: string | null };
+              msg.statusText =
+                info.message ||
+                (info.passed ? '' : '系统提示：回答质量置信度较低，建议核实关键信息');
+            }
             if (event.type === 'error') {
-              msg.errorMessage = event.content || '对话执行失败';
+              msg.errorMessage =
+                typeof event.content === 'string' ? event.content : '对话执行失败';
               msg.status = 'FAILED';
             }
             msg.updatedAt = event.timestamp || new Date().toISOString();
@@ -350,13 +397,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       await streamHandle.done;
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
+    } catch (error) {
+      if (!(error instanceof Error) || error.name !== 'AbortError') {
         get().updateCurrentAssistant((msg) => {
-          msg.errorMessage = error.message || '流式对话失败';
+          msg.errorMessage = errorMessage(error, '流式对话失败');
           msg.status = 'FAILED';
         });
-        set({ pageError: error.message || '流式对话失败' });
+        set({ pageError: errorMessage(error, '流式对话失败') });
       }
     } finally {
       set({
@@ -366,13 +413,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         isStopping: false
       });
       
+      // B7 优化：仅刷新会话列表（轻量）；不再重拉会话详情——
+      // SSE 流已包含本轮全部内容（含引用/推荐/路由轨迹），全量重拉是冗余网络与渲染开销。
       try {
         await get().refreshSessions();
-        const exists = get().sessions.some(s => s.conversationId === conversationId);
-        if (exists) {
-          await get().loadConversation(conversationId);
-        }
-      } catch (e) {
+      } catch {
         // Handle silently
       }
     }

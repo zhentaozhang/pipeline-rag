@@ -19,14 +19,16 @@ import {
   Legend
 } from 'recharts';
 import { manageApi } from '../../lib/api';
+import type { BenchmarkItem, EvaluationDataset, MetricsOverview } from '../../types/api';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { errorMessage } from '../../lib/utils';
 
 export const AdminMetricsView: React.FC = () => {
-  const [overview, setOverview] = useState<any>(null);
-  const [trend, setTrend] = useState<any[]>([]);
-  const [benchmarks, setBenchmarks] = useState<any[]>([]);
-  const [evaluations, setEvaluations] = useState<any[]>([]);
+  const [overview, setOverview] = useState<MetricsOverview | null>(null);
+  const [trend, setTrend] = useState<unknown[]>([]);
+  const [benchmarks, setBenchmarks] = useState<BenchmarkItem[]>([]);
+  const [evaluations, setEvaluations] = useState<EvaluationDataset[]>([]);
   const [loading, setLoading] = useState(true);
   const [runningEval, setRunningEval] = useState(false);
   const [error, setError] = useState('');
@@ -46,12 +48,12 @@ export const AdminMetricsView: React.FC = () => {
         manageApi.listEvaluationDataset({ pageNo: 1, pageSize: 20 })
       ]);
       setOverview(overviewData);
-      setTrend(trendData || []);
-      setBenchmarks(benchData || []);
+      setTrend(Array.isArray(trendData) ? trendData : []);
+      setBenchmarks(Array.isArray(benchData) ? (benchData as BenchmarkItem[]) : []);
       // The dataset might be wrapped in records/list depending on backend, handle gracefully
-      setEvaluations(evalData?.records || evalData?.list || evalData || []);
-    } catch (e: any) {
-      setError(e.message || '加载指标数据失败');
+      setEvaluations(evalData?.records || []);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '加载指标数据失败');
     } finally {
       setLoading(false);
     }
@@ -65,8 +67,8 @@ export const AdminMetricsView: React.FC = () => {
     try {
       await manageApi.runEvaluation(datasetId ? [datasetId] : undefined);
       alert('评估任务已触发');
-    } catch (e: any) {
-      alert(`触发失败: ${e.message}`);
+    } catch (e) {
+      alert(`触发失败: ${errorMessage(e)}`);
     } finally {
       setRunningEval(false);
     }
@@ -269,7 +271,7 @@ export const AdminMetricsView: React.FC = () => {
                       <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">暂无评估数据集</td>
                     </tr>
                   ) : (
-                    evaluations.map((item: any, idx: number) => (
+                    evaluations.map((item, idx) => (
                       <tr key={item.id || idx} className="hover:bg-secondary/30 transition-colors">
                         <td className="px-4 py-3 font-medium text-foreground">{item.id}</td>
                         <td className="px-4 py-3 text-muted-foreground truncate max-w-[200px]" title={item.description || item.question}>{item.description || item.question || '-'}</td>
