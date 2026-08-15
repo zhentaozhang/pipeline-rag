@@ -33,10 +33,6 @@ export const AdminMetricsView: React.FC = () => {
   const [runningEval, setRunningEval] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const loadData = async () => {
     setLoading(true);
     setError('');
@@ -58,6 +54,12 @@ export const AdminMetricsView: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    void (async () => {
+      await loadData();
+    })();
+  }, []);
 
   const handleRunEvaluation = async (datasetId?: number) => {
     if (!confirm('确定要触发评估任务吗？这将消耗较多大模型调用额度。')) {

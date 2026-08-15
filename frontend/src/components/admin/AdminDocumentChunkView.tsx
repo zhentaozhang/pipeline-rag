@@ -53,8 +53,11 @@ export const AdminDocumentChunkView: React.FC<AdminDocumentChunkViewProps> = ({
 
   useEffect(() => {
     if (documentId && hasIndexSuccess) {
-      loadChunks(1);
+      void (async () => {
+        await loadChunks(1);
+      })();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId, hasIndexSuccess]);
 
   if (!hasIndexSuccess) {

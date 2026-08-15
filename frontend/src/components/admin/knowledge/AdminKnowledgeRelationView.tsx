@@ -45,11 +45,13 @@ export const AdminKnowledgeRelationView: React.FC<AdminKnowledgeRelationViewProp
   };
 
   useEffect(() => {
-    if (selectedTopic) {
-      loadRelations(selectedTopic);
-    } else {
-      setRelations([]);
-    }
+    void (async () => {
+      if (selectedTopic) {
+        await loadRelations(selectedTopic);
+      } else {
+        setRelations([]);
+      }
+    })();
   }, [selectedTopic]);
 
   const handleRemove = async (docId: string) => {

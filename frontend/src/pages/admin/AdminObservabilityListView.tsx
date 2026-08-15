@@ -59,7 +59,9 @@ export const AdminObservabilityListView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadSessions();
+    void (async () => {
+      await loadSessions();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

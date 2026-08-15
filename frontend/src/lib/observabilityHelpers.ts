@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { APIError } from './api'
 
 const STATUS_LABELS = {

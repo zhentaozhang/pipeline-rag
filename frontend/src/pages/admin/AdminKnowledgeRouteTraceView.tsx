@@ -47,7 +47,9 @@ export const AdminKnowledgeRouteTraceView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadTraces();
+    void (async () => {
+      await loadTraces();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

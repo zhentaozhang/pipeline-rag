@@ -45,7 +45,9 @@ export const AdminEvaluationDatasetView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData(1);
+    void (async () => {
+      await loadData(1);
+    })();
   }, []);
 
   const handleRunEvaluation = async (id?: number) => {

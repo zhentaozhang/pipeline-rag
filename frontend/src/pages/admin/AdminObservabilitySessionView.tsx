@@ -76,7 +76,9 @@ export const AdminObservabilitySessionView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadSession();
+    void (async () => {
+      await loadSession();
+    })();
     return () => {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };

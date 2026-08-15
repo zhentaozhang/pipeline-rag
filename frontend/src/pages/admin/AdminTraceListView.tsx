@@ -41,7 +41,9 @@ export const AdminTraceListView: React.FC = () => {
   }, [page, conversationId, status]);
 
   useEffect(() => {
-    load();
+    void (async () => {
+      await load();
+    })();
   }, [load]);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;

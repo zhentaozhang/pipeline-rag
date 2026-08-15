@@ -68,7 +68,9 @@ export const AdminObservabilityDetailView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadPage();
+    void (async () => {
+      await loadPage();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, exchangeId]);
 

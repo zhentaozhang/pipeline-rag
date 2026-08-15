@@ -54,7 +54,9 @@ export const AdminKnowledgeRouteView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData();
+    void (async () => {
+      await loadData();
+    })();
   }, []);
 
   return (

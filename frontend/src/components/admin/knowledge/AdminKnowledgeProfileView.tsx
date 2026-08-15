@@ -95,7 +95,11 @@ export const AdminKnowledgeProfileView: React.FC = () => {
     }
   };
 
-  useEffect(() => { loadDocs(); }, []);
+  useEffect(() => {
+    void (async () => {
+      await loadDocs();
+    })();
+  }, []);
 
   const filteredDocs = useMemo(() => {
     if (!keyword.trim()) return docs;

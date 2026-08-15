@@ -37,7 +37,9 @@ export const AdminDocumentDetailView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadDocumentDetail();
+    void (async () => {
+      await loadDocumentDetail();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId]);
 

@@ -191,7 +191,9 @@ export const AdminDocumentListView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadDocuments();
+    void (async () => {
+      await loadDocuments();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

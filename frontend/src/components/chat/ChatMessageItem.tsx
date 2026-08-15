@@ -16,6 +16,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
   const [groundTruth, setGroundTruth] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackSuccess, setFeedbackSuccess] = useState(false);
+  const [expandedRefs, setExpandedRefs] = useState<Record<string, boolean>>({});
   const sendMessage = useChatStore((state) => state.sendMessage);
   const isStreaming = useChatStore((state) => state.isStreaming);
 
@@ -161,16 +162,17 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
             <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4 opacity-80">Sources</div>
             <div className="flex flex-wrap gap-2">
               {message.references.map((ref, idx) => {
+                const refKey = String(ref.id ?? idx);
+                const expanded = !!expandedRefs[refKey];
                 const isClickable = !!ref.url;
                 const Component = isClickable ? 'a' : 'div';
                 const props = isClickable ? { href: ref.url, target: "_blank", rel: "noopener noreferrer" } : {};
                 const hasContent = !!ref.content;
-                const [expanded, setExpanded] = React.useState(false);
                 return (
                   <div key={idx} className="flex flex-col gap-1">
                     <Component
                       {...props}
-                      onClick={hasContent && !isClickable ? () => setExpanded((v) => !v) : undefined}
+                      onClick={hasContent && !isClickable ? () => setExpandedRefs((prev) => ({ ...prev, [refKey]: !prev[refKey] })) : undefined}
                       className={`flex flex-col gap-1.5 p-3 bg-secondary/30 border border-border/50 rounded-xl text-xs hover:bg-secondary/50 transition-colors ${isClickable ? 'cursor-pointer hover:border-primary/50 shadow-sm hover:shadow' : hasContent ? 'cursor-pointer hover:border-primary/50 shadow-sm' : 'cursor-default shadow-sm'} min-w-[220px] max-w-[280px]`}
                     >
                       <div className="flex items-center gap-2 font-medium text-foreground">

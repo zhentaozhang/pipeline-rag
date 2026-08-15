@@ -53,7 +53,9 @@ export const AdminDashboardView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadDashboard();
+    void (async () => {
+      await loadDashboard();
+    })();
   }, []);
 
   const formatCount = (count: number) => count.toLocaleString();

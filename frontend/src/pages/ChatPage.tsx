@@ -12,8 +12,11 @@ export const ChatPage: React.FC = () => {
 
   useEffect(() => {
     if (conversationId && conversationId !== storeConversationId) {
-      loadConversation(conversationId);
+      void (async () => {
+        await loadConversation(conversationId);
+      })();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);

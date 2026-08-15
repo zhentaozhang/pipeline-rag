@@ -46,8 +46,11 @@ export const AdminDocumentStrategyView: React.FC<AdminDocumentStrategyViewProps>
 
   useEffect(() => {
     if (documentId) {
-      loadStrategyPlan();
+      void (async () => {
+        await loadStrategyPlan();
+      })();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId]);
 
   const toggleStrategy = (type: string, pipelineKey: string) => {
