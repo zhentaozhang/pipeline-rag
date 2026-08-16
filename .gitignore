@@ -81,6 +81,8 @@ skills-lock.json
 .playwright-mcp/
 
 # Local documentation drafts
+# 技术演进记录（docs/evolution/*）——有意不进入仓库：详细版留本地磁盘，
+# 远端留痕以 git commit message 为准（每次重要优化在 message 中记录决策要点）
 docs/
 
 # Development-only scripts (keep tracked copies clean)
