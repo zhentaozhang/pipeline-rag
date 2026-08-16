@@ -194,6 +194,18 @@ class TestApplyRerankFilterAndTopk:
         out = RagRetrievalEngine()._apply_rerank_filter_and_topk(docs)
         assert [e.chunk_id for e in out] == ["a"]
 
+    def test_all_below_threshold_keeps_top1_not_empty(self, monkeypatch):
+        """阈值语义失效（整查询低分区间）时保留最高分 top-1，避免空证据拒答"""
+        monkeypatch.setattr(
+            engine_module, "settings", make_settings(rag=dict(rerank_min_score=0.35, final_top_k=10))
+        )
+        docs = [
+            make_evidence(chunk_id="high", rerank_score=0.17),
+            make_evidence(chunk_id="low", rerank_score=0.06),
+        ]
+        out = RagRetrievalEngine()._apply_rerank_filter_and_topk(docs)
+        assert [e.chunk_id for e in out] == ["high"]
+
 
 class TestMarkSelection:
     def test_marks_ranks_and_note(self):

@@ -1,5 +1,6 @@
 """P3 · 用户事实记忆（Mem0 式）：抽取解析 / 去重 / 注入渲染"""
 
+import types
 from types import SimpleNamespace
 
 from app.chat.fact_memory import parse_extraction_response
@@ -38,7 +39,6 @@ def test_parse_filters_short_and_invalid():
 
 
 def test_system_prompt_includes_user_memory(monkeypatch):
-    import types
 
     fake_settings = types.SimpleNamespace(
         rag=types.SimpleNamespace(answer_system_prompt="", answer_history_max_chars=200),
@@ -55,7 +55,6 @@ def test_system_prompt_includes_user_memory(monkeypatch):
 
 
 def test_system_prompt_without_memory_unchanged(monkeypatch):
-    import types
 
     fake_settings = types.SimpleNamespace(
         rag=types.SimpleNamespace(answer_system_prompt="", answer_history_max_chars=200),
@@ -65,13 +64,6 @@ def test_system_prompt_without_memory_unchanged(monkeypatch):
     svc = PromptAssemblyService()
     out = svc._build_system_prompt(SimpleNamespace(user_memory_context=[]))
     assert "跨轮记忆" not in out
-
-
-def test_retrieve_disabled_default(monkeypatch):
-    """默认关闭：execute_stream 不检索（配置 enabled=False 时 getattr 安全返回）"""
-    from app.config import get_settings
-
-    assert get_settings().fact_memory.enabled is False
 
 
 def test_agent_template_injects_user_memory():

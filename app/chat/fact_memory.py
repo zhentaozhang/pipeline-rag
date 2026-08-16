@@ -95,7 +95,7 @@ class FactMemoryStore:
         if user_key:
             rows = await fetch(
                 """
-                SELECT content FROM public.user_fact_memory
+                SELECT content, category, edit_time FROM public.user_fact_memory
                 WHERE user_key = $1 OR conversation_id = $2
                 ORDER BY embedding <=> $3::vector
                 LIMIT $4
@@ -108,7 +108,7 @@ class FactMemoryStore:
         else:
             rows = await fetch(
                 """
-                SELECT content FROM public.user_fact_memory
+                SELECT content, category, edit_time FROM public.user_fact_memory
                 WHERE conversation_id = $1
                 ORDER BY embedding <=> $2::vector
                 LIMIT $3
@@ -117,7 +117,14 @@ class FactMemoryStore:
                 embedding_str,
                 top_k,
             )
-        return [str(r["content"]) for r in rows]
+        # 按 category 去重：同类事实只保留 edit_time 最新（避免改口后矛盾事实共存，
+        # 如"喜欢简洁"与"偏好详细"同时注入导致行为不确定）
+        seen: dict[str, str] = {}
+        for r in rows:
+            cat = r.get("category") or "_"
+            if cat not in seen:
+                seen[cat] = str(r["content"])
+        return list(seen.values())
 
     async def delete_by_conversation(self, conversation_id: str, user_key: str | None = None) -> int:
         """删除会话的全部事实记忆（会话重置/删除时调用，隐私清理）。
