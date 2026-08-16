@@ -52,6 +52,31 @@ def _char_bigrams(text: str) -> set[str]:
     return {text[i : i + 2] for i in range(len(text) - 1)}
 
 
+def compute_recall_at_k(
+    retrieved_contexts: list[str],
+    relevant_contexts: list[str],
+    k: int,
+) -> float:
+    """Recall@K：检索结果前 K 条中覆盖的应检上下文比例（量化能力 #2）"""
+    if not relevant_contexts:
+        return 0.0
+    top_k = retrieved_contexts[:k]
+    if not top_k:
+        return 0.0
+    recalled = 0
+    for relevant in relevant_contexts:
+        rel_bigrams = _char_bigrams(relevant)
+        if not rel_bigrams:
+            continue
+        matched = any(
+            len(rel_bigrams & _char_bigrams(ret)) / len(rel_bigrams) >= 0.5
+            for ret in top_k
+        )
+        if matched:
+            recalled += 1
+    return recalled / len(relevant_contexts)
+
+
 def compute_context_recall(
     retrieved_contexts: list[str],
     relevant_contexts: list[str],

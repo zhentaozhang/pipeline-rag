@@ -38,6 +38,8 @@ class EvalResult(BaseModel):
 
     # 性能
     retrieval_ms: float | None = None
+    recall_at_5: float | None = None  # 量化能力 #2
+    recall_at_10: float | None = None
     generation_ms: float | None = None
     total_ms: float | None = None
 

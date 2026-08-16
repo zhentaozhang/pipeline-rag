@@ -236,9 +236,18 @@ async def run_evaluation(
         await close_es()
         await close_pg()
 
+    # 量化能力 #2：Recall@5 / Recall@10（基于 relevant_contexts 的 top-k 覆盖）
+    from scripts.evaluation.metrics import compute_recall_at_k
+
     final: list[EvalResult] = []
     for i, r in enumerate(results):
         if isinstance(r, EvalResult):
+            r.recall_at_5 = compute_recall_at_k(
+                r.retrieved_contexts, dataset[i].relevant_contexts, 5
+            )
+            r.recall_at_10 = compute_recall_at_k(
+                r.retrieved_contexts, dataset[i].relevant_contexts, 10
+            )
             final.append(r)
         else:
             final.append(
@@ -269,9 +278,13 @@ def _print_report(results: list[EvalResult], run_tag: str) -> dict[str, float]:
     precision = [r.context_precision_score or 0.0 for r in completed]
     correctness = [r.answer_correctness_score or 0.0 for r in completed]
     recall = [r.context_recall_score or 0.0 for r in completed]
+    recall5 = [r.recall_at_5 or 0.0 for r in completed]
+    recall10 = [r.recall_at_10 or 0.0 for r in completed]
 
     avg = {
         "faithfulness": _avg(faithfulness),
+        "recall_at_5": _avg(recall5),
+        "recall_at_10": _avg(recall10),
         "answer_relevancy": _avg(relevancy),
         "context_precision": _avg(precision),
         "answer_correctness": _avg(correctness),
@@ -287,6 +300,7 @@ def _print_report(results: list[EvalResult], run_tag: str) -> dict[str, float]:
     logger.info("  │ Context Precision    │ %.3f    │", avg["context_precision"])
     logger.info("  │ Answer Correctness   │ %.3f    │", avg["answer_correctness"])
     logger.info("  │ Context Recall       │ %.3f    │", avg["context_recall"])
+    logger.info("  │ Recall@5 / Recall@10 │ %.3f / %.3f │", avg.get("recall_at_5", 0.0), avg.get("recall_at_10", 0.0))
     logger.info("  └──────────────────────┴──────────┘")
 
     logger.info("\n  Per-question breakdown:")
@@ -330,13 +344,42 @@ if __name__ == "__main__":
     parser.add_argument("--min-recall", type=float, default=0.6)
     parser.add_argument("--min-correctness", type=float, default=0.6)
     parser.add_argument("--json-report", type=str, default="", help="Write JSON report to path")
+    parser.add_argument(
+        "--compare",
+        type=str,
+        default="",
+        help="量化能力 #3：对比两份 JSON 报告，如 --compare base.json opt.json（输出指标 diff）",
+    )
+    parser.add_argument(
+        "--reranker-on",
+        action="store_true",
+        help="量化能力 #5：强制开启 Reranker（A/B 用，与默认关闭对比）",
+    )
+    parser.add_argument(
+        "--reranker-off",
+        action="store_true",
+        help="量化能力 #5：强制关闭 Reranker（A/B 用）",
+    )
     args = parser.parse_args()
 
     dataset = load_dataset()
     if args.questions:
         dataset = dataset[: args.questions]
 
-    logger.info("Running evaluation round %s with %d questions...", args.round, len(dataset))
+    # 量化能力 #5：Reranker A/B（显式覆盖配置）
+    from app.config import get_settings as _gs
+
+    _settings = _gs()
+    if args.reranker_on:
+        _settings.rerank.enabled = True
+    if args.reranker_off:
+        _settings.rerank.enabled = False
+    logger.info(
+        "Running evaluation round %s with %d questions (reranker=%s)...",
+        args.round,
+        len(dataset),
+        _settings.rerank.enabled,
+    )
 
     results = asyncio.run(run_evaluation(dataset))
 
@@ -356,6 +399,27 @@ if __name__ == "__main__":
                 indent=2,
             )
         logger.info("JSON report written to %s", args.json_report)
+
+    # 量化能力 #3：对比两份报告
+    if args.compare:
+        import json as _json
+
+        try:
+            base_path, opt_path = args.compare.split(",")
+            with open(base_path, encoding="utf-8") as _bf, open(opt_path, encoding="utf-8") as _of:
+                base = _json.load(_bf)
+                opt = _json.load(_of)
+        except Exception as e:
+            logger.error("compare failed: %s", e)
+            sys.exit(2)
+        b_avg, o_avg = base["averages"], opt["averages"]
+        print("\n=== 优化对比（base → opt）===")
+        for metric in sorted(set(b_avg) | set(o_avg)):
+            b = b_avg.get(metric, 0.0)
+            o = o_avg.get(metric, 0.0)
+            delta = o - b
+            arrow = "▲" if delta > 0.005 else ("▼" if delta < -0.005 else "＝")
+            print(f"  {metric:<20} {b:.3f} → {o:.3f}  {arrow} {delta:+.3f}")
 
     # 门禁判定：阈值 0 表示跳过该指标
     gates = [

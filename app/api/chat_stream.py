@@ -37,6 +37,34 @@ class ChatRequest(BaseModel):
 router = APIRouter()
 
 
+@router.post(
+    "/stage/benchmarks",
+    summary="阶段耗时基准",
+    description="量化能力 #1：从进程内 Prometheus Histogram 计算 Pipeline 各阶段 / LLM / 检索通道 / 对话的 P50/P90/P99 耗时。",
+)
+async def stage_benchmarks() -> dict:
+    from app.observability.percentiles import collect_histogram_quantiles
+
+    def _to_rows(metric: str) -> list[dict]:
+        rows = []
+        for label_key, quants in collect_histogram_quantiles(metric).items():
+            rows.append(
+                {
+                    "stageCode": label_key,
+                    "p50Ms": round(quants.get("0.5", 0.0) * 1000, 1),
+                    "p90Ms": round(quants.get("0.9", 0.0) * 1000, 1),
+                    "p99Ms": round(quants.get("0.99", 0.0) * 1000, 1),
+                }
+            )
+        return rows
+
+    rows = _to_rows("stage_duration_seconds")
+    rows += _to_rows("llm_call_duration_seconds")
+    rows += _to_rows("retrieval_channel_duration_seconds")
+    rows += _to_rows("exchange_duration_seconds")
+    return {"code": 0, "data": rows}
+
+
 def _buffer_key(conversation_id: str) -> str:
     return f"{_BUFFER_KEY_PREFIX}:{conversation_id}"
 

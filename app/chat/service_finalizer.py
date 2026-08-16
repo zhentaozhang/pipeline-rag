@@ -77,6 +77,37 @@ async def finalize_stream(
             turn_stopped=state.turn_stopped,
         )
 
+        # 量化能力 #6：Token/成本落库 chat_model_usage_trace（此前为预留表无写入方，
+        # 管理面板成本数据为空；此处按轮写入，成本/趋势可历史查询）
+        try:
+            from app.config import get_settings as _gs
+            from app.db.models.rag_observability import ChatModelUsageTrace
+            from app.observability.traced_llm import _estimate_cost
+
+            _cost = _estimate_cost(
+                task.model_name,
+                task.prompt_tokens,
+                task.completion_tokens,
+                cache_hit_tokens=0,
+                cache_hit_factor=_gs().llm.cache_hit_price_factor,
+            )
+            db.add(
+                ChatModelUsageTrace(
+                    trace_id=str(temp_exchange_id),
+                    exchange_id=temp_exchange_id,
+                    session_id=conversation_id,
+                    model_name=task.model_name,
+                    prompt_tokens=task.prompt_tokens,
+                    completion_tokens=task.completion_tokens,
+                    total_tokens=task.total_tokens,
+                    cost_usd=round(_cost, 6),
+                    duration_ms=elapsed_total,
+                )
+            )
+            await db.commit()
+        except Exception:
+            logger.warning("usage trace persist failed", exchange_id=temp_exchange_id, exc_info=True)
+
         if turn_status == 2:
             await memory_service.save(
                 conversation_id=conversation_id,
