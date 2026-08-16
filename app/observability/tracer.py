@@ -289,6 +289,12 @@ class Tracer:
         self._populate_trace_from_spans(all_spans)
         store = MySQLTraceStore(self._db)
         try:
+            # 流式链路中事务可能已被穿插的 commit/close 打乱（InvalidRequestError:
+            # transaction already begun）——先结束隐式事务再 begin，保证 flush 干净
+            from contextlib import suppress
+
+            with suppress(Exception):
+                await self._db.commit()
             async with self._db.begin():
                 await store.save_trace(self._trace)
                 await store.save_spans(all_spans)

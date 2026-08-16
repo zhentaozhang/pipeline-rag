@@ -312,7 +312,7 @@ async def execute_stream(
         # P0-1d: 无证据兜底回复轮跳过推荐——推荐基于回答上下文，无证据时无推荐价值
         answer_text = "".join(state.full_answer)
         no_evidence = bool(plan.no_evidence_reply) and answer_text == plan.no_evidence_reply
-        if answer_text and not no_evidence:
+        if answer_text and not no_evidence and _settings.recommendation.enabled:
             async with tracer.span("recommendation", kind=SpanKind.PIPELINE):
                 from app.orchestrator.recommendation import RecommendationService
 
