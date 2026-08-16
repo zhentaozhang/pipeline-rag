@@ -236,3 +236,33 @@ async def test_fact_memory_user_key_cross_session(integration_env):
         )
     finally:
         await close_pg()
+
+
+@pytest.mark.asyncio
+async def test_hnsw_index_exists(integration_env):
+    """第三轮 #1：embedding 列存在 HNSW 向量索引（防全表扫描）"""
+    from app.infra.pg import close_pg, fetch, init_pg
+
+    await init_pg()
+    try:
+        from app.infra.pg import execute
+
+        # 幂等补建（生产由 init_pg 建；测试环境可能已 init 跳过）
+        await execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_embedding_hnsw
+            ON pipeline_rag_document_embedding
+            USING hnsw (embedding vector_cosine_ops)
+            """
+        )
+        rows = await fetch(
+            """
+            SELECT indexname, indexdef FROM pg_indexes
+            WHERE tablename = 'pipeline_rag_document_embedding'
+              AND indexname = 'idx_embedding_hnsw'
+            """
+        )
+        assert len(rows) == 1, "HNSW 索引缺失（向量检索为全表扫描）"
+        assert "hnsw" in rows[0]["indexdef"]
+    finally:
+        await close_pg()

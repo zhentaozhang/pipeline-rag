@@ -57,8 +57,9 @@ v0.1 单体 RAG（10 阶段 Pipeline + 双通道检索 + 摘要记忆）
   → Next Problem：缓存命中不可见；成本按全价估算（白付 9 倍命中折扣）
   → Next Optimization：007 P0 Prompt Caching（usage 解析 + 折扣计费 + 命中率面板）
   → Result：成本口径接近真实；命中率可观测（真实命中率待流量数据）
-  → Next Problem：分块上下文只修了文本侧（向量侧未做）
-  → Next Optimization：008 Late Chunking 实验（000 调研 P1）
+  → Next Problem：向量检索全表扫描、SSE 并发 30 即耗尽连接池、配置漂移、trace 无清理
+  → Next Optimization：012 第三轮（HNSW 索引 + 连接归还 + 配置校验 + 运维健康 8 项）
+  → Result：检索走索引；并发上限大幅提升；运维闭环（待真实环境量化）
   → ...
 ```
 
@@ -572,6 +573,9 @@ mypy app/
 
 # 测试
 pytest tests/ -v
+
+# 测试覆盖率（可选，输出缺失行）
+pytest --cov=app --cov-report=term-missing
 
 # 集成测试（需先 docker compose up -d 起基础设施，不可达自动 skip）
 pytest tests/integration -v

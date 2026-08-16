@@ -42,8 +42,10 @@ def create_access_token(username: str) -> str:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    request: Request = None,  # type: ignore[assignment]  # FastAPI 注入；None 仅为满足测试直调
 ) -> str:
-    """JWT 认证依赖，返回当前用户名"""
+
+    """JWT 认证依赖，返回当前用户名（第三轮 #8：通过即记录管理操作审计）"""
 
     try:
         payload = jwt.decode(
@@ -54,11 +56,26 @@ async def get_current_user(
         username: str = payload.get("sub", "")
         if not username:
             raise AuthException("后台登录无效，请重新登录")
+        _record_audit(username, request)
         return username
     except jwt.ExpiredSignatureError as e:
         raise AuthException("后台登录已过期，请重新登录") from e
     except jwt.InvalidTokenError as e:
         raise AuthException("后台登录无效，请重新登录") from e
+
+
+def _record_audit(username: str, request) -> None:
+    """管理操作审计（第三轮 #8）：操作者/方法/路径/来源 → 结构化日志，可检索与合规追溯"""
+    import structlog as _slog
+
+    _slog.get_logger(__name__).info(
+        "admin operation audit",
+        operator=username,
+        event_name="manage_request",
+        method=getattr(request, "method", ""),
+        path=getattr(request, "url", None) and getattr(request.url, "path", ""),
+        client=getattr(request, "client", None) and getattr(request.client, "host", ""),
+    )
 
 
 @router.post(

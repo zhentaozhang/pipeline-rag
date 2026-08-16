@@ -14,6 +14,7 @@ class MySQLSettings(BaseSettings):
     password: str = "5656"
     pool_size: int = 10
     max_overflow: int = 20
+    slow_query_ms: int = 500  # 第三轮 #6：慢查询告警阈值（db 事件监听）
 
     @computed_field  # type: ignore[misc]
     @property
@@ -30,6 +31,8 @@ class MySQLSettings(BaseSettings):
 
 class PostgresSettings(BaseSettings):
     """PostgreSQL + PGVector 配置"""
+
+    hnsw_index_enabled: bool = True  # 第三轮 #1：embedding 列 HNSW 向量索引（防全表扫描）
 
     enabled: bool = True
     host: str = "localhost"

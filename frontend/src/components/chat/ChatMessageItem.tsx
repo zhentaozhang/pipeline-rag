@@ -9,7 +9,7 @@ interface ChatMessageItemProps {
   message: Message;
 }
 
-export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => {
+export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({ message }) => {
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -291,5 +291,4 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message }) => 
       </div>
     </div>
   );
-};
-
+});

@@ -3,8 +3,12 @@
 提供：AsyncEngine、AsyncSessionLocal、依赖注入 get_db()
 """
 
+import re as _re
+import time as _time
 from collections.abc import AsyncGenerator
 
+import structlog as _slog
+from prometheus_client import Histogram as _Histogram
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -17,6 +21,15 @@ from sqlalchemy.orm import DeclarativeBase
 from app.config import get_settings
 
 settings = get_settings()
+
+# 第三轮 #6：慢查询监控（模块级，仅注册一次；init_db 可多次调用）
+_DB_SLOW_QUERY_MS = max(100, settings.mysql.slow_query_ms)
+_DB_QUERY_DURATION = _Histogram(
+    "db_query_duration_seconds",
+    "DB query duration in seconds",
+    ["table"],
+)
+_slow_query_installed = False
 
 # ── 引擎（全局单例）──────────────────────────────────────────────────────────
 _engine: AsyncEngine | None = None
@@ -48,6 +61,31 @@ async def init_db() -> None:
         cursor.execute("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci")
         cursor.close()
 
+    # 第三轮 #6：慢查询监控——超过阈值记录告警日志 + Prometheus 直方图
+    global _slow_query_installed
+    if not _slow_query_installed:
+        _slow_query_installed = True
+
+        @event.listens_for(_engine.sync_engine, "before_cursor_execute")
+        def _before_cursor(conn, cursor, statement, parameters, context, executemany):
+            conn.info.setdefault("_query_start", []).append(_time.monotonic())
+
+        @event.listens_for(_engine.sync_engine, "after_cursor_execute")
+        def _after_cursor(conn, cursor, statement, parameters, context, executemany):
+            start_times = conn.info.get("_query_start")
+            if not start_times:
+                return
+            start = start_times.pop()
+            elapsed_ms = (_time.monotonic() - start) * 1000
+            _DB_QUERY_DURATION.labels(table=_guess_table(statement)).observe(elapsed_ms / 1000.0)
+            if elapsed_ms >= _DB_SLOW_QUERY_MS:
+                _slog.get_logger(__name__).warning(
+                    "slow query detected",
+                    elapsed_ms=round(elapsed_ms, 1),
+                    threshold_ms=_DB_SLOW_QUERY_MS,
+                    statement=statement[:300],
+                )
+
     _session_factory = async_sessionmaker(
         bind=_engine,
         class_=AsyncSession,
@@ -72,6 +110,14 @@ def get_engine() -> AsyncEngine:
 def get_session_factory() -> async_sessionmaker[AsyncSession] | None:
     """获取 AsyncSession factory（Celery task / 评估等非 web 上下文使用）"""
     return _session_factory
+
+
+def _guess_table(statement: str) -> str:
+    """从 SQL 猜测主要表名（慢查询指标 label）"""
+    m = _re.search(r"(?:FROM|INTO|UPDATE|JOIN)\s+([\w.`]+)", statement, _re.I)
+    if m:
+        return m.group(1).strip("`").split(".")[-1]
+    return "unknown"
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

@@ -58,7 +58,10 @@ async def _ensure_pg_tables() -> None:
         with contextlib.suppress(Exception):
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
-        await conn.execute("""
+        _embed_dim = getattr(settings.llm, "embedding_dimensions", 1536) or 1536
+
+        await conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS public.document_chunk (
                 chunk_id VARCHAR(64) NOT NULL,
                 tenant_id VARCHAR(64) DEFAULT 'default' NOT NULL,
@@ -85,7 +88,8 @@ async def _ensure_pg_tables() -> None:
                 "CREATE INDEX IF NOT EXISTS idx_document_chunk_tenant_id ON public.document_chunk (tenant_id)"
             )
 
-        await conn.execute("""
+        await conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS public.pipeline_rag_document_embedding (
                 id BIGINT NOT NULL,
                 tenant_id VARCHAR(64) DEFAULT 'default' NOT NULL,
@@ -105,13 +109,15 @@ async def _ensure_pg_tables() -> None:
                 token_count INTEGER DEFAULT 0,
                 embedding_model VARCHAR(128),
                 metadata_json JSONB DEFAULT '{}'::jsonb,
-                embedding VECTOR NOT NULL,
+                embedding VECTOR(__EMB_DIM__) NOT NULL,
                 create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 edit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 status SMALLINT DEFAULT 1,
                 PRIMARY KEY (id)
             )
-        """)
+            """
+            .replace("__EMB_DIM__", str(_embed_dim))
+        )
         with contextlib.suppress(Exception):
             await conn.execute(
                 "ALTER TABLE public.pipeline_rag_document_embedding ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(64) DEFAULT 'default' NOT NULL"
@@ -137,6 +143,24 @@ async def _ensure_pg_tables() -> None:
                 "CREATE UNIQUE INDEX IF NOT EXISTS uk_embedding_document_chunk "
                 "ON public.pipeline_rag_document_embedding (document_id, chunk_no)"
             )
+
+        # 第三轮优化 #1：HNSW 向量索引——embedding <=> $1 检索此前为全表扫描，
+        # 数据量增长后线性退化；HNSW（pgvector 0.5+）高维向量召回率/速度优于 IVFFlat。
+        # 注意：大数据量首次建索引耗时较长（HNSW 构建慢），可在低峰期执行。
+        if settings.postgres.hnsw_index_enabled:
+            # 旧表 embedding 列可能为无维度 VECTOR，HNSW 要求固定维度 → 幂等 ALTER
+            _emb_dim = getattr(settings.llm, "embedding_dimensions", 1536) or 1536
+            with contextlib.suppress(Exception):
+                await conn.execute(
+                    "ALTER TABLE public.pipeline_rag_document_embedding "
+                    f"ALTER COLUMN embedding TYPE VECTOR({_emb_dim})"
+                )
+            with contextlib.suppress(Exception):
+                await conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_embedding_hnsw "
+                    "ON public.pipeline_rag_document_embedding "
+                    "USING hnsw (embedding vector_cosine_ops)"
+                )
 
 
 async def close_pg() -> None:

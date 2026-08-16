@@ -187,6 +187,13 @@ async def execute_stream(
 
     registry = ExecutorRegistry(db=db, task=task)
     task.sm.transition(ConversationState.EXECUTING)
+    # 第三轮优化 #2：executor dispatch 前显式结束事务并归还数据库连接。
+    # SSE 流式生成可能持续几十秒，期间无 MySQL 操作；若连接被请求级 session
+    # 全程持有，30 个并发流式对话即耗尽连接池（pool 10 + overflow 20）。
+    # AsyncSession.close() 仅归还连接，后续 finalize 的 db 操作会自动重连。
+    await db.commit()
+    await db.close()
+
     async for chunk in registry.dispatch(plan):
         if task.cancelled:
             state.turn_stopped = True

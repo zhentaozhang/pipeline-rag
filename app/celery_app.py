@@ -41,6 +41,11 @@ def make_celery() -> Celery:
                 "task": "chat.prune_user_facts",
                 "schedule": crontab(hour=4, minute=30),
             },
+            # 第三轮 #5：trace 三表保留期清理（004 遗留，retention_days 悬空）
+            "cleanup-traces": {
+                "task": "observability.cleanup_traces",
+                "schedule": crontab(hour=5, minute=0),
+            },
         },
     )
     return app

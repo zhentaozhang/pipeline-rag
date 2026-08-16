@@ -191,3 +191,43 @@ def import_s3_documents() -> dict:
         return await import_from_s3()
 
     return run_async(_do())  # type: ignore[no-any-return]
+
+
+@celery_app.task(name="observability.cleanup_traces")
+def cleanup_traces() -> dict:
+    """trace 三表保留期清理（第三轮 #5，004 遗留）：按 created_at 删除 retention_days 前的数据。
+
+    注意删除顺序（外键）：score → span → trace。
+    """
+
+    async def _do() -> dict:
+        from sqlalchemy import text
+
+        from app.config import get_settings
+        from app.db.session import get_session_factory
+
+        settings = get_settings()
+        retention_days = settings.observability.retention_days
+        if retention_days <= 0:
+            return {"status": "skipped", "reason": "retention_days<=0"}
+
+        sf = get_session_factory()
+        if sf is None:
+            raise RuntimeError("Session factory not initialized")
+        from sqlalchemy import CursorResult
+
+        async with sf() as db:
+            removed = 0
+            for table in ("trace_observability_score", "trace_observability_span", "trace_observability"):
+                result = await db.execute(
+                    text(
+                        f"DELETE FROM {table} WHERE created_at < NOW() - (:days * INTERVAL '1 day')"
+                    ),
+                    {"days": retention_days},
+                )
+                if isinstance(result, CursorResult):
+                    removed += result.rowcount or 0
+            await db.commit()
+            return {"status": "ok", "removed": removed}
+
+    return run_async(_do())  # type: ignore[no-any-return]

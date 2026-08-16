@@ -182,6 +182,7 @@ module = [
 ignore_errors = true
 
 [tool.pytest.ini_options]
+addopts = "-p no:cacheprovider"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
