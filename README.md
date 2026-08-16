@@ -29,40 +29,6 @@
 
 面向企业知识库问答与复杂任务处理场景，构建集**检索增强生成、多智能体协作、长期记忆管理与工具调用于一体**的 AI Agent 平台。系统基于 FastAPI 与 LangGraph 构建，围绕**上下文精度、任务分解、记忆连续性**三大核心挑战，整合 PGVector + Elasticsearch 双通道召回、泛型 Pipeline 对话编排、Supervisor + DAG 任务分解、摘要压缩记忆等组件，形成了一套完整的企业级 AI Agent 解决方案。
 
-### 技术演进（Evolution）
-
-
-
-```
-v0.1 单体 RAG（10 阶段 Pipeline + 双通道检索 + 摘要记忆）
-  → Current State：功能完整但无测试/无类型安全/隐性 bug 多
-  → Problem：22 项确认问题（索引 42P10、限流可伪造、168 处 any）
-  → Optimization：001 全量体检 + A/B/C 三类修复（1430 tests 基线）
-  → Result：测试/类型/配置全对齐，可安全迭代
-  → Next Problem：LLM 调用 7 次，成本高；分块丢失上下文；导航误判
-  → Next Optimization：002 P0 减链 7→3 + Contextual Chunking + 导航预筛
-  → Result：确定性省 4 次 LLM 调用；检索上下文增强（待 reindex 量化）
-  → Next Problem：回答无来源、索引易漂移、评估无门禁
-  → Next Optimization：003 引用溯源 + 索引对账 + 评估门禁（CI 级）
-  → Result：回答可点开原文；三存储可自愈；回归有阈值拦截
-  → Next Problem：checkpoint 写后即弃、可观测性无 UI、OTEL 陈旧
-  → Next Optimization：004 checkpoint 彻底移除 + 自研 Trace UI + OTEL 退役
-  → Result：Agent 每请求少 6~12 次 MySQL 写；trace 可视化
-  → Next Problem：前端 bundle 798KB、无集成测试、入口单一
-  → Next Optimization：005 前端分包(43KB) + 集成测试 + S3/网页连接器 + 飞书
-  → Result：1435 tests；多数据源；多渠道
-  → Next Problem：多实例隐患、无缓存、SSE 断线丢流、镜像重
-  → Next Optimization：006 单实例守卫 + 响应缓存 + SSE 续传 + unstructured 可选化 + 优雅停机
-  → Result：1469 tests；重复问答省全链路；断线可续传
-  → Next Problem：缓存命中不可见；成本按全价估算（白付 9 倍命中折扣）
-  → Next Optimization：007 P0 Prompt Caching（usage 解析 + 折扣计费 + 命中率面板）
-  → Result：成本口径接近真实；命中率可观测（真实命中率待流量数据）
-  → Next Problem：向量检索全表扫描、SSE 并发 30 即耗尽连接池、配置漂移、trace 无清理
-  → Next Optimization：012 第三轮（HNSW 索引 + 连接归还 + 配置校验 + 运维健康 8 项）
-  → Result：检索走索引；并发上限大幅提升；运维闭环（待真实环境量化）
-  → ...
-```
-
 ### 核心能力
 
 | 维度 | 能力 |
