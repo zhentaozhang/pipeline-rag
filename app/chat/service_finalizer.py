@@ -35,6 +35,15 @@ async def finalize_stream(
     archive_store,
     session,
 ) -> None:
+    import time as _time
+
+    _step_log: list[str] = []
+
+    def _mark(step: str) -> None:
+        _step_log.append(f"{step}={_time.monotonic() - _finalize_t0:.1f}s")
+
+    _finalize_t0 = _time.monotonic()
+
     if task.sm.state in {ConversationState.EXECUTING}:
         task.sm.transition(ConversationState.FINALIZING)
 
@@ -76,7 +85,7 @@ async def finalize_stream(
             turn_failed=state.turn_failed,
             turn_stopped=state.turn_stopped,
         )
-
+        _mark("complete_exchange")
 
         if turn_status == 2:
             await memory_service.save(
@@ -85,6 +94,7 @@ async def finalize_stream(
                 answer="".join(state.full_answer),
                 exchange_id=temp_exchange_id,
             )
+            _mark("memory_save")
             await bus.emit(
                 Event(
                     name="memory.saved",
@@ -98,6 +108,8 @@ async def finalize_stream(
             )
     except Exception:
         logger.exception("persist exchange failed")
+    _mark("end")
+    logger.info("finalize step timing", steps=", ".join(_step_log))
 
     # 标题生成改为 Celery 异步执行（体检 B5）：避免流式请求收尾被 LLM 调用阻塞。
     # 任务内部会用独立 DB session，并二次校验标题未被用户重命名。
@@ -175,6 +187,7 @@ async def finalize_stream(
         await db.commit()
     except Exception:
         logger.warning("usage trace persist failed", exchange_id=temp_exchange_id, exc_info=True)
+    _mark("usage_persist")
 
     try:
         if state.turn_stopped:
@@ -189,6 +202,7 @@ async def finalize_stream(
             task.sm.transition(ConversationState.COMPLETED)
     except Exception:
         logger.exception("state_machine.final_transition_error")
+    _mark("state_transition")
 
     try:
         _event: Event[

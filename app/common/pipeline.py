@@ -76,12 +76,25 @@ class Pipeline(Generic[C, R]):
         self.stages = stages or []
 
     async def run(self, ctx: C) -> R:
+        import time as _time
+
+        import structlog as _slog
+
+        _logger = _slog.get_logger(__name__)
         for stage_wrapper in self.stages:
             # 条件检查：不满足则跳过
             if stage_wrapper.condition is not None and not stage_wrapper.condition(ctx):
                 continue
 
+            _t0 = _time.monotonic()
             result = await stage_wrapper.handler.process(ctx)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            if _elapsed_ms >= 50:  # 只记录 >50ms 的 stage（定位延迟黑洞，P0）
+                _logger.info(
+                    "stage timing",
+                    stage=getattr(stage_wrapper.handler, "name", type(stage_wrapper.handler).__name__),
+                    elapsed_ms=round(_elapsed_ms, 1),
+                )
 
             if result.signal == StageSignal.TERMINATE:
                 if result.plan is not None:
