@@ -42,7 +42,7 @@ def extract_citations(answer: str) -> list[int]:
 
 async def fetch_answer(
     question: str,
-    engine: RagRetrievalEngine,
+    engine: Any,
     fallback: ModelFallbackManager,
 ) -> tuple[str, list[str]]:
     """检索→生成真实回答（与评估 runner 同路径），返回 (answer, final_evidence_contents)"""
