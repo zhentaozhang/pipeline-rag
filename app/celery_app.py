@@ -36,6 +36,11 @@ def make_celery() -> Celery:
                 "task": "document.reconcile_indexes",
                 "schedule": crontab(hour=3, minute=30),
             },
+            # P3 事实记忆保留期清理（隐私数据生命周期）
+            "prune-user-facts": {
+                "task": "chat.prune_user_facts",
+                "schedule": crontab(hour=4, minute=30),
+            },
         },
     )
     return app

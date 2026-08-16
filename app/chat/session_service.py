@@ -188,6 +188,14 @@ async def reset_session(db: AsyncSession, cid: str) -> dict[str, Any]:
 
     await db.commit()
 
+    # P3 事实记忆清理：删除会话后同步清除该会话的用户事实（隐私）
+    try:
+        from app.chat.fact_memory import FactMemoryStore
+
+        await FactMemoryStore().delete_by_conversation(cid)
+    except Exception:
+        logger.warning("user fact memory cleanup failed", conversation_id=cid, exc_info=True)
+
     if task:
         ChatRuntimeRegistry.unregister(cid, task)
 

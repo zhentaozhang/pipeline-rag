@@ -121,6 +121,31 @@ def task_extract_user_facts(
 
 @celery_app.task(
     bind=True,
+    name="chat.prune_user_facts",
+)
+def task_prune_user_facts(self) -> dict:
+    """全局事实记忆保留期清理（beat 定时，隐私数据生命周期）"""
+    from app.config import get_settings
+
+    settings = get_settings()
+    if not settings.fact_memory.enabled:
+        return {"status": "skipped_disabled"}
+
+    async def _do() -> dict:
+        from app.chat.fact_memory import FactMemoryStore
+
+        removed = await FactMemoryStore().prune_expired(settings.fact_memory.retention_days)
+        return {"status": "ok", "removed": removed}
+
+    try:
+        return run_async(_do())  # type: ignore[no-any-return]
+    except Exception as e:
+        logger.error("user facts prune failed", error=str(e), exc_info=True)
+        raise
+
+
+@celery_app.task(
+    bind=True,
     name="chat.generate_session_title",
 )
 def task_generate_session_title(self, conversation_id: str, question: str, answer: str) -> dict:

@@ -97,6 +97,59 @@ class FactMemoryStore:
         )
         return [str(r["content"]) for r in rows]
 
+    async def delete_by_conversation(self, conversation_id: str) -> int:
+        """删除会话的全部事实记忆（会话重置/删除时调用，隐私清理）"""
+        from app.infra.pg import execute
+
+        result = await execute(
+            "DELETE FROM public.user_fact_memory WHERE conversation_id = $1", conversation_id
+        )
+        return int(result.split()[-1]) if result and result.split()[-1].isdigit() else 0
+
+    async def enforce_capacity(self, conversation_id: str, max_facts: int) -> int:
+        """容量上限：超出 max_facts 时按 edit_time 最旧淘汰，返回淘汰数"""
+        if max_facts <= 0:
+            return 0
+        from app.infra.pg import execute
+
+        try:
+            result = await execute(
+                """
+                DELETE FROM public.user_fact_memory
+                WHERE id IN (
+                    SELECT id FROM public.user_fact_memory
+                    WHERE conversation_id = $1
+                    ORDER BY edit_time ASC
+                    OFFSET $2
+                )
+                """,
+                conversation_id,
+                max_facts,
+            )
+            return int(result.split()[-1]) if result and result.split()[-1].isdigit() else 0
+        except Exception as e:
+            logger.warning("fact memory capacity prune failed", error=str(e), exc_info=True)
+            return 0
+
+    async def prune_expired(self, retention_days: int) -> int:
+        """全局保留期清理：edit_time 早于 retention_days 的事实删除（0 或负数表示不限）"""
+        if retention_days <= 0:
+            return 0
+        from app.infra.pg import execute
+
+        try:
+            result = await execute(
+                """
+                DELETE FROM public.user_fact_memory
+                WHERE edit_time < NOW() - ($1 * INTERVAL '1 day')
+                """,
+                retention_days,
+            )
+            return int(result.split()[-1]) if result and result.split()[-1].isdigit() else 0
+        except Exception as e:
+            logger.warning("fact memory retention prune failed", error=str(e), exc_info=True)
+            return 0
+
     async def insert_many(
         self,
         conversation_id: str,
@@ -143,4 +196,6 @@ class FactMemoryStore:
                 inserted += 1
             except Exception as e:
                 logger.warning("fact memory insert failed", error=str(e), exc_info=True)
+        if inserted > 0:
+            await self.enforce_capacity(conversation_id, settings.max_facts)
         return inserted

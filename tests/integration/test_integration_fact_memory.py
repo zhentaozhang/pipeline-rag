@@ -80,3 +80,79 @@ async def test_fact_memory_insert_and_retrieve(integration_env):
         await execute("DELETE FROM public.user_fact_memory WHERE conversation_id = $1", conv)
     finally:
         await close_pg()
+
+
+@pytest.mark.asyncio
+async def test_fact_memory_cleanup_strategies(integration_env):
+    """清理策略：按会话删除 / 容量淘汰（真实 PG）"""
+    from app.chat.fact_memory import FactMemoryStore, UserFact
+    from app.infra.pg import close_pg, execute, fetch, init_pg
+
+    await init_pg()
+    try:
+        await execute(
+            """
+            CREATE TABLE IF NOT EXISTS public.user_fact_memory (
+                id BIGINT NOT NULL,
+                conversation_id VARCHAR(64) NOT NULL,
+                content TEXT NOT NULL,
+                category VARCHAR(32) NOT NULL DEFAULT 'fact',
+                embedding VECTOR NOT NULL,
+                source_exchange_id BIGINT,
+                create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                edit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id)
+            )
+            """
+        )
+        store = FactMemoryStore()
+
+        _VECTORS = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.5, 0.5, 0.0]]
+
+        class _FakeEmbedder:
+            def __init__(self):
+                self._i = 0
+
+            async def embed_batch(self, texts):
+                out = []
+                for _ in texts:
+                    out.append(_VECTORS[self._i % len(_VECTORS)])
+                    self._i += 1
+                return out
+
+        store._embedder = _FakeEmbedder()
+
+        conv = "conv-fact-clean"
+        await execute("DELETE FROM public.user_fact_memory WHERE conversation_id = $1", conv)
+
+        # 插入 3 条（内容不同 → 向量不同）
+        await store.insert_many(
+            conv,
+            [UserFact(f"事实{i}", "fact") for i in range(3)],
+            source_exchange_id=1,
+        )
+        count = await fetch(
+            "SELECT COUNT(*) AS c FROM public.user_fact_memory WHERE conversation_id = $1", conv
+        )
+        assert int(count[0]["c"]) == 3
+
+        # 容量淘汰：max=2 → 淘汰 1 条（最旧）
+        removed = await store.enforce_capacity(conv, 2)
+        assert removed == 1
+        count = await fetch(
+            "SELECT COUNT(*) AS c FROM public.user_fact_memory WHERE conversation_id = $1", conv
+        )
+        assert int(count[0]["c"]) == 2
+
+        # 按会话删除
+        deleted = await store.delete_by_conversation(conv)
+        assert deleted == 2
+        count = await fetch(
+            "SELECT COUNT(*) AS c FROM public.user_fact_memory WHERE conversation_id = $1", conv
+        )
+        assert int(count[0]["c"]) == 0
+
+        # 清理
+        await execute("DELETE FROM public.user_fact_memory WHERE conversation_id = $1", conv)
+    finally:
+        await close_pg()
