@@ -14,6 +14,17 @@ class CelerySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CELERY_", env_file=_ENV_FILE, extra="ignore")
 
 
+class AdaptiveKSettings(BaseSettings):
+    """查询自适应 Top-k 截断（调研 P2）：RRF 前按得分分布动态截断，默认关闭"""
+
+    enabled: bool = False
+    min_k: int = 3  # 保底召回下限
+    max_k: int = 20  # 单通道候选上限（成本控制）
+    ratio_threshold: float = 0.4  # 得分低于最高分×ratio 且已超 min_k 即截断
+
+    model_config = SettingsConfigDict(env_prefix="RAG_ADAPTIVE_K_", env_file=_ENV_FILE, extra="ignore")
+
+
 class RAGSettings(BaseSettings):
     """RAG 检索参数"""
 

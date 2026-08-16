@@ -17,6 +17,7 @@ from app.config.infra import (
 )
 from app.config.llm import LLMSettings, RerankSettings, TavilySettings
 from app.config.pipeline import (
+    AdaptiveKSettings,
     AgentSettings,
     CelerySettings,
     ChatCacheSettings,
@@ -55,6 +56,7 @@ class Settings:
         self.jwt: JWTSettings = JWTSettings()  # type: ignore[call-arg]
         self.celery: CelerySettings = CelerySettings()  # type: ignore[call-arg]
         self.rag: RAGSettings = RAGSettings()  # type: ignore[call-arg]
+        self.adaptive_k: AdaptiveKSettings = AdaptiveKSettings()  # type: ignore[call-arg]
         self.agent: AgentSettings = AgentSettings()  # type: ignore[call-arg]
         self.memory: MemorySettings = MemorySettings()  # type: ignore[call-arg]
         self.mineru: MinerUSettings = MinerUSettings()  # type: ignore[call-arg]

@@ -272,6 +272,24 @@ class RagRetrievalEngine:
             (r.documents for r in channel_results if r.channel_name == "keyword"), []
         )
 
+        # ── 查询自适应 Top-k 截断（调研 P2，默认关）─────────────
+        _adaptive_k_settings = getattr(settings, "adaptive_k", None)
+        if _adaptive_k_settings is not None and _adaptive_k_settings.enabled:
+            from app.rag.adaptive_k import adaptive_truncate
+
+            ak = _adaptive_k_settings
+            vector_accepted = adaptive_truncate(
+                vector_accepted, ak.min_k, ak.max_k, ak.ratio_threshold
+            )
+            keyword_accepted = adaptive_truncate(
+                keyword_accepted, ak.min_k, ak.max_k, ak.ratio_threshold
+            )
+            logger.debug(
+                "adaptive-k truncation",
+                vector=len(vector_accepted),
+                keyword=len(keyword_accepted),
+            )
+
         # ── RRF 融合 ───────────────────────────────────────────
         rrf_started_at = datetime.now(UTC)
         t_rrf = time.monotonic()
