@@ -12,6 +12,14 @@
 【历史上下文】
 {{ context_summary }}
 {% endif %}
+{% if user_memory %}
+【已知的用户长期信息】
+{% for f in user_memory %}
+- {{ f }}
+{% endfor %}
+
+回答时可结合这些信息提供个性化服务，但不得编造记忆之外的用户信息。
+{% endif %}
 
 {% if skill_prompts %}
 你可以使用的工具：

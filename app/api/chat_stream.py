@@ -30,6 +30,7 @@ class ChatRequest(BaseModel):
     chat_mode: str = Field(default="auto", alias="chatMode")
     doc_ids: list[str] = Field(default_factory=list, alias="docIds")
     selected_document_id: str | None = Field(default=None, alias="selectedDocumentId")
+    user_key: str | None = Field(default=None, alias="userKey")  # P3：用户级事实记忆维度
     model_config = {"populate_by_name": True}
 
 

@@ -156,3 +156,83 @@ async def test_fact_memory_cleanup_strategies(integration_env):
         await execute("DELETE FROM public.user_fact_memory WHERE conversation_id = $1", conv)
     finally:
         await close_pg()
+
+
+@pytest.mark.asyncio
+async def test_fact_memory_user_key_cross_session(integration_env):
+    """user_key 扩展：用户级事实跨会话命中（Mem0 式用户画像）"""
+    from app.chat.fact_memory import FactMemoryStore, UserFact
+    from app.infra.pg import close_pg, execute, init_pg
+
+    await init_pg()
+    try:
+        await execute(
+            """
+            CREATE TABLE IF NOT EXISTS public.user_fact_memory (
+                id BIGINT NOT NULL,
+                conversation_id VARCHAR(64) NOT NULL,
+                user_key VARCHAR(64),
+                content TEXT NOT NULL,
+                category VARCHAR(32) NOT NULL DEFAULT 'fact',
+                embedding VECTOR NOT NULL,
+                source_exchange_id BIGINT,
+                create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                edit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id)
+            )
+            """
+        )
+        await execute(
+            "ALTER TABLE public.user_fact_memory ADD COLUMN IF NOT EXISTS user_key VARCHAR(64)"
+        )
+        store = FactMemoryStore()
+
+        _VECTORS = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+
+        class _FakeEmbedder:
+            def __init__(self):
+                self._i = 0
+
+            async def embed_batch(self, texts):
+                out = []
+                for _ in texts:
+                    out.append(_VECTORS[self._i % len(_VECTORS)])
+                    self._i += 1
+                return out
+
+        store._embedder = _FakeEmbedder()
+
+        user = "ou_user_1"
+        await execute(
+            "DELETE FROM public.user_fact_memory WHERE user_key = $1 OR conversation_id = $2",
+            user,
+            "conv-a",
+        )
+        await execute("DELETE FROM public.user_fact_memory WHERE user_key = $1", user)
+
+        # 会话 A 抽取（带 user_key）
+        await store.insert_many(
+            "conv-a", [UserFact("用户是后端工程师", "identity")], 1, user_key=user
+        )
+
+        # 会话 B（不同 conversation_id，同一 user_key）→ 跨会话命中用户画像
+        facts = await store.retrieve("conv-b", [1.0, 0.0, 0.0], top_k=3, user_key=user)
+        assert any("后端工程师" in f for f in facts)
+
+        # 无 user_key 时检索不到（仅会话级）
+        facts_conv_only = await store.retrieve("conv-b", [1.0, 0.0, 0.0], top_k=3)
+        assert facts_conv_only == []
+
+        # 隐私擦除：按 user_key 删除
+        removed = await store.delete_by_conversation("conv-b", user_key=user)
+        assert removed >= 1
+        facts_after = await store.retrieve("conv-b", [1.0, 0.0, 0.0], top_k=3, user_key=user)
+        assert facts_after == []
+
+        await execute(
+            "DELETE FROM public.user_fact_memory WHERE user_key = $1 OR conversation_id = $2",
+            user,
+            "conv-a",
+        )
+    finally:
+        await close_pg()

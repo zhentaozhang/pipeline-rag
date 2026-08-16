@@ -55,6 +55,8 @@ class ReactAgentExecutor(ConversationExecutor):
         SkillRegistry.discover()
         skill_prompts = SkillRegistry.get_system_prompts()
         template = jinja_env.get_template("agent_system.j2")
+        # P3 用户事实记忆：Agent 路径同样注入用户长期信息（个性化）
+        user_memory = getattr(plan, "user_memory_context", None) or []
         system_prompt = template.render(
             context_summary=getattr(plan, "context_summary", "") or "",
             current_date_text=getattr(plan, "current_date_text", "") or "",
@@ -63,6 +65,7 @@ class ReactAgentExecutor(ConversationExecutor):
             ),
             requires_fresh_search=bool(getattr(plan, "requires_fresh_search", False)),
             skill_prompts=skill_prompts,
+            user_memory=user_memory,
         )
 
         workflow = build_react_graph()

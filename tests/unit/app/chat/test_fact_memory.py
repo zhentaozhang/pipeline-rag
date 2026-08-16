@@ -72,3 +72,32 @@ def test_retrieve_disabled_default(monkeypatch):
     from app.config import get_settings
 
     assert get_settings().fact_memory.enabled is False
+
+
+def test_agent_template_injects_user_memory():
+    """Agent 执行器模板：user_memory 渲染进 system prompt"""
+    from app.executors.agent import jinja_env
+
+    template = jinja_env.get_template("agent_system.j2")
+    out = template.render(
+        context_summary="",
+        current_date_text="2026-08-16",
+        requires_current_date_anchoring=False,
+        requires_fresh_search=False,
+        skill_prompts="",
+        user_memory=["用户是后端工程师", "用户偏好简洁回答"],
+    )
+    assert "已知的用户长期信息" in out
+    assert "用户是后端工程师" in out
+    assert "用户偏好简洁回答" in out
+
+    # 无记忆时模板不输出该段
+    out_empty = template.render(
+        context_summary="",
+        current_date_text="2026-08-16",
+        requires_current_date_anchoring=False,
+        requires_fresh_search=False,
+        skill_prompts="",
+        user_memory=[],
+    )
+    assert "已知的用户长期信息" not in out_empty

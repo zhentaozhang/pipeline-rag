@@ -57,7 +57,12 @@ def task_compress_conversation_memory(
     default_retry_delay=30,
 )
 def task_extract_user_facts(
-    self, conversation_id: str, question: str, answer: str, exchange_id: int
+    self,
+    conversation_id: str,
+    question: str,
+    answer: str,
+    exchange_id: int,
+    user_key: str | None = None,
 ) -> dict:
     """异步抽取用户事实/偏好（P3 · Mem0 式）：LLM 结构化抽取 → 向量化 → 去重落库。
 
@@ -98,7 +103,7 @@ def task_extract_user_facts(
             return {"conversation_id": conversation_id, "status": "no_facts"}
 
         store = FactMemoryStore()
-        inserted = await store.insert_many(conversation_id, facts, exchange_id)
+        inserted = await store.insert_many(conversation_id, facts, exchange_id, user_key=user_key)
         logger.info(
             "user facts extracted",
             conversation_id=conversation_id,

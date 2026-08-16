@@ -114,7 +114,7 @@ async def _answer_question(chat_id: str, open_id: str, question: str) -> None:
         message_id = send_card(chat_id, "🤔 正在思考...")
 
         service = BusinessChatService(db)
-        req = _build_request(conversation_id, question)
+        req = _build_request(conversation_id, question, open_id)
         chunks: list[str] = []
         last_content = ""
         last_send_at = 0.0
@@ -159,7 +159,7 @@ async def _answer_question(chat_id: str, open_id: str, question: str) -> None:
                 update_card(message_id, f"⚠️ 服务异常：{e}")
 
 
-def _build_request(conversation_id: str, question: str) -> Any:
+def _build_request(conversation_id: str, question: str, open_id: str) -> Any:
     from types import SimpleNamespace
 
     return SimpleNamespace(
@@ -168,6 +168,7 @@ def _build_request(conversation_id: str, question: str) -> Any:
         chat_mode="auto",
         doc_ids=[],
         selected_document_id=None,
+        user_key=open_id or None,  # 渠道身份 → 用户级事实记忆维度
     )
 
 

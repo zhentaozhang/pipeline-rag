@@ -133,6 +133,7 @@ async def finalize_stream(
                         question,
                         "".join(state.full_answer)[:2000],
                         temp_exchange_id,
+                        user_key=getattr(task, "user_key", None),
                     )
         except Exception as fact_err:
             logger.warning(

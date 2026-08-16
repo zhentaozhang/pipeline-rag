@@ -78,31 +78,58 @@ class FactMemoryStore:
         return await self._embedder.embed_batch(texts)
 
     async def retrieve(
-        self, conversation_id: str, query_embedding: list[float], top_k: int
+        self,
+        conversation_id: str,
+        query_embedding: list[float],
+        top_k: int,
+        user_key: str | None = None,
     ) -> list[str]:
-        """检索与查询向量最相关的已记忆事实（余弦距离升序）"""
+        """检索相关已记忆事实（余弦距离升序）。
+
+        user_key 提供时检索「用户级 + 会话级」记忆并集（跨会话画像）；
+        否则仅检索会话级（向后兼容）。
+        """
         from app.infra.pg import fetch
 
         embedding_str = f"[{','.join(str(f) for f in query_embedding)}]"
-        rows = await fetch(
-            """
-            SELECT content FROM public.user_fact_memory
-            WHERE conversation_id = $1
-            ORDER BY embedding <=> $2::vector
-            LIMIT $3
-            """,
-            conversation_id,
-            embedding_str,
-            top_k,
-        )
+        if user_key:
+            rows = await fetch(
+                """
+                SELECT content FROM public.user_fact_memory
+                WHERE user_key = $1 OR conversation_id = $2
+                ORDER BY embedding <=> $3::vector
+                LIMIT $4
+                """,
+                user_key,
+                conversation_id,
+                embedding_str,
+                top_k,
+            )
+        else:
+            rows = await fetch(
+                """
+                SELECT content FROM public.user_fact_memory
+                WHERE conversation_id = $1
+                ORDER BY embedding <=> $2::vector
+                LIMIT $3
+                """,
+                conversation_id,
+                embedding_str,
+                top_k,
+            )
         return [str(r["content"]) for r in rows]
 
-    async def delete_by_conversation(self, conversation_id: str) -> int:
-        """删除会话的全部事实记忆（会话重置/删除时调用，隐私清理）"""
+    async def delete_by_conversation(self, conversation_id: str, user_key: str | None = None) -> int:
+        """删除会话的全部事实记忆（会话重置/删除时调用，隐私清理）。
+
+        user_key 提供时同时清除该用户的全部事实（用户注销/隐私擦除场景）。
+        """
         from app.infra.pg import execute
 
         result = await execute(
-            "DELETE FROM public.user_fact_memory WHERE conversation_id = $1", conversation_id
+            "DELETE FROM public.user_fact_memory WHERE conversation_id = $1 OR user_key = $2",
+            conversation_id,
+            user_key or "",
         )
         return int(result.split()[-1]) if result and result.split()[-1].isdigit() else 0
 
@@ -155,6 +182,7 @@ class FactMemoryStore:
         conversation_id: str,
         facts: list[UserFact],
         source_exchange_id: int | None,
+        user_key: str | None = None,
     ) -> int:
         """插入新事实（去重：与已有事实相似度 > threshold 跳过）。返回插入条数"""
         if not facts:
@@ -168,26 +196,40 @@ class FactMemoryStore:
             emb = (await self._embed([fact.content]))[0]
             embedding_str = f"[{','.join(str(f) for f in emb)}]"
             try:
-                similar = await fetchval(
-                    """
-                    SELECT COUNT(*) FROM public.user_fact_memory
-                    WHERE conversation_id = $1
-                      AND embedding <=> $2::vector < $3
-                    """,
-                    conversation_id,
-                    embedding_str,
-                    1.0 - threshold,
-                )
+                if user_key:
+                    similar = await fetchval(
+                        """
+                        SELECT COUNT(*) FROM public.user_fact_memory
+                        WHERE (user_key = $1 OR conversation_id = $2)
+                          AND embedding <=> $3::vector < $4
+                        """,
+                        user_key,
+                        conversation_id,
+                        embedding_str,
+                        1.0 - threshold,
+                    )
+                else:
+                    similar = await fetchval(
+                        """
+                        SELECT COUNT(*) FROM public.user_fact_memory
+                        WHERE conversation_id = $1
+                          AND embedding <=> $2::vector < $3
+                        """,
+                        conversation_id,
+                        embedding_str,
+                        1.0 - threshold,
+                    )
                 if similar is not None and int(str(similar)) > 0:
                     continue  # 已有近似事实，去重
                 await execute(
                     """
                     INSERT INTO public.user_fact_memory
-                        (id, conversation_id, content, category, embedding, source_exchange_id)
-                    VALUES ($1, $2, $3, $4, $5::vector, $6)
+                        (id, conversation_id, user_key, content, category, embedding, source_exchange_id)
+                    VALUES ($1, $2, $3, $4, $5, $6::vector, $7)
                     """,
                     next_id(),
                     conversation_id,
+                    user_key,
                     fact.content,
                     fact.category,
                     embedding_str,

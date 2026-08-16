@@ -33,6 +33,7 @@ class ChatTaskInfo(BaseModel):
     question: str
     start_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
     plan: ExecutionPlan | None = None
+    user_key: str | None = None  # P3 扩展：用户级事实记忆维度（渠道身份，如飞书 open_id）
 
     # ── 核心辨识字段 ────────────────────────────────────────────────────
     exchange_id: int | None = None

@@ -122,6 +122,7 @@ class BusinessChatService:
             chat_mode=request.chat_mode,
             current_date=today.isoformat(),
             current_date_text=current_date_text,
+            user_key=getattr(request, "user_key", None),
             plan=None,
         )
         if hasattr(request, "model_name"):

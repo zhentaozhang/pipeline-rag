@@ -88,8 +88,12 @@ async def execute_stream(
             tenant_id=getattr(session, "tenant_id", "default"),
         )
         # P3 用户事实记忆（Mem0 式）：检索相关长期记忆注入 plan（默认关）
+        # 覆盖 RETRIEVAL（RAG 问答）与 AGENT（React Agent 联网/工具）两类主执行器
         try:
-            if _settings.fact_memory.enabled and plan.mode == ExecutionMode.RETRIEVAL:
+            if _settings.fact_memory.enabled and plan.mode in (
+                ExecutionMode.RETRIEVAL,
+                ExecutionMode.AGENT,
+            ):
                 from app.chat.fact_memory import FactMemoryStore
                 from app.infra.embedding import get_embedding_provider
 
@@ -97,10 +101,18 @@ async def execute_stream(
                     await get_embedding_provider().embed_batch([question or plan.original_question or ""])
                 )[0]
                 facts = await FactMemoryStore().retrieve(
-                    conversation_id, q_embedding, _settings.fact_memory.retrieval_top_k
+                    conversation_id,
+                    q_embedding,
+                    _settings.fact_memory.retrieval_top_k,
+                    user_key=getattr(task, "user_key", None),
                 )
                 plan.user_memory_context = facts
-                logger.debug("user memory injected", conversation_id=conversation_id, count=len(facts))
+                logger.debug(
+                    "user memory injected",
+                    conversation_id=conversation_id,
+                    mode=plan.mode,
+                    count=len(facts),
+                )
         except Exception as e:
             logger.warning("user memory retrieve failed", error=str(e), exc_info=True)
 
