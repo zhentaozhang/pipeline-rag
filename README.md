@@ -54,8 +54,11 @@ v0.1 单体 RAG（10 阶段 Pipeline + 双通道检索 + 摘要记忆）
   → Next Problem：多实例隐患、无缓存、SSE 断线丢流、镜像重
   → Next Optimization：006 单实例守卫 + 响应缓存 + SSE 续传 + unstructured 可选化 + 优雅停机
   → Result：1469 tests；重复问答省全链路；断线可续传
-  → Next Problem：成本还有一档可降（prompt 级）；分块上下文只修了文本侧
-  → Next Optimization：007 Prompt Caching + Late Chunking（调研 000）
+  → Next Problem：缓存命中不可见；成本按全价估算（白付 9 倍命中折扣）
+  → Next Optimization：007 P0 Prompt Caching（usage 解析 + 折扣计费 + 命中率面板）
+  → Result：成本口径接近真实；命中率可观测（真实命中率待流量数据）
+  → Next Problem：分块上下文只修了文本侧（向量侧未做）
+  → Next Optimization：008 Late Chunking 实验（000 调研 P1）
   → ...
 ```
 

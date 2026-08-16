@@ -5,7 +5,7 @@ import {
   Clock, 
   MessageSquare,
   AlertTriangle,
-  Coins,
+  Coins, Zap,
   PlayCircle
 } from 'lucide-react';
 import { 
@@ -114,7 +114,7 @@ export const AdminMetricsView: React.FC = () => {
       </div>
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex justify-between">
@@ -171,6 +171,23 @@ export const AdminMetricsView: React.FC = () => {
             <div className="text-3xl font-bold">${overview?.todayCost || 0}</div>
             <p className="text-xs text-muted-foreground mt-1">
               总计: ${overview?.totalCost || 0}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex justify-between">
+              Prompt 缓存命中率
+              <Zap size={16} className="text-purple-500" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {((overview?.cacheHitRatio ?? 0) * 100).toFixed(1)}%
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              命中 token 按约 1/10 单价计费（P0 Prompt Caching）
             </p>
           </CardContent>
         </Card>

@@ -31,6 +31,7 @@ class MetricsOverview:
         today_cost: float = 0.0,
         total_tokens: int = 0,
         total_cost: float = 0.0,
+        cache_hit_ratio: float = 0.0,
     ):
         self.total_exchanges = total_exchanges
         self.failed_exchanges = failed_exchanges
@@ -40,6 +41,7 @@ class MetricsOverview:
         self.today_cost = today_cost
         self.total_tokens = total_tokens
         self.total_cost = total_cost
+        self.cache_hit_ratio = cache_hit_ratio
 
     @property
     def error_rate(self) -> float:
@@ -113,6 +115,28 @@ class MetricsService:
         total_tokens = int(total_row[0] or 0)
         total_cost = float(total_row[1] or 0.0)
 
+        # Prompt Caching（P0）：从进程内 Prometheus registry 读缓存命中/未命中总量
+        cache_hit_ratio = 0.0
+        try:
+            import prometheus_client
+
+            hit_total = (
+                prometheus_client.REGISTRY.get_sample_value(
+                    "llm_cache_hit_token_total", {"model": "deepseek-chat"}
+                )
+                or 0.0
+            )
+            miss_total = (
+                prometheus_client.REGISTRY.get_sample_value(
+                    "llm_cache_miss_token_total", {"model": "deepseek-chat"}
+                )
+                or 0.0
+            )
+            if hit_total + miss_total > 0:
+                cache_hit_ratio = round(hit_total / (hit_total + miss_total), 4)
+        except Exception:
+            cache_hit_ratio = 0.0
+
         return MetricsOverview(
             total_exchanges=total_exchanges,
             failed_exchanges=failed_exchanges,
@@ -122,6 +146,7 @@ class MetricsService:
             today_cost=today_cost,
             total_tokens=total_tokens,
             total_cost=total_cost,
+            cache_hit_ratio=cache_hit_ratio,
         )
 
     async def get_usage_trend(self, days: int = 14) -> list[dict]:

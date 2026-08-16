@@ -14,6 +14,8 @@ class ChatModelUsageTrace(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    prompt_cache_hit_tokens: int = 0
+    prompt_cache_miss_tokens: int = 0
     estimated_cost: float = 0.0
     duration_ms: float = 0.0
     status: str = "success"

@@ -49,6 +49,18 @@ LLM_COST_TOTAL = Counter(
     ["model"],
 )
 
+# Prompt Caching（P0）：缓存命中/未命中 input token，命中率 = hit/(hit+miss)
+LLM_CACHE_HIT_TOKEN_TOTAL = Counter(
+    "llm_cache_hit_token_total",
+    "LLM prompt tokens served from context cache",
+    ["model"],
+)
+LLM_CACHE_MISS_TOKEN_TOTAL = Counter(
+    "llm_cache_miss_token_total",
+    "LLM prompt tokens not served from context cache",
+    ["model"],
+)
+
 RETRIEVAL_EMPTY_TOTAL = Counter(
     "retrieval_empty_total",
     "Empty retrieval count",

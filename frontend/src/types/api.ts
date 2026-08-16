@@ -316,6 +316,7 @@ export interface MetricsOverview {
   errorRate?: number;
   todayCost?: number;
   totalCost?: number;
+  cacheHitRatio?: number;
   [key: string]: unknown;
 }
 
