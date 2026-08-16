@@ -139,4 +139,69 @@ EMPLOYEE_DATASET: list[EvalQuestion] = [
         ground_truth_answer="礼品须符合制度标准并有事前审批，禁止赠送现金或超出规定的贵重礼品。",
         relevant_contexts=["礼品赠送"],
     ),
+
+    # ═══ 21-30 复杂问题补盲（016 轮 E 项：比较/否定/多跳/数值/流程）═══
+    EvalQuestion(
+        id="emp021",
+        question="连续请 8 天事假需要谁审批？",
+        ground_truth_answer="事假超过7天须由事业部负责人审批（≤3天直属上级；3-7天部门负责人；>7天事业部负责人）。",
+        relevant_contexts=[">7天 → 事业部负责人审批", "3-7天 → 部门负责人审批"],
+    ),
+    EvalQuestion(
+        id="emp022",
+        question="事假和病假的审批权限有什么区别？",
+        ground_truth_answer=(
+            "事假按天数分层审批（≤3天直属上级/3-7天部门负责人/>7天事业部负责人）；"
+            "病假需提供二级及以上医院证明，审批路径按制度规定执行，两者申请条件不同。"
+        ),
+        relevant_contexts=["事假", "病假", "二级及以上医院"],
+    ),
+    EvalQuestion(
+        id="emp023",
+        question="试用期最长可以签多久？",
+        ground_truth_answer="6个月（合同期限3年以上或无固定期限的，试用期最长6个月）。",
+        relevant_contexts=["合同期限3年以上或无固定期限：试用期6个月"],
+    ),
+    EvalQuestion(
+        id="emp024",
+        question="未休的年假最多可以跨年结转几天？",
+        ground_truth_answer="最多结转5天，超出部分按日工资300%补偿。",
+        relevant_contexts=["未休年假可跨年结转最多5天", "超出部分按日工资300%补偿"],
+    ),
+    EvalQuestion(
+        id="emp025",
+        question="单次违纪扣款的金额上限是多少？",
+        ground_truth_answer="单次违纪扣款不超过当月工资的20%，且扣款后不低于当地最低工资标准。",
+        relevant_contexts=["单次违纪扣款不超过当月工资的20%", "不低于当地最低工资标准"],
+    ),
+    EvalQuestion(
+        id="emp026",
+        question="信息安全事件处置的初步研判要求多长时间内完成？",
+        ground_truth_answer="初步研判要求在15分钟内完成（安全值班工程师确认事件真实性并初判等级）。",
+        relevant_contexts=["初步研判（15分钟内）"],
+    ),
+    EvalQuestion(
+        id="emp027",
+        question="信息安全事件处置流程分哪几步？",
+        ground_truth_answer="第1步初步研判（15分钟内）；第2步上报对应处置团队；第3步应急处置（网络隔离等）；后续包含调查与恢复等步骤。",
+        relevant_contexts=["初步研判（15分钟内）", "第3步：应急处置", "网络隔离"],
+    ),
+    EvalQuestion(
+        id="emp028",
+        question="P6 级别研发员工的核心工作时间是几点到几点？",
+        ground_truth_answer="弹性工时制仅限研发序列P6及以上员工，核心工作时间为10:00-16:00，须保证每日在岗满8小时。",
+        relevant_contexts=["弹性工时制", "P6及以上", "核心工作时间为10:00-16:00"],
+    ),
+    EvalQuestion(
+        id="emp029",
+        question="员工每天需要在考勤系统打卡几次？",
+        ground_truth_answer="每日须在考勤系统打卡2次（上班+下班），缺卡可在当月处理。",
+        relevant_contexts=["每日须在考勤系统打卡2次", "上班+下班"],
+    ),
+    EvalQuestion(
+        id="emp030",
+        question="集团内部接待的人均餐饮标准是多少？",
+        ground_truth_answer="集团内部接待（兄弟公司来访、总部检查）人均餐饮不超过300元。",
+        relevant_contexts=["集团内部接待", "人均不超过300元"],
+    ),
 ]

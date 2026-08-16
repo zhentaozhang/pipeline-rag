@@ -188,6 +188,12 @@ class PromptAssemblyService:
                 "如果引用了证据，请在对应句子末尾标注 [1][2] 这样的引用编号。"
             )
         )
+        # D 项：回答长度上限约束（RAG_ANSWER_MAX_CHARS>0 时注入）
+        if (getattr(settings.rag, "answer_max_chars", 0) or 0) > 0:
+            base += (
+                f"\n回答长度约束：本次回答请简明扼要，总字数控制在 "
+                f"{settings.rag.answer_max_chars} 字以内，直接给出结论与关键要点，不要展开背景。"
+            )
         # P3 用户事实记忆（Mem0 式）：注入已记忆的用户事实/偏好（个性化，不编造）
         user_memory = getattr(plan, "user_memory_context", None) or []
         if user_memory:

@@ -61,6 +61,7 @@ class RAGSettings(BaseSettings):
     no_evidence_reply: str = "当前没有从已接入文档中检索到足够证据，暂时不能给出可靠结论。"
     stream_timeout_seconds: int = 600
     answer_system_prompt: str = ""
+    answer_max_chars: int = 0  # 回答长度上限（0=不限；>0 时 prompt 注入简明约束，D 项 A/B）
     rewrite_enabled: bool = True
     rewrite_history_turns: int = 4
     rewrite_temperature: float = 0.1
