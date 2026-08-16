@@ -23,7 +23,12 @@ For each statement:
 - Resolve pronouns to their referents
 - Keep the exact meaning from the original answer
 
-Return JSON: {"statements": ["statement 1", "statement 2", ...]}"""
+Return JSON: {"statements": ["statement 1", "statement 2", ...]}
+
+IMPORTANT: Score based ONLY on semantic meaning and evidence support.
+Ignore surface features such as answer length, wording style, citation
+format ([1][2] vs (1)(2) vs none), or text formatting. An identical
+meaning expressed with more/less verbosity must receive the same score."""
 
 _NLI_PROMPT = """You are judging whether statements are supported by the given context.
 
@@ -32,7 +37,12 @@ Return JSON: {"verdicts": [1, 0, 1, ...], "reasons": ["supported by...", "not fo
 
 Where:
 - 1 = statement is supported by the context
-- 0 = statement is NOT supported by the context"""
+- 0 = statement is NOT supported by the context
+
+IMPORTANT: Score based ONLY on semantic meaning and evidence support.
+Ignore surface features such as answer length, wording style, citation
+format ([1][2] vs (1)(2) vs none), or text formatting. An identical
+meaning expressed with more/less verbosity must receive the same score."""
 
 
 class FaithfulnessMetric(Metric):

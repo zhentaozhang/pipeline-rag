@@ -7,7 +7,12 @@ _PROMPT = """You are evaluating the relevance of retrieved context chunks for a 
 For each context chunk, determine if it contains information relevant to answering the question.
 Return a JSON object with an array of 1 (relevant) or 0 (not relevant) for each chunk.
 
-Example: {"relevance": [1, 0, 1, 1]}"""
+Example: {"relevance": [1, 0, 1, 1]}
+
+IMPORTANT: Score based ONLY on semantic meaning and evidence support.
+Ignore surface features such as answer length, wording style, citation
+format ([1][2] vs (1)(2) vs none), or text formatting. An identical
+meaning expressed with more/less verbosity must receive the same score."""
 
 
 class ContextPrecisionMetric(Metric):

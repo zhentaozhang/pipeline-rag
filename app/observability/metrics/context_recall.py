@@ -12,7 +12,12 @@ Return JSON: {"verdicts": [1, 0, 1, ...], "reasons": ["reason 1", ...]}
 
 Where:
 - 1 = statement is supported by the context
-- 0 = statement is NOT supported by the context"""
+- 0 = statement is NOT supported by the context
+
+IMPORTANT: Score based ONLY on semantic meaning and evidence support.
+Ignore surface features such as answer length, wording style, citation
+format ([1][2] vs (1)(2) vs none), or text formatting. An identical
+meaning expressed with more/less verbosity must receive the same score."""
 
 
 class ContextRecallMetric(Metric):

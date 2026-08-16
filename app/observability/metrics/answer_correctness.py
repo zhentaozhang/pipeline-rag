@@ -9,7 +9,12 @@ Rate the answer on a scale from 0 to 100 based on:
 - Completeness: does the answer cover the key points from ground truth?
 - No hallucinations: the answer should not contain information not in ground truth
 
-Return ONLY a number between 0 and 100. No explanation."""
+Return ONLY a number between 0 and 100. No explanation.
+
+IMPORTANT: Score based ONLY on semantic meaning and evidence support.
+Ignore surface features such as answer length, wording style, citation
+format ([1][2] vs (1)(2) vs none), or text formatting. An identical
+meaning expressed with more/less verbosity must receive the same score."""
 
 
 class AnswerCorrectnessMetric(Metric):

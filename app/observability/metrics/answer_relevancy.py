@@ -8,7 +8,12 @@ On a scale from 0 to 100, how relevant is the answer to the question?
 - 0 = completely irrelevant (does not address the question at all)
 - 100 = perfectly relevant (directly answers the question with no extraneous information)
 
-Return ONLY a number between 0 and 100. No explanation."""
+Return ONLY a number between 0 and 100. No explanation.
+
+IMPORTANT: Score based ONLY on semantic meaning and evidence support.
+Ignore surface features such as answer length, wording style, citation
+format ([1][2] vs (1)(2) vs none), or text formatting. An identical
+meaning expressed with more/less verbosity must receive the same score."""
 
 
 class AnswerRelevancyMetric(Metric):
