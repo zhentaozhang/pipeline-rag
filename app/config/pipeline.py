@@ -73,7 +73,7 @@ class RAGSettings(BaseSettings):
     evaluation_timeout_seconds: int = 30
     evaluation_sample_rate: float = 0.0
     evidence_min_score: float = 0.1
-    rerank_min_score: float = 0.0
+    rerank_min_score: float = 0.35  # 基准验证：滤无关块（0.10-0.25）不伤相关块（0.45+）
     knowledge_route_confidence_threshold: float = 0.40
     vectorize_batch_size: int = 10
     # P0-2: Contextual Chunking——embedding 文本附加文档名+章节路径（重索引后生效，可回退关闭）
