@@ -117,6 +117,30 @@ async def finalize_stream(
                     exc_info=True,
                 )
 
+        # P3 用户事实记忆（Mem0 式）：异步抽取（采样率控制，离线不阻塞收尾）
+        try:
+            from app.config import get_settings
+
+            fm_settings = get_settings().fact_memory
+            if fm_settings.enabled:
+                import random as _random
+
+                if _random.random() < fm_settings.extract_sample_rate:
+                    from app.chat.tasks import task_extract_user_facts
+
+                    task_extract_user_facts.delay(
+                        conversation_id,
+                        question,
+                        "".join(state.full_answer)[:2000],
+                        temp_exchange_id,
+                    )
+        except Exception as fact_err:
+            logger.warning(
+                "user facts dispatch failed",
+                error=str(fact_err),
+                exc_info=True,
+            )
+
     if task.tracer:
         await task.tracer.flush()
 

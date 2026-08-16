@@ -14,6 +14,17 @@ class CelerySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CELERY_", env_file=_ENV_FILE, extra="ignore")
 
 
+class FactMemorySettings(BaseSettings):
+    """用户事实记忆（调研 P3 · Mem0 式）：跨轮抽取用户事实/偏好，检索注入个性化回答"""
+
+    enabled: bool = False  # 默认关（隐私安全）；开启后抽取/检索才生效
+    extract_sample_rate: float = 1.0  # 抽取采样率（每轮是否触发异步抽取）
+    retrieval_top_k: int = 3  # 注入 prompt 的相关记忆条数
+    update_threshold: float = 0.92  # 相似度高于此值视为已有事实（去重）
+
+    model_config = SettingsConfigDict(env_prefix="RAG_USER_MEMORY_", env_file=_ENV_FILE, extra="ignore")
+
+
 class AdaptiveKSettings(BaseSettings):
     """查询自适应 Top-k 截断（调研 P2）：RRF 前按得分分布动态截断，默认关闭"""
 

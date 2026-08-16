@@ -22,6 +22,7 @@ from app.config.pipeline import (
     CelerySettings,
     ChatCacheSettings,
     ChunkSettings,
+    FactMemorySettings,
     FeishuSettings,
     MemorySettings,
     MinerUSettings,
@@ -57,6 +58,7 @@ class Settings:
         self.celery: CelerySettings = CelerySettings()  # type: ignore[call-arg]
         self.rag: RAGSettings = RAGSettings()  # type: ignore[call-arg]
         self.adaptive_k: AdaptiveKSettings = AdaptiveKSettings()  # type: ignore[call-arg]
+        self.fact_memory: FactMemorySettings = FactMemorySettings()  # type: ignore[call-arg]
         self.agent: AgentSettings = AgentSettings()  # type: ignore[call-arg]
         self.memory: MemorySettings = MemorySettings()  # type: ignore[call-arg]
         self.mineru: MinerUSettings = MinerUSettings()  # type: ignore[call-arg]

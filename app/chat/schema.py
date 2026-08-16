@@ -193,6 +193,9 @@ class ExecutionPlan(BaseModel):
     requires_fresh_search: bool = False
     requires_current_date_anchoring: bool = False
 
+    # ── 用户事实记忆（P3 · Mem0 式，跨轮个性化）──────────────────────
+    user_memory_context: list[str] = Field(default_factory=list)
+
     # ── 多 Agent 并行执行 ────────────────────────────────────────────
     supervisor_mode: bool = False
     sub_plans: list[SubPlan] = Field(default_factory=list)

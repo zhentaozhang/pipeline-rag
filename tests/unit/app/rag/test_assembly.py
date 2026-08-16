@@ -325,7 +325,8 @@ class TestBuildSystemPrompt:
         )
         monkeypatch.setattr("app.rag.assembly.settings", fake_settings)
         svc = PromptAssemblyService()
-        out = svc._build_system_prompt()
+        plan = types.SimpleNamespace(user_memory_context=[])
+        out = svc._build_system_prompt(plan)
         assert "Pipeline RAG" in out
         assert "不要编造" in out
 
@@ -338,7 +339,8 @@ class TestBuildSystemPrompt:
         )
         monkeypatch.setattr("app.rag.assembly.settings", fake_settings)
         svc = PromptAssemblyService()
-        assert svc._build_system_prompt() == "自定义系统提示"
+        plan = types.SimpleNamespace(user_memory_context=[])
+        assert svc._build_system_prompt(plan) == "自定义系统提示"
 
 
 class TestAssemble:

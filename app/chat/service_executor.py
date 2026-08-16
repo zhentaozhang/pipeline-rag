@@ -31,6 +31,10 @@ async def execute_stream(
     state,
 ) -> AsyncIterator[str]:
     plan: ExecutionPlan | None = None
+
+    from app.config import get_settings as _get_settings
+
+    _settings = _get_settings()
     _chunk_count: int = 0
     from app.config import get_settings
 
@@ -83,6 +87,23 @@ async def execute_stream(
             exchange_id=temp_exchange_id,
             tenant_id=getattr(session, "tenant_id", "default"),
         )
+        # P3 用户事实记忆（Mem0 式）：检索相关长期记忆注入 plan（默认关）
+        try:
+            if _settings.fact_memory.enabled and plan.mode == ExecutionMode.RETRIEVAL:
+                from app.chat.fact_memory import FactMemoryStore
+                from app.infra.embedding import get_embedding_provider
+
+                q_embedding = (
+                    await get_embedding_provider().embed_batch([question or plan.original_question or ""])
+                )[0]
+                facts = await FactMemoryStore().retrieve(
+                    conversation_id, q_embedding, _settings.fact_memory.retrieval_top_k
+                )
+                plan.user_memory_context = facts
+                logger.debug("user memory injected", conversation_id=conversation_id, count=len(facts))
+        except Exception as e:
+            logger.warning("user memory retrieve failed", error=str(e), exc_info=True)
+
         task.plan = plan
         task.sm.transition(ConversationState.PREPARED)
         EXECUTION_MODE_TOTAL.labels(mode=plan.mode.value).inc()

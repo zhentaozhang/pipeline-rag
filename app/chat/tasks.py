@@ -52,6 +52,75 @@ def task_compress_conversation_memory(
 
 @celery_app.task(
     bind=True,
+    name="chat.extract_user_facts",
+    max_retries=2,
+    default_retry_delay=30,
+)
+def task_extract_user_facts(
+    self, conversation_id: str, question: str, answer: str, exchange_id: int
+) -> dict:
+    """异步抽取用户事实/偏好（P3 · Mem0 式）：LLM 结构化抽取 → 向量化 → 去重落库。
+
+    离线执行（不阻塞 SSE 收尾）；任何失败降级为放弃（记忆是锦上添花）。
+    """
+    from app.common.llm_client import get_chat_client
+    from app.config import get_settings
+
+    settings = get_settings()
+    if not settings.fact_memory.enabled:
+        return {"conversation_id": conversation_id, "status": "skipped_disabled"}
+
+    logger.info("task extract user facts started", conversation_id=conversation_id)
+
+    async def _do() -> dict:
+        from app.chat.fact_memory import FactMemoryStore, parse_extraction_response
+
+        client = get_chat_client()
+        prompt = (
+            "从下面的问答对话中，抽取值得长期记住的用户事实、偏好、身份或目标信息。\n"
+            "规则：\n"
+            "1. 只抽取『关于用户的长期信息』（如职业、偏好、身份、长期目标）；"
+            "不要抽取一次性的查询内容或系统知识。\n"
+            "2. 每条事实用一句话陈述，第三人称（如『用户是后端工程师』）。\n"
+            "3. 没有可记忆信息时返回空数组。\n"
+            "4. 只输出 JSON 数组，格式：[{\"content\": \"...\", \"category\": \"preference|fact|identity|goal\"}]\n\n"
+            f"用户问题：{question[:500]}\n系统回答：{answer[:800]}"
+        )
+        resp = await client.chat.completions.create(
+            model=settings.llm.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=500,
+        )
+        raw = (resp.choices[0].message.content or "") if resp.choices else ""
+        facts = parse_extraction_response(raw)
+        if not facts:
+            return {"conversation_id": conversation_id, "status": "no_facts"}
+
+        store = FactMemoryStore()
+        inserted = await store.insert_many(conversation_id, facts, exchange_id)
+        logger.info(
+            "user facts extracted",
+            conversation_id=conversation_id,
+            extracted=len(facts),
+            inserted=inserted,
+        )
+        return {"conversation_id": conversation_id, "status": "ok", "inserted": inserted}
+
+    try:
+        return run_async(_do())  # type: ignore[no-any-return]
+    except Exception as e:
+        logger.error(
+            "user facts extraction failed",
+            error=str(e),
+            conversation_id=conversation_id,
+            exc_info=True,
+        )
+        raise
+
+
+@celery_app.task(
+    bind=True,
     name="chat.generate_session_title",
 )
 def task_generate_session_title(self, conversation_id: str, question: str, answer: str) -> dict:

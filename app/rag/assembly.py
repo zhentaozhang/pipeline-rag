@@ -76,7 +76,7 @@ class PromptAssemblyService:
         )
         rendered_reference_keys: set[str] = set()
 
-        system_prompt = self._build_system_prompt()
+        system_prompt = self._build_system_prompt(plan)
         user_prompt = self._build_user_prompt(plan, deduped, budget, rendered_reference_keys)
 
         # ── Step 3: Context Window 预检 ────────────────────────────
@@ -172,17 +172,29 @@ class PromptAssemblyService:
         )
         return result, reference_map
 
-    def _build_system_prompt(self) -> str:
-        if settings.rag.answer_system_prompt and settings.rag.answer_system_prompt.strip():
-            return settings.rag.answer_system_prompt.strip()
-        return (
-            "你是 Pipeline RAG 的企业知识问答助手。\n"
-            "你必须严格基于给定证据回答，不要编造证据中没有出现的事实。\n"
-            '如果提供了"对话承接上下文"，它只用于理解当前问题中的指代关系，不能替代证据材料，也不能作为事实来源。\n'
-            "如果证据不足以支持明确结论，请直接说明资料不足。\n"
-            "如果问题被拆成多个子问题，请按编号逐一回答。\n"
-            "如果引用了证据，请在对应句子末尾标注 [1][2] 这样的引用编号。"
+    def _build_system_prompt(self, plan) -> str:
+        base = (
+            settings.rag.answer_system_prompt.strip()
+            if settings.rag.answer_system_prompt and settings.rag.answer_system_prompt.strip()
+            else (
+                "你是 Pipeline RAG 的企业知识问答助手。\n"
+                "你必须严格基于给定证据回答，不要编造证据中没有出现的事实。\n"
+                '如果提供了"对话承接上下文"，它只用于理解当前问题中的指代关系，不能替代证据材料，也不能作为事实来源。\n'
+                "如果证据不足以支持明确结论，请直接说明资料不足。\n"
+                "如果问题被拆成多个子问题，请按编号逐一回答。\n"
+                "如果引用了证据，请在对应句子末尾标注 [1][2] 这样的引用编号。"
+            )
         )
+        # P3 用户事实记忆（Mem0 式）：注入已记忆的用户事实/偏好（个性化，不编造）
+        user_memory = getattr(plan, "user_memory_context", None) or []
+        if user_memory:
+            facts_block = "\n".join(f"- {f}" for f in user_memory)
+            base += (
+                "\n\n已知的用户长期信息（来自跨轮记忆）：\n"
+                f"{facts_block}\n"
+                "回答时可结合这些信息提供个性化服务，但不得编造记忆之外的用户信息。"
+            )
+        return base
 
     def _build_user_prompt(
         self,
