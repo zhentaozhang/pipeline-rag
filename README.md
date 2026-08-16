@@ -31,7 +31,7 @@
 
 ### 技术演进（Evolution）
 
-> 完整演进记录见 [docs/evolution/](docs/evolution/README.md)（8 段式决策记录，含面试复盘）。
+> 完整演进记录见 [docs/evolution/](docs/evolution/README.md)（8 段式决策记录）；文档总索引见 [docs/](docs/README.md)（含"问题→优化"脉络表）。
 
 ```
 v0.1 单体 RAG（10 阶段 Pipeline + 双通道检索 + 摘要记忆）

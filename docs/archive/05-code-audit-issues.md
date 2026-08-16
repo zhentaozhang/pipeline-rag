@@ -1,5 +1,7 @@
 # 05 · 代码体检 — 问题清单与验证记录（二次确认版）
 
+> **归档状态**：📦 历史过程文档（2026-08）。问题已全部在演进记录 001 闭环修复，本文件保留原始问题清单供追溯，不再更新。
+
 > 创建日期：2026-08-11；二次确认：2026-08-15
 > 范围：后端 app/（Python ~51K 行）+ 前端 frontend/（React 19 + TS）+ 部署（Docker/compose/alembic）
 > 基线：`1396 个单测全部通过`、`ruff 2 个 F401`、`mypy 通过（大部分文件 ignore_errors）`、`前端 tsc 通过、eslint 192 错误`
@@ -255,7 +257,7 @@
 |----|------|----------|
 | C1 | A（自研为准） | ✅ 核对确认两处 metrics 无重复（infra=基础设施/安全域，observability=对话/检索/评估域）；`app/infra/tracing.py`、`OTelSettings`、pyproject OTEL 依赖均标注 DEPRECATED/预留 |
 | C2 | A（默认 400） | ✅ exception_handlers 默认状态码 200→400（Auth/429/400 特例保留）；前端 `!response.ok` 分支读 body.message 兼容（400 不误触 401 登录跳转）；测试同步更新 |
-| C3 | A（文档+清理） | ✅ 新增 `WWH/07_SSE协议规范.md`（事件类型/payload/时序/坑记录）；`SSEEventType.MESSAGE` 标注 deprecated；确认 TEXT content 全为 str |
+| C3 | A（文档+清理） | ✅ 新增 `docs/protocol/sse-protocol.md`（原 WWH/07）（事件类型/payload/时序/坑记录）；`SSEEventType.MESSAGE` 标注 deprecated；确认 TEXT content 全为 str |
 | C4 | A（更新 README） | ✅ README 架构图补 Celery Beat、Neo4j 标注"可选·默认关闭"、技术栈表格同步 |
 | C5 | A（DEGRADATION 指标） | ✅ 新增 `DEGRADATION_TOTAL` counter（reason 标签）；三处降级点接入：无效 chatMode、未知记忆策略、检索通道失败/子问题超时 |
 | C6 | A（出对照表） | ⏳ 49 项差异对照表已产出（脱敏）→ **等待你确认 5 个关键决策**（见文档附录） |

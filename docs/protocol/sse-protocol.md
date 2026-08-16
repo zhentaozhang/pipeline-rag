@@ -1,5 +1,7 @@
 # 07 · SSE 流式对话协议规范
 
+> **演进状态**：✅ 有效（2026-08 核对）。006 新增断线续传（`?resume=N` 重放 Redis 缓冲，见演进记录 006）；超时/失败/完成三态语义见 001。
+
 > 状态：正式文档（2026-08-15，体检 C3 输出）
 > 端点：`POST /api/chat/stream`，响应 `Content-Type: text/event-stream;charset=UTF-8`
 > 后端实现：`app/common/sse.py`；前端解析：`frontend/src/lib/api.ts::consumeEventStream`
