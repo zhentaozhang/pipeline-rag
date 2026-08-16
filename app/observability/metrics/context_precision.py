@@ -37,7 +37,7 @@ class ContextPrecisionMetric(Metric):
             )
 
         chunks_text = "\n\n---\n\n".join(f"Chunk {i + 1}: {c}" for i, c in enumerate(contexts))
-        resp = self.eval_llm.chat.completions.create(
+        resp = await self.eval_llm.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": _PROMPT},

@@ -20,6 +20,7 @@ from app.document.tasks._parse import task_parse_document
 from app.document.tasks._profile import task_generate_profile
 from app.document.tasks._vectorize import task_vectorize_document
 from app.document.tasks.reconcile import (
+    cleanup_traces,
     import_s3_documents,
     import_web_documents,
     reconcile_indexes,
@@ -96,6 +97,7 @@ __all__ = [
     "cleanup_orphan_documents",
     "reconcile_indexes",
     "import_s3_documents",
+    "cleanup_traces",
     "import_web_documents",
     "_compensate",
     "_infer_stage",

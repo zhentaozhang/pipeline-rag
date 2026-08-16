@@ -216,12 +216,19 @@ def cleanup_traces() -> dict:
             raise RuntimeError("Session factory not initialized")
         from sqlalchemy import CursorResult
 
+        # 各表日期列不同（span 表为 started_at，score/trace 表为 created_at）——
+        # 验证发现 span 无 created_at（1054 错），按表使用正确列
+        table_date_cols = (
+            ("trace_observability_score", "created_at"),
+            ("trace_observability_span", "started_at"),
+            ("trace_observability", "created_at"),
+        )
         async with sf() as db:
             removed = 0
-            for table in ("trace_observability_score", "trace_observability_span", "trace_observability"):
+            for table, date_col in table_date_cols:
                 result = await db.execute(
                     text(
-                        f"DELETE FROM {table} WHERE created_at < NOW() - (:days * INTERVAL '1 day')"
+                        f"DELETE FROM {table} WHERE {date_col} < DATE_SUB(NOW(), INTERVAL :days DAY)"
                     ),
                     {"days": retention_days},
                 )

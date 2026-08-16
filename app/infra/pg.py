@@ -181,9 +181,10 @@ def get_pg_pool() -> asyncpg.Pool:
 
 @asynccontextmanager
 async def _acquire() -> AsyncIterator[asyncpg.Connection]:
-    """从连接池获取连接（自动释放）"""
+    """从连接池获取连接（自动释放）；池未初始化时懒初始化（验证发现：
+    Celery worker 进程不会走 FastAPI lifespan，首次使用自动建池）"""
     if _pool is None:
-        raise RuntimeError("Postgres pool not initialized")
+        await init_pg()
     conn = await _pool.acquire()
     try:
         yield conn

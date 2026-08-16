@@ -62,7 +62,7 @@ class FaithfulnessMetric(Metric):
                 reason="empty answer or context",
                 metadata={},
             )
-        resp = self.eval_llm.chat.completions.create(
+        resp = await self.eval_llm.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": _EXTRACT_PROMPT},
@@ -87,7 +87,7 @@ class FaithfulnessMetric(Metric):
         context_str = "\n\n".join(contexts)
         if len(context_str) > _MAX_CONTEXT_CHARS:
             context_str = context_str[:_MAX_CONTEXT_CHARS] + "\n\n[...truncated]"
-        resp2 = self.eval_llm.chat.completions.create(
+        resp2 = await self.eval_llm.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": _NLI_PROMPT},

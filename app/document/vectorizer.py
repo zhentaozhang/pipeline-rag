@@ -111,7 +111,8 @@ class VectorizerService:
         from app.infra.pg import transaction as _pg_transaction
 
         chunk_sql = """
-            chunk_id, tenant_id, doc_id, parent_chunk_id, chunk_index, content, 
+        INSERT INTO document_chunk (
+            chunk_id, tenant_id, doc_id, parent_chunk_id, chunk_index, content,
             chunk_type, token_count, section_title
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (chunk_id) DO UPDATE SET

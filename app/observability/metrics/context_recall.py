@@ -38,7 +38,7 @@ class ContextRecallMetric(Metric):
                 metadata={},
             )
 
-        resp = self.eval_llm.chat.completions.create(
+        resp = await self.eval_llm.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": _EXTRACT_PROMPT},
@@ -59,7 +59,7 @@ class ContextRecallMetric(Metric):
             )
 
         context_str = "\n\n".join(contexts) if contexts else ""
-        resp2 = self.eval_llm.chat.completions.create(
+        resp2 = await self.eval_llm.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": _COVERAGE_PROMPT},

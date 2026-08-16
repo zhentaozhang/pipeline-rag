@@ -28,7 +28,12 @@ async def init_es() -> None:
     """在 lifespan 启动时调用"""
     global _es
     connect_timeout = settings.es.connect_timeout_ms / 1000.0
+    # 用 httpx transport（项目已有 httpx 依赖）替代默认 aiohttp transport——
+    # 修复「aiohttp 未安装导致 ES 客户端启动失败」（验证发现，生产同样会挂）
+    from elastic_transport._node._http_httpx import HttpxAsyncHttpNode
+
     _es = AsyncElasticsearch(
+        node_class=HttpxAsyncHttpNode,
         hosts=[settings.es.base_url],
         basic_auth=(settings.es.user, settings.es.password)
         if settings.es.user and settings.es.password

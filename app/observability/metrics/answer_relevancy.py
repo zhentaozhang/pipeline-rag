@@ -34,7 +34,7 @@ class AnswerRelevancyMetric(Metric):
                 metadata={},
             )
 
-        resp = self.eval_llm.chat.completions.create(
+        resp = await self.eval_llm.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": _PROMPT},
