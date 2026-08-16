@@ -19,7 +19,6 @@ from app.rag.engine import RagRetrievalEngine
 from app.rag.evaluation import RAGEvaluationService
 from scripts.evaluation.datasets import load_dataset
 from scripts.evaluation.datasets.base import EvalQuestion, EvalResult
-from scripts.evaluation.metrics import compute_answer_correctness, compute_context_recall
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
@@ -158,31 +157,23 @@ async def evaluate_single(
 
     result.total_ms = (time.perf_counter() - total_start) * 1000
 
-    # ── 3. 评估 ────────────────────────────────────────────────────────
+    # ── 3. 评估（EvaluationPipeline 真实评分，修复 stub 接口不匹配）───
     try:
-        # 3a. 已有 3 个指标
-        scores = await eval_service.evaluate(
-            conversation_id="offline",
-            exchange_id=-1,
+        from app.observability.metrics.pipeline import EvaluationPipeline
+
+        pipeline = EvaluationPipeline.with_ground_truth()
+        metric_results = await pipeline.run(
             question=q.question,
             answer=result.generated_answer,
             contexts=[c for c in result.retrieved_contexts],
+            ground_truth=q.ground_truth_answer,
         )
-        result.faithfulness_score = scores.get("faithfulness_score")
-        result.answer_relevancy_score = scores.get("answer_relevancy_score")
-        result.context_precision_score = scores.get("context_precision_score")
-
-        # 3b. 新增 2 个指标
-        result.answer_correctness_score = await compute_answer_correctness(
-            model_fallback,
-            q.question,
-            result.generated_answer,
-            q.ground_truth_answer,
-        )
-        result.context_recall_score = compute_context_recall(
-            result.retrieved_contexts,
-            q.relevant_contexts,
-        )
+        score_map = {r.metric_name: r.value for r in metric_results}
+        result.faithfulness_score = score_map.get("faithfulness")
+        result.answer_relevancy_score = score_map.get("answer_relevancy")
+        result.context_precision_score = score_map.get("context_precision")
+        result.answer_correctness_score = score_map.get("answer_correctness")
+        result.context_recall_score = score_map.get("context_recall")
     except Exception as e:
         result.status = "partial"
         result.error = f"evaluation error: {e}"
