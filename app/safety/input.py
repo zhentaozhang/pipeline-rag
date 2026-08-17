@@ -359,7 +359,13 @@ class SafetyInputFilter:
         # 1. PII 脱敏
         try:
             if not self._settings or self._settings.input_pii_enabled:
-                sanitized = await self._pii.anonymize(question)
+                # 019 延迟优化 #3：presidio 分析 CPU 密集（~687ms/轮）。
+                # 规则预筛（正则 _PII_RULES）无命中即跳过 presidio——员工手册问答
+                # 场景绝大多数输入不含 PII，命中信号才走精确分析。
+                from app.safety.input import _PII_RULES
+
+                _has_signal = any(p.search(question) for _, p, _ in _PII_RULES)
+                sanitized = await self._pii.anonymize(question) if _has_signal else question
             else:
                 sanitized = question
         except Exception as e:

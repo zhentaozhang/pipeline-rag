@@ -171,10 +171,23 @@ class TestSafetyInputFilter:
 
         f = SafetyInputFilter(pii_detector=BoomPii())
         await set_safety_mode(SafetyMode.FAIL_CLOSE)
-        result = await f.filter("任何文本")
+        # 019 优化 #3：PII 预筛（正则信号）——含手机号信号触发 presidio，异常 → fail_close 拦截
+        result = await f.filter("我的手机号是 13800138000")
         assert result.is_safe is False
         assert result.sanitized_text == ""
         assert "拒绝" in result.reason
+
+    @pytest.mark.asyncio
+    async def test_fail_close_passes_without_pii_signal(self):
+        class BoomPii:
+            async def anonymize(self, text):
+                raise RuntimeError("boom")
+
+        f = SafetyInputFilter(pii_detector=BoomPii())
+        await set_safety_mode(SafetyMode.FAIL_CLOSE)
+        # 无 PII 信号文本：预筛跳过 presidio（不触发异常，也不需拦截）
+        result = await f.filter("员工手册试用期规定是什么")
+        assert result.is_safe is True
 
     @pytest.mark.asyncio
     async def test_fail_open_passes_on_pii_error(self):

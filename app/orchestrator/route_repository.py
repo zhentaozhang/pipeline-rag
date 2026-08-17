@@ -49,11 +49,7 @@ class RouteRepository:
         query_terms = tokenize_fn(routing_text) if tokenize_fn else []
         query_embedding: list[float] | None = None
         if routing_text:
-            try:
-                embeddings = await self.embedding_provider.embed_batch([routing_text])
-                query_embedding = embeddings[0] if embeddings else None
-            except Exception:
-                logger.warning("Route embedding failed for text", exc_info=True)
+            query_embedding = await self._embed_with_cache(routing_text)
         return RouteQueryContext(
             question=question or "",
             rewrite_question=rewrite_question or "",
@@ -61,6 +57,39 @@ class RouteRepository:
             query_terms=query_terms,
             query_embedding=query_embedding,
         )
+
+    async def _embed_with_cache(self, routing_text: str) -> list[float] | None:
+        """路由 query 向量化（019 延迟优化 #1：Redis 哈希缓存，省 ~300-800ms/轮）"""
+        import hashlib
+
+        from app.infra.redis_lease import get_redis
+
+        key = "pipeline_rag:route_embed:" + hashlib.sha1(routing_text.encode("utf-8")).hexdigest()
+        try:
+            redis = get_redis()
+            cached = await redis.get(key)
+            if cached:
+                if isinstance(cached, bytes):
+                    cached = cached.decode("utf-8")
+                return [float(x) for x in cached.split(",")]
+        except Exception:
+            pass  # 缓存不可用时直接调 API
+
+        try:
+            embeddings = await self.embedding_provider.embed_batch([routing_text])
+            query_embedding = embeddings[0] if embeddings else None
+            if query_embedding:
+                try:
+                    redis = get_redis()
+                    await redis.set(
+                        key, ",".join(str(f) for f in query_embedding), ex=86400
+                    )
+                except Exception:
+                    pass
+            return query_embedding
+        except Exception:
+            logger.warning("Route embedding failed for text", exc_info=True)
+            return None
 
     def _build_routing_text(self, question: str, rewrite_question: str) -> str:
         orig = (question or "").strip()
