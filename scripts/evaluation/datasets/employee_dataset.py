@@ -201,7 +201,10 @@ EMPLOYEE_DATASET: list[EvalQuestion] = [
     EvalQuestion(
         id="emp030",
         question="集团内部接待的人均餐饮标准是多少？",
-        ground_truth_answer="集团内部接待（兄弟公司来访、总部检查）人均餐饮不超过300元。",
-        relevant_contexts=["集团内部接待", "人均不超过300元"],
+        ground_truth_answer=(
+            "集团内部接待（兄弟公司来访、总部检查）工作餐人均不超过80元，不适用酒水；"
+            "会议用餐参照第4条（普通商务招待一线城市300元/重要商务招待一线城市600元）。"
+        ),
+        relevant_contexts=["集团内部接待", "工作餐：人均不超过80元", "不适用酒水"],
     ),
 ]

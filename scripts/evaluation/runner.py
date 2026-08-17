@@ -384,6 +384,24 @@ if __name__ == "__main__":
                     "total": len(results),
                     "averages": avg,
                     "failed": [r.error for r in results if r.status == "failed"],
+                    "results": [
+                        {
+                            "question_id": r.question_id,
+                            "question": r.question,
+                            "ground_truth": r.ground_truth_answer,
+                            "generated_answer": r.generated_answer[:500],
+                            "faithfulness_score": r.faithfulness_score,
+                            "answer_relevancy_score": r.answer_relevancy_score,
+                            "context_precision_score": r.context_precision_score,
+                            "answer_correctness_score": r.answer_correctness_score,
+                            "context_recall_score": r.context_recall_score,
+                            "recall_at_5": r.recall_at_5,
+                            "recall_at_10": r.recall_at_10,
+                            "retrieval_ms": round(r.retrieval_ms, 1) if r.retrieval_ms else None,
+                            "generation_ms": round(r.generation_ms, 1) if r.generation_ms else None,
+                        }
+                        for r in results
+                    ],
                 },
                 fh,
                 ensure_ascii=False,

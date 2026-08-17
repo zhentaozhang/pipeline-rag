@@ -152,7 +152,7 @@ class StructureParsingSettings(BaseSettings):
 class RecommendationSettings(BaseSettings):
     """推荐追问配置"""
 
-    enabled: bool = True
+    enabled: bool = False  # 017 决策：默认关（省 ~2s/轮，延迟敏感场景不背锅）；产品需要时 RECOMMEND_ENABLED=true 开启
     timeout_ms: int = 3000
 
     model_config = SettingsConfigDict(env_prefix="RECOMMEND_", env_file=_ENV_FILE, extra="ignore")

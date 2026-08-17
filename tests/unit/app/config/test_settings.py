@@ -149,7 +149,7 @@ class TestPipelineSettings:
 
     def test_recommendation_defaults(self):
         s = RecommendationSettings()
-        assert s.enabled
+        assert s.enabled is False  # 017 决策：默认关（省 ~2s/轮）
         assert s.timeout_ms == 3000
 
     def test_rate_limit_defaults(self):
