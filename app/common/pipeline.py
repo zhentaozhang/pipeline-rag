@@ -90,13 +90,25 @@ class Pipeline(Generic[C, R]):
             result = await stage_wrapper.handler.process(ctx)
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
             if _elapsed_ms >= 50:  # 只记录 >50ms 的 stage（定位延迟黑洞，P0）
+                _stage_name = (
+                    getattr(stage_wrapper, "name", None)
+                    or getattr(stage_wrapper.handler, "name", None)
+                    or type(stage_wrapper.handler).__name__
+                )
                 _logger.info(
                     "stage timing",
-                    stage=getattr(stage_wrapper, "name", None)
-                    or getattr(stage_wrapper.handler, "name", None)
-                    or type(stage_wrapper.handler).__name__,
+                    stage=_stage_name,
                     elapsed_ms=round(_elapsed_ms, 1),
                 )
+                # 019 审查：STAGE_DURATION_SECONDS 指标此前存在但从未被 observe（观测死代码）
+                try:
+                    from app.observability.tracer import STAGE_DURATION_SECONDS
+
+                    STAGE_DURATION_SECONDS.labels(
+                        kind="stage", name=_stage_name, status="ok"
+                    ).observe(_elapsed_ms / 1000.0)
+                except Exception:
+                    pass
 
             if result.signal == StageSignal.TERMINATE:
                 if result.plan is not None:

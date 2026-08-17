@@ -52,12 +52,22 @@ def is_cacheable(chat_mode: str, has_history: bool) -> bool:
 
 
 async def has_history(db: Any, conversation_id: str) -> bool:
-    """会话是否有历史上下文（摘要非空即视为有历史）"""
-    from app.chat.memory_service import PersistentConversationMemoryService
+    """会话是否有历史上下文。
 
-    memory_service = PersistentConversationMemoryService(db)
-    summary = await memory_service.get_summary(conversation_id)
-    return bool(summary and summary.strip())
+    注意（019 审查发现）：摘要为空 ≠ 无历史——压缩异步触发/未到窗口时
+    摘要为空但已有问答轮。缓存只能用于「首轮无上下文」的确定性问答，
+    因此以「是否存在任何历史 exchange」为准（比摘要更保守、更正确）。
+    """
+    from sqlalchemy import select
+
+    from app.db.models.conversation import ConversationExchange
+
+    result = await db.execute(
+        select(ConversationExchange.id)
+        .where(ConversationExchange.conversation_id == conversation_id)
+        .limit(1)
+    )
+    return result.first() is not None
 
 
 async def lookup(db: Any, conversation_id: str, question: str, chat_mode: str, doc_ids: list[str]) -> CacheHit | None:
