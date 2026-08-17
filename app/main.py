@@ -3,6 +3,11 @@ Pipeline RAG Python — FastAPI 应用入口
 负责：应用初始化、lifespan 生命周期管理、中间件挂载、路由注册
 """
 
+# ── 全局 structlog 配置 ──────────────────────────────────────────────────
+# uvicorn 新版默认 log_config 不配置 root logger -> stdlib LoggerFactory 的
+# structlog 事件 propagate 到 root 无 handler，INFO 被静默丢弃（观测盲区，
+# 018 实证：API 进程 structlog 0 输出，排查全靠 trace 落库）。
+import logging as _logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -20,12 +25,13 @@ from app.infra.middleware import request_id_middleware
 from app.infra.minio import close_minio, init_minio
 from app.infra.redis_lease import close_redis, init_redis
 
-# ── 全局 structlog 配置 ──────────────────────────────────────────────────
+if not _logging.getLogger().handlers:
+    _logging.basicConfig(level=_logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
+
 structlog.configure(
     processors=[
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
-        structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.dev.ConsoleRenderer()
         if get_settings().app.debug
@@ -33,7 +39,9 @@ structlog.configure(
     ],
     wrapper_class=structlog.stdlib.BoundLogger,
     context_class=dict,
-    logger_factory=structlog.stdlib.LoggerFactory(),
+    # 018: stdlib LoggerFactory 依赖 root handler，uvicorn 默认 log_config
+    # 不配 root -> INFO 静默丢弃。WriteLoggerFactory 原生写 stdout（不依赖 logging）。
+    logger_factory=structlog.WriteLoggerFactory(),
     cache_logger_on_first_use=True,
 )
 

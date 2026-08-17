@@ -92,7 +92,9 @@ class Pipeline(Generic[C, R]):
             if _elapsed_ms >= 50:  # 只记录 >50ms 的 stage（定位延迟黑洞，P0）
                 _logger.info(
                     "stage timing",
-                    stage=getattr(stage_wrapper.handler, "name", type(stage_wrapper.handler).__name__),
+                    stage=getattr(stage_wrapper, "name", None)
+                    or getattr(stage_wrapper.handler, "name", None)
+                    or type(stage_wrapper.handler).__name__,
                     elapsed_ms=round(_elapsed_ms, 1),
                 )
 
