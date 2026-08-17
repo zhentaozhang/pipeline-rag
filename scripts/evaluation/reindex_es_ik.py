@@ -27,6 +27,7 @@ async def reindex_chunks() -> None:
     # 1. 先建立 client 删旧索引（standard 分词）——init_es 对已存在索引不会重建 analyzer
     from elastic_transport._node._http_httpx import HttpxAsyncHttpNode
     from elasticsearch import AsyncElasticsearch
+
     from app.config import get_settings
 
     _s = get_settings()
