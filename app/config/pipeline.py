@@ -62,6 +62,7 @@ class RAGSettings(BaseSettings):
     stream_timeout_seconds: int = 600
     answer_system_prompt: str = ""
     answer_max_chars: int = 0  # 回答长度上限（0=不限；>0 时 prompt 注入简明约束，D 项 A/B）
+    citation_verify_enabled: bool = True  # 017 生成侧：引用验证器（每轮 1 次轻量 LLM 自检引用-证据对应）
     rewrite_enabled: bool = True
     rewrite_history_turns: int = 4
     rewrite_temperature: float = 0.1
