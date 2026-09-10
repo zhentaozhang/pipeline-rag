@@ -1,12 +1,15 @@
 # 阶段 1: builder (安装依赖)
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 # 安装 uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 # 环境变量
+# UV_PROJECT_ENVIRONMENT=/usr/local：让 uv 直接装到系统 Python 的 site-packages，
+# 否则 uv sync 会建 /app/.venv，下面 COPY site-packages 会拷不到依赖。
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/usr/local \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
@@ -32,8 +35,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice \
     && rm -rf /var/lib/apt/lists/*
 
-# 从 builder 复制已安装的包
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+# 从 builder 复制已安装的包（基础镜像为 python:3.12-slim，路径必须是 python3.12）
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # 复制项目代码

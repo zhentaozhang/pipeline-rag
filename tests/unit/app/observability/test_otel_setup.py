@@ -1,14 +1,17 @@
 """otel_setup 初始化/关闭行为测试"""
 
+import base64
+
 from app.observability import otel_setup
 
 
-def _fake_settings(enabled: bool):
+def _fake_settings(enabled: bool, headers: str = ""):
     class FakeOtelSettings:
         pass
 
     FakeOtelSettings.enabled = enabled
     FakeOtelSettings.exporter_otlp_endpoint = "http://otel:4318/v1/traces"
+    FakeOtelSettings.exporter_otlp_headers = headers
     FakeOtelSettings.service_name = "pipeline-rag-test"
 
     class FakeSettings:
@@ -17,14 +20,44 @@ def _fake_settings(enabled: bool):
     return FakeSettings()
 
 
+class _FakeLangfuse:
+    enabled = False
+    public_key = ""
+    secret_key = ""
+
+
+def _patch_settings(monkeypatch, otel_settings, langfuse_settings=None):
+    class FakeSettings:
+        otel = otel_settings.otel
+        langfuse = langfuse_settings or _FakeLangfuse()
+
+    monkeypatch.setattr(otel_setup, "get_settings", lambda: FakeSettings())
+
+
+def test_build_otlp_headers_derives_langfuse_basic_auth():
+    headers = otel_setup.build_otlp_headers("", True, "pk-lf-1", "sk-lf-2")
+    expected = base64.b64encode(b"pk-lf-1:sk-lf-2").decode()
+    assert headers["Authorization"] == f"Basic {expected}"
+    assert headers["x-langfuse-ingestion-version"] == "4"
+
+
+def test_build_otlp_headers_explicit_raw_wins():
+    headers = otel_setup.build_otlp_headers("Authorization=Bearer x,Foo=bar", True, "pk", "sk")
+    assert headers == {"Authorization": "Bearer x", "Foo": "bar"}
+
+
+def test_build_otlp_headers_empty_without_langfuse():
+    assert otel_setup.build_otlp_headers("", False, "pk", "sk") == {}
+
+
 def test_init_otel_disabled_returns_none(monkeypatch):
-    monkeypatch.setattr(otel_setup, "get_settings", lambda: _fake_settings(False))
+    _patch_settings(monkeypatch, _fake_settings(False))
     otel_setup._provider = None
     assert otel_setup.init_otel() is None
 
 
 def test_shutdown_otel_noop_when_not_initialized(monkeypatch):
-    monkeypatch.setattr(otel_setup, "get_settings", lambda: _fake_settings(False))
+    _patch_settings(monkeypatch, _fake_settings(False))
     otel_setup._provider = None
     otel_setup.shutdown_otel()  # 未初始化时调用不抛异常
 
@@ -49,8 +82,9 @@ def test_init_otel_enabled_wires_provider_and_instrumentors(monkeypatch):
             calls["shutdown"] = True
 
     class FakeExporter:
-        def __init__(self, endpoint=None):
+        def __init__(self, endpoint=None, headers=None):
             calls["endpoint"] = endpoint
+            calls["headers"] = headers
 
     class FakeBatchProcessor:
         def __init__(self, exporter):
@@ -78,7 +112,12 @@ def test_init_otel_enabled_wires_provider_and_instrumentors(monkeypatch):
     class FakeHTTPX(FakeInstrumentor):
         _name = "httpx"
 
-    monkeypatch.setattr(otel_setup, "get_settings", lambda: _fake_settings(True))
+    class FakeLangfuse:
+        enabled = True
+        public_key = "pk-lf-1"
+        secret_key = "sk-lf-2"
+
+    _patch_settings(monkeypatch, _fake_settings(True), FakeLangfuse)
     monkeypatch.setattr(otel_setup, "Resource", FakeResource)
     monkeypatch.setattr(otel_setup, "TracerProvider", FakeProvider)
     monkeypatch.setattr(otel_setup, "OTLPSpanExporter", FakeExporter)
@@ -104,6 +143,8 @@ def test_init_otel_enabled_wires_provider_and_instrumentors(monkeypatch):
     assert calls["resource"] == "RESOURCE"
     assert calls["resource_attrs"] == {"service.name": "pipeline-rag-test"}
     assert calls["endpoint"] == "http://otel:4318/v1/traces"
+    assert calls["headers"]["Authorization"].startswith("Basic ")
+    assert calls["headers"]["x-langfuse-ingestion-version"] == "4"
     assert isinstance(calls["processor"], FakeBatchProcessor)
     assert calls["global_provider"] is provider
     assert calls["app"] == "APP"

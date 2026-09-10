@@ -7,6 +7,7 @@ otlp-proto-http。OTel 用于基础设施级分布式追踪（DB/Redis/HTTP/Cele
 
 from __future__ import annotations
 
+import base64
 import logging
 from typing import Any
 
@@ -23,6 +24,35 @@ logger = logging.getLogger(__name__)
 _provider: TracerProvider | None = None
 
 
+def build_otlp_headers(
+    raw: str,
+    langfuse_enabled: bool,
+    public_key: str,
+    secret_key: str,
+) -> dict[str, str]:
+    """构造 OTLP HTTP 头。
+
+    - 显式 `OTEL_EXPORTER_OTLP_HEADERS`（raw，逗号分隔 k=v）优先；
+    - 否则在 Langfuse 启用时派生 Basic auth + v4 ingestion 版本头
+      （x-langfuse-ingestion-version=4，否则 v4 数据模型下 ingestion 延迟可达 10 分钟）。
+    """
+    if raw.strip():
+        headers: dict[str, str] = {}
+        for part in raw.split(","):
+            part = part.strip()
+            if "=" in part:
+                key, value = part.split("=", 1)
+                headers[key.strip()] = value.strip()
+        return headers
+    if langfuse_enabled and public_key and secret_key:
+        token = base64.b64encode(f"{public_key}:{secret_key}".encode()).decode()
+        return {
+            "Authorization": f"Basic {token}",
+            "x-langfuse-ingestion-version": "4",
+        }
+    return {}
+
+
 def init_otel(app: Any = None) -> TracerProvider | None:
     global _provider
     settings = get_settings().otel
@@ -31,7 +61,16 @@ def init_otel(app: Any = None) -> TracerProvider | None:
     if _provider is not None:
         return _provider
     resource = Resource.create({"service.name": settings.service_name})
-    exporter = OTLPSpanExporter(endpoint=settings.exporter_otlp_endpoint)
+    langfuse = get_settings().langfuse
+    headers = build_otlp_headers(
+        settings.exporter_otlp_headers,
+        langfuse.enabled,
+        langfuse.public_key,
+        langfuse.secret_key,
+    )
+    exporter = OTLPSpanExporter(
+        endpoint=settings.exporter_otlp_endpoint, headers=headers or None
+    )
     provider = TracerProvider(resource=resource)
     provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
