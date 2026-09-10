@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from app.observability.metrics.base import Metric, MetricResult, parse_json_safe
 
 _EXTRACT_PROMPT = """Break the ground truth answer down into individual factual statements.
@@ -29,6 +31,7 @@ class ContextRecallMetric(Metric):
         answer: str,
         contexts: list[str],
         ground_truth: str | None = None,
+        tracer: Any = None,
     ) -> MetricResult:
         if not ground_truth:
             return MetricResult(
@@ -38,15 +41,18 @@ class ContextRecallMetric(Metric):
                 metadata={},
             )
 
-        resp = await self.eval_llm.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": _EXTRACT_PROMPT},
-                {"role": "user", "content": f"Ground truth: {ground_truth}"},
-            ],
-            temperature=0.0,
+        raw = (
+            await self._call_llm(
+                tracer=tracer,
+                name="context_recall_extract",
+                messages=[
+                    {"role": "system", "content": _EXTRACT_PROMPT},
+                    {"role": "user", "content": f"Ground truth: {ground_truth}"},
+                ],
+                temperature=0.0,
+            )
+            or "{}"
         )
-        raw = resp.choices[0].message.content or "{}"
         extracted = parse_json_safe(raw, default={"statements": []})
         statements = extracted.get("statements", [])  # type: ignore[union-attr]
 
@@ -59,21 +65,24 @@ class ContextRecallMetric(Metric):
             )
 
         context_str = "\n\n".join(contexts) if contexts else ""
-        resp2 = await self.eval_llm.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": _COVERAGE_PROMPT},
-                {
-                    "role": "user",
-                    "content": (
-                        f"Context:\n{context_str}\n\n"
-                        f"Statements:\n" + "\n".join(f"- {s}" for s in statements)
-                    ),
-                },
-            ],
-            temperature=0.0,
+        raw2 = (
+            await self._call_llm(
+                tracer=tracer,
+                name="context_recall_coverage",
+                messages=[
+                    {"role": "system", "content": _COVERAGE_PROMPT},
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Context:\n{context_str}\n\n"
+                            f"Statements:\n" + "\n".join(f"- {s}" for s in statements)
+                        ),
+                    },
+                ],
+                temperature=0.0,
+            )
+            or "{}"
         )
-        raw2 = resp2.choices[0].message.content or "{}"
         coverage = parse_json_safe(raw2, default={"verdicts": [], "reasons": []})
         verdicts = coverage.get("verdicts", [])  # type: ignore[union-attr]
         reasons = coverage.get("reasons", [])  # type: ignore[union-attr]

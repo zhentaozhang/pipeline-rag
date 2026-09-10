@@ -32,6 +32,7 @@ class EvaluationPipeline:
                 answer=answer,
                 contexts=contexts,
                 ground_truth=ground_truth,
+                tracer=tracer,
             )
             if tracer is not None:
                 tracer.attach_score(result.metric_name, result.value, reason=result.reason)

@@ -66,6 +66,33 @@ class Metric(ABC):
         if not self.name:
             self.name = self.__class__.__name__.lower()
 
+    async def _call_llm(
+        self,
+        *,
+        tracer: Any,
+        name: str,
+        messages: list[dict[str, Any]],
+        **kwargs: Any,
+    ) -> str:
+        """调用评估 LLM 并把该次调用记录为 Langfuse generation（tracer 未启用时静默短路）。"""
+        resp = await self.eval_llm.chat.completions.create(
+            model=self.model, messages=messages, **kwargs
+        )
+        content = resp.choices[0].message.content or ""
+        usage = getattr(resp, "usage", None)
+        from app.observability.llm_observe import record_generation
+
+        record_generation(
+            tracer,
+            name,
+            model=self.model,
+            input=messages,
+            output=content,
+            prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+            completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+        )
+        return content
+
     @abstractmethod
     async def ascore(
         self,
@@ -73,4 +100,5 @@ class Metric(ABC):
         answer: str,
         contexts: list[str],
         ground_truth: str | None = None,
+        tracer: Any = None,
     ) -> MetricResult: ...

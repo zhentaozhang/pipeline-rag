@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from app.observability.metrics.base import Metric, MetricResult
 
 _PROMPT = """You are evaluating the relevance of an answer to a question.
@@ -25,6 +27,7 @@ class AnswerRelevancyMetric(Metric):
         answer: str,
         contexts: list[str],
         ground_truth: str | None = None,
+        tracer: Any = None,
     ) -> MetricResult:
         if not answer or not question:
             return MetricResult(
@@ -34,15 +37,18 @@ class AnswerRelevancyMetric(Metric):
                 metadata={},
             )
 
-        resp = await self.eval_llm.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": _PROMPT},
-                {"role": "user", "content": f"Question: {question}\n\nAnswer: {answer}"},
-            ],
-            temperature=0.0,
+        content = (
+            await self._call_llm(
+                tracer=tracer,
+                name="answer_relevancy",
+                messages=[
+                    {"role": "system", "content": _PROMPT},
+                    {"role": "user", "content": f"Question: {question}\n\nAnswer: {answer}"},
+                ],
+                temperature=0.0,
+            )
+            or "0"
         )
-        content = resp.choices[0].message.content or "0"
         import re
 
         match = re.search(r"\d+", content)
