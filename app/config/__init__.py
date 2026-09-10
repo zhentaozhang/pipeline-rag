@@ -15,7 +15,9 @@ from app.config.infra import (
     Neo4jSettings,
     RedisSettings,
 )
+from app.config.langfuse import LangfuseSettings
 from app.config.llm import LLMSettings, RerankSettings, TavilySettings
+from app.config.otel import OtelSettings
 from app.config.pipeline import (
     AdaptiveKSettings,
     AgentSettings,
@@ -74,6 +76,8 @@ class Settings:
         self.recommendation: RecommendationSettings = RecommendationSettings()  # type: ignore[call-arg]
         self.rate_limit: RateLimitSettings = RateLimitSettings()  # type: ignore[call-arg]
         self.observability: ObservabilitySettings = ObservabilitySettings()  # type: ignore[call-arg]
+        self.langfuse: LangfuseSettings = LangfuseSettings()  # type: ignore[call-arg]
+        self.otel: OtelSettings = OtelSettings()  # type: ignore[call-arg]
         self._check_default_credentials()
 
     _KNOWN_DEFAULT_CREDENTIALS = {
