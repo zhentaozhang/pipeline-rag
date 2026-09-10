@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langfuse import Langfuse
 
@@ -59,3 +59,48 @@ def get_trace_url(trace_id: str) -> str | None:
     if client is None:
         return None
     return client.get_trace_url(trace_id=trace_id)
+
+
+def record_standalone_generation(
+    name: str,
+    *,
+    model: str,
+    input: Any = None,
+    output: Any = None,
+    prompt_tokens: int = 0,
+    completion_tokens: int = 0,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """离线进程（Celery）里为一次 LLM 调用创建独立 Langfuse trace + generation。
+
+    离线任务不属于任何在线 exchange 的 trace，因此各自开一条独立 trace。
+    """
+    client = get_langfuse()
+    if client is None:
+        return
+
+    from app.config import get_settings
+    from app.observability.cost import estimate_cost
+
+    trace_id = client.create_trace_id()
+    gen = client.start_observation(
+        trace_context={"trace_id": trace_id},
+        name=name,
+        as_type="generation",
+        model=model,
+        input=input,
+        metadata=metadata,
+    )
+    total = prompt_tokens + completion_tokens
+    cost = estimate_cost(
+        model,
+        prompt_tokens,
+        completion_tokens,
+        cache_hit_factor=get_settings().llm.cache_hit_price_factor,
+    )
+    gen.update(
+        output=output,
+        usage_details={"input": prompt_tokens, "output": completion_tokens, "total": total},
+        cost_details={"total": cost},
+    )
+    gen.end()

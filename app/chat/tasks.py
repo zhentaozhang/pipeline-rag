@@ -98,6 +98,20 @@ def task_extract_user_facts(
             max_tokens=500,
         )
         raw = (resp.choices[0].message.content or "") if resp.choices else ""
+
+        # 离线任务无 live exchange tracer：为本次 LLM 调用开独立 Langfuse trace
+        from app.observability.langfuse_client import record_standalone_generation
+
+        _usage = getattr(resp, "usage", None)
+        record_standalone_generation(
+            "fact_extraction_llm",
+            model=settings.llm.model,
+            input=prompt,
+            output=raw,
+            prompt_tokens=getattr(_usage, "prompt_tokens", 0) or 0,
+            completion_tokens=getattr(_usage, "completion_tokens", 0) or 0,
+            metadata={"conversation_id": conversation_id, "exchange_id": exchange_id},
+        )
         facts = parse_extraction_response(raw)
         if not facts:
             return {"conversation_id": conversation_id, "status": "no_facts"}
@@ -197,6 +211,20 @@ def task_generate_session_title(self, conversation_id: str, question: str, answe
             title = (
                 title_resp.choices[0].message.content.strip().strip('"').strip("'")
             )[:256]
+
+            # 离线任务：为本次标题生成开独立 Langfuse trace
+            from app.observability.langfuse_client import record_standalone_generation
+
+            _usage = getattr(title_resp, "usage", None)
+            record_standalone_generation(
+                "session_title_llm",
+                model=getattr(title_resp, "model", None) or settings.llm.model,
+                input=title_prompt,
+                output=title,
+                prompt_tokens=getattr(_usage, "prompt_tokens", 0) or 0,
+                completion_tokens=getattr(_usage, "completion_tokens", 0) or 0,
+                metadata={"conversation_id": conversation_id},
+            )
             if title:
                 await store.update_session_title(conversation_id, title)
             return title
