@@ -12,6 +12,9 @@
 #   (Redis noeviction)、库/bucket 初始化顺序耦合；升级 Langfuse 互不影响。
 # - 服务名加 langfuse- 前缀：Compose 按服务名合并 overlay，重名会覆盖主栈服务。
 # - 仅 langfuse-web 暴露宿主机端口（浏览器访问 UI）；其余仅容器内可达。
+#   默认 3000；若与宿主机其它服务冲突，改 .env 的 LANGFUSE_WEB_PORT。
+# - Langfuse 镜像用 Docker Hub（langfuse/langfuse:4）；官方自托管 compose 用
+#   docker.langfuse.com/langfuse/langfuse:4（同一镜像，需认证），两者可互换。
 #
 # 密钥（写在 .env，供插值与 app 的 env_file 复用）：
 #   LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY   —— app 上报 + Langfuse 初始开通
@@ -20,7 +23,7 @@
 services:
   # ── Langfuse Web（UI + API + OTLP 端点）──────────────────────────────────
   langfuse-web:
-    image: docker.langfuse.com/langfuse/langfuse:4
+    image: langfuse/langfuse:4
     container_name: pipeline-rag-langfuse-web
     restart: unless-stopped
     profiles: ["observability"]
@@ -84,7 +87,7 @@ services:
 
   # ── Langfuse Worker（异步 ingestion：写入 ClickHouse / S3）───────────────
   langfuse-worker:
-    image: docker.langfuse.com/langfuse/langfuse-worker:4
+    image: langfuse/langfuse-worker:4
     container_name: pipeline-rag-langfuse-worker
     restart: unless-stopped
     profiles: ["observability"]
