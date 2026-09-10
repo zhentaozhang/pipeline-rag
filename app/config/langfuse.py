@@ -11,6 +11,9 @@ class LangfuseSettings(BaseSettings):
     secret_key: str = ""
     # 空串 = 使用 Langfuse Cloud 默认；自建时填 http://localhost:3000
     host: str = ""
+    # 浏览器可达的对外地址（深链用）。容器内 host 为服务名（如 http://langfuse-web:3000）
+    # 时，深链需用对外地址（如 http://localhost:3000）。
+    public_url: str = ""
     sample_rate: float = 1.0
     flush_at: int = 15
     flush_interval: float = 0.5

@@ -153,6 +153,10 @@ services:
       REDIS_HOST: redis
       ES_HOST: elasticsearch
       MINIO_ENDPOINT: minio:9000
+      NEO4J_URI: bolt://neo4j:7687
+      # Celery broker/backend 默认为 localhost，容器内必须显式指向 redis 服务名
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
     ports:
       - "${APP_PORT:-8080}:8080"
 
@@ -179,6 +183,9 @@ services:
       REDIS_HOST: redis
       ES_HOST: elasticsearch
       MINIO_ENDPOINT: minio:9000
+      NEO4J_URI: bolt://neo4j:7687
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
     command: celery -A app.celery_app worker -l info -c 4 --without-gossip --without-mingle
 
   # ── Celery Beat（定时调度：文档孤儿清理等）─────────────────────────────
@@ -196,6 +203,9 @@ services:
       REDIS_HOST: redis
       ES_HOST: elasticsearch
       MINIO_ENDPOINT: minio:9000
+      NEO4J_URI: bolt://neo4j:7687
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
     command: celery -A app.celery_app beat -l info --schedule=/tmp/celerybeat-schedule
 
 volumes:

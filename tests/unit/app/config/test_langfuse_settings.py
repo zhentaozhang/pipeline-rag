@@ -11,6 +11,7 @@ class TestLangfuseSettings:
         assert s.public_key == ""
         assert s.secret_key == ""
         assert s.host == ""
+        assert s.public_url == ""
         assert s.sample_rate == 1.0
         assert s.flush_at == 15
         assert s.flush_interval == 0.5

@@ -54,11 +54,25 @@ def shutdown_langfuse() -> None:
 
 
 def get_trace_url(trace_id: str) -> str | None:
-    """返回 Langfuse trace 深链 URL（供自研 UI 跳转），未启用时返回 None。"""
+    """返回 Langfuse trace 深链 URL（供自研 UI 跳转），未启用时返回 None。
+
+    容器部署时 `LANGFUSE_HOST` 是服务名（如 http://langfuse-web:3000），浏览器不可达；
+    若配置了 `LANGFUSE_PUBLIC_URL`（对外地址），则把 host 换为对外地址。
+    """
     client = get_langfuse()
     if client is None:
         return None
-    return client.get_trace_url(trace_id=trace_id)
+    url = client.get_trace_url(trace_id=trace_id)
+    if not url:
+        return None
+    public = get_settings().langfuse.public_url.strip()
+    if public:
+        from urllib.parse import urlsplit, urlunsplit
+
+        parts = urlsplit(url)
+        pub = urlsplit(public)
+        url = urlunsplit((pub.scheme, pub.netloc, parts.path, parts.query, parts.fragment))
+    return url
 
 
 def record_standalone_generation(

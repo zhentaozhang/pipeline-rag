@@ -78,6 +78,27 @@ def test_get_trace_url_delegates_to_client(monkeypatch):
     assert langfuse_client.get_trace_url("t1") == "http://langfuse/trace/t1"
 
 
+def test_get_trace_url_rebases_to_public_url(monkeypatch):
+    class FakeClient:
+        def get_trace_url(self, *, trace_id=None):
+            return f"http://langfuse-web:3000/project/p1/traces/{trace_id}"
+
+    class FakeLangfuseSettings:
+        enabled = True
+        public_url = "https://langfuse.example.com"
+
+    class FakeSettings:
+        langfuse = FakeLangfuseSettings()
+
+    monkeypatch.setattr(langfuse_client, "get_langfuse", lambda: FakeClient())
+    monkeypatch.setattr(langfuse_client, "get_settings", lambda: FakeSettings())
+
+    assert (
+        langfuse_client.get_trace_url("t1")
+        == "https://langfuse.example.com/project/p1/traces/t1"
+    )
+
+
 def test_record_standalone_generation_noop_when_disabled(monkeypatch):
     monkeypatch.setattr(langfuse_client, "get_langfuse", lambda: None)
     # 未启用时不抛异常
