@@ -8,12 +8,25 @@ Tracer 中按 feature flag 无缝切换。
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal, cast
 
 from langfuse import Langfuse
 
+# langfuse 4.x observation 类型（start_observation 的重载按此区分）
+AsType = Literal[
+    "span",
+    "generation",
+    "embedding",
+    "agent",
+    "tool",
+    "chain",
+    "retriever",
+    "evaluator",
+    "guardrail",
+]
+
 # 自研 SpanKind -> langfuse as_type 映射
-KIND_TO_AS_TYPE: dict[str, str] = {
+KIND_TO_AS_TYPE: dict[str, AsType] = {
     "llm": "generation",
     "agent": "agent",
     "tool": "tool",
@@ -47,14 +60,15 @@ class LangfuseTraceExporter:
         self.session_id = session_id
 
     @staticmethod
-    def _as_type(kind: str) -> str:
+    def _as_type(kind: str) -> AsType:
         return KIND_TO_AS_TYPE.get(kind, "span")
 
     def start_root(self, name: str, *, input: Any = None, kind: str = "pipeline"):
+        # as_type 为动态值，无法静态匹配 langfuse 的按类型重载：cast 到 Any 绕过
         return self._client.start_observation(
             trace_context={"trace_id": self._trace_id},
             name=name,
-            as_type=self._as_type(kind),
+            as_type=cast(Any, self._as_type(kind)),
             input=input,
             metadata={
                 "conversation_id": self.conversation_id,

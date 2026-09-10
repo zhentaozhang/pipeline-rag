@@ -49,7 +49,7 @@ def init_otel(app: Any = None) -> TracerProvider | None:
     RedisInstrumentor().instrument()
     HTTPXClientInstrumentor().instrument()
 
-    logger.info("otel initialized", endpoint=settings.exporter_otlp_endpoint)
+    logger.info("otel initialized: %s", settings.exporter_otlp_endpoint)
     return provider
 
 
