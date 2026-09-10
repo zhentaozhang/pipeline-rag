@@ -49,10 +49,10 @@ async def verify_citations(
     answer: str,
     references: list[dict[str, Any] | Any],
     question: str = "",
-) -> tuple[str, list[int]]:
+) -> tuple[str, list[int], dict[str, Any]]:
     """验证回答中每个 [n] 引用是否被对应证据支持。
 
-    返回 (修正后 answer, 不支持/无法核实的引用编号列表)。
+    返回 (修正后 answer, 不支持/无法核实的引用编号列表, 元信息)。
     仅追加说明，不改写正文（正文已流式发出）。
     """
     refs = extract_citations(answer)
@@ -106,7 +106,7 @@ async def verify_citations(
     return answer + note, unsupported, _meta
 
 
-def _parse_json(raw: str) -> dict:
+def _parse_json(raw: str) -> dict[str, Any]:
     """宽容解析 judge JSON 输出（去 markdown 围栏）"""
     import json
 
@@ -115,14 +115,19 @@ def _parse_json(raw: str) -> dict:
         raw = raw.strip("`")
         raw = re.sub(r"^json\s*", "", raw)
     try:
-        return json.loads(raw)
+        parsed = json.loads(raw)
     except Exception:
-        m = re.search(r"\{.*\}", raw, re.S)
-        if m:
-            try:
-                return json.loads(m.group(0))
-            except Exception:
-                pass
+        parsed = None
+    if isinstance(parsed, dict):
+        return parsed
+    m = re.search(r"\{.*\}", raw, re.S)
+    if m:
+        try:
+            inner = json.loads(m.group(0))
+        except Exception:
+            inner = None
+        if isinstance(inner, dict):
+            return inner
     return {}
 
 

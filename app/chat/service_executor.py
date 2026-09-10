@@ -312,8 +312,9 @@ async def execute_stream(
         # P0-1d: 无证据兜底回复轮跳过推荐——推荐基于回答上下文，无证据时无推荐价值
         # 019 审查：精确匹配脆弱（模型措辞微变即失效），改为去空白前缀匹配
         answer_text = "".join(state.full_answer)
-        no_evidence = bool(plan.no_evidence_reply) and answer_text.replace(" ", "").startswith(
-            plan.no_evidence_reply.replace(" ", "")
+        _no_evidence_reply = plan.no_evidence_reply or ""
+        no_evidence = bool(_no_evidence_reply) and answer_text.replace(" ", "").startswith(
+            _no_evidence_reply.replace(" ", "")
         )
         if answer_text and not no_evidence and _settings.recommendation.enabled:
             async with tracer.span("recommendation", kind=SpanKind.PIPELINE):

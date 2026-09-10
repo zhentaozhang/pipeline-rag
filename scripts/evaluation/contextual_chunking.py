@@ -149,11 +149,11 @@ async def apply(chunks: list[dict], descriptions: list[str]) -> None:
 
     provider = get_embedding_provider()
     enriched = []
-    for c, desc in zip(chunks, descriptions):
+    for c, desc in zip(chunks, descriptions, strict=True):
         text = f"{desc}\n\n{c['chunk_text']}" if desc else c["chunk_text"]
         enriched.append(text)
     vectors = await provider.embed_batch(enriched)
-    for c, vec in zip(chunks, vectors):
+    for c, vec in zip(chunks, vectors, strict=True):
         await execute(
             f"UPDATE {TABLE} SET embedding = $1::vector WHERE id = $2",
             f"[{','.join(str(f) for f in vec)}]",
