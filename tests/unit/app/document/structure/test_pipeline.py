@@ -1,3 +1,5 @@
+import json
+import re
 import types
 
 import pytest
@@ -5,8 +7,23 @@ import pytest
 from app.document.structure.pipeline import DocumentStructurePipeline
 
 
+def _resolve_ambiguous_as_body(kwargs):
+    """确定性歧义消解：把所有候选行判为 BODY（正文）。
+
+    pipeline 的歧义消解阶段会调 LLM，真调会因模型波动导致结构不稳定（flaky）。
+    这里从 prompt 中解析候选行号（structure_parse_candidate.j2 模板用 `### 候选行 N`），
+    统一判为 BODY —— 即“普通正文行不应成为 section”这一被测意图。
+    """
+    prompt = kwargs["messages"][-1]["content"]
+    line_nos = re.findall(r"候选行\s+(\d+)", prompt)
+    return json.dumps(
+        [{"line_no": int(n), "resolved_kind": "BODY"} for n in line_nos], ensure_ascii=False
+    )
+
+
 @pytest.fixture
-def pipeline():
+def pipeline(fake_llm):
+    fake_llm.set_fallback(_resolve_ambiguous_as_body)
     return DocumentStructurePipeline()
 
 

@@ -15,6 +15,22 @@ from typing import Any
 
 import pytest
 
+# 模块级 `from app.common.llm_client import get_chat_client` 会产生各自的绑定，
+# 只 patch 源模块无效（能否生效取决于 import 顺序）。这里显式同时 patch 目标模块，
+# 保证 fake 隔离不依赖 import 顺序（否则会真调外部 LLM → flaky + 泄漏 key）。
+_CHAT_CLIENT_TARGET_MODULES = (
+    "app.infra.embedding",
+    "app.document.structure.ambiguity",
+    "app.rag.channels.vector",
+    "app.executors.rag_stream",
+    "app.executors.rag",
+    "app.executors.aggregator_executor",
+    "app.orchestrator.supervisor_graph",
+    "app.orchestrator.supervisor",
+    "app.orchestrator.recommendation",
+    "app.orchestrator.guardrails",
+)
+
 
 class FakeCompletions:
     """可编程的 chat.completions mock（全局单例，每测试 reset）。"""
@@ -51,6 +67,8 @@ class FakeCompletions:
                 self.completions = _Completions(owner)
 
         self._client = type("FakeClient", (), {})()
+        # 部分调用方会读 base_url（如 ambiguity 里的 dashscope 判断）
+        self._client.base_url = "https://fake.local/v1"
         self._client.chat = _Chat(self)
         self._responses: list[str] = []
         self._fallback: Any = None
@@ -59,10 +77,24 @@ class FakeCompletions:
         self._install(monkeypatch)
 
     def _install(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """每次测试重新 patch get_chat_client 指向本单例客户端。"""
+        """每次测试重新 patch get_chat_client：源模块 + 各目标模块的绑定。
+
+        目标模块用 `from ... import get_chat_client` 持有独立引用，只 patch 源模块会
+        漏掉已在导入期绑定真实客户端的模块（真调 LLM）。显式逐个 patch 消除该依赖。
+        """
+        import importlib
+
         import app.common.llm_client as llm_client_mod
 
-        monkeypatch.setattr(llm_client_mod, "get_chat_client", lambda: self._client)
+        replacement = lambda: self._client  # noqa: E731
+        monkeypatch.setattr(llm_client_mod, "get_chat_client", replacement)
+        for module_path in _CHAT_CLIENT_TARGET_MODULES:
+            try:
+                module = importlib.import_module(module_path)
+            except Exception:  # noqa: BLE001 — 模块不可导入时跳过
+                continue
+            if hasattr(module, "get_chat_client"):
+                monkeypatch.setattr(module, "get_chat_client", replacement, raising=False)
 
     def reset(self) -> None:
         self._responses.clear()
