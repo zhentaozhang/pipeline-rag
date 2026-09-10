@@ -78,8 +78,13 @@ services:
         LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-admin}
         LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-changeme123}
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me-nextauth}
+      # Next.js 默认会用 Docker 注入的 HOSTNAME（容器 ID）作绑定地址 →
+      # 容器内 localhost 不可达（healthcheck 误报 unhealthy）。固定为 0.0.0.0。
+      HOSTNAME: 0.0.0.0
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/public/health || exit 1"]
+      # 用 127.0.0.1 而非 localhost：容器 /etc/hosts 使 localhost 优先解析到 ::1，
+      # 而 next-server 只监 IPv4 → 用 localhost 会误报 unhealthy。
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/public/health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -109,7 +114,8 @@ services:
       - langfuse_ch_data:/var/lib/clickhouse
       - langfuse_ch_logs:/var/log/clickhouse-server
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      # 同上：127.0.0.1 避免 localhost→::1 的 IPv6 解析（ClickHouse 只监 IPv4）
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8123/ping || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
