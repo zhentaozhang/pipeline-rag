@@ -41,28 +41,17 @@ def _record_generation(
     prompt_tokens: int,
     completion_tokens: int,
 ) -> None:
-    """把一次 LLM 调用作为 Langfuse generation 记录（未启用时静默短路）。"""
-    tracer = getattr(task, "tracer", None)
-    record = getattr(tracer, "record_generation", None)
-    if record is None:
-        return
-    from app.observability.traced_llm import _estimate_cost
+    """把一次 LLM 调用作为 Langfuse generation 记录（委托共享入口）。"""
+    from app.observability.llm_observe import record_generation
 
-    model = settings.llm.model
-    total = prompt_tokens + completion_tokens
-    cost = _estimate_cost(
-        model,
-        prompt_tokens,
-        completion_tokens,
-        cache_hit_factor=settings.llm.cache_hit_price_factor,
-    )
-    record(
+    record_generation(
+        getattr(task, "tracer", None),
         name,
-        model=model,
+        model=settings.llm.model,
         input=input_text,
         output=output_text,
-        usage={"input": prompt_tokens, "output": completion_tokens, "total": total},
-        cost={"total": cost},
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
     )
 
 

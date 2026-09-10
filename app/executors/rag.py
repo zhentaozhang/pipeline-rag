@@ -57,9 +57,10 @@ class QualityResult:
 
 
 class AnswerQualityChecker:
-    def __init__(self) -> None:
+    def __init__(self, tracer=None) -> None:
         self._jinja = jinja_env
         self._openai = get_chat_client()
+        self._tracer = tracer
 
     async def check(
         self,
@@ -104,8 +105,9 @@ class AnswerQualityChecker:
         return template.render(question=question, answer=answer)
 
     async def _call_llm(self, prompt: str) -> dict[str, Any]:
+        model = settings.rag.quality_model or settings.llm.model
         response = await self._openai.chat.completions.create(
-            model=settings.rag.quality_model or settings.llm.model,
+            model=model,
             messages=[
                 {
                     "role": "system",
@@ -118,6 +120,20 @@ class AnswerQualityChecker:
             timeout=15,
         )
         content = response.choices[0].message.content or "{}"
+
+        # 记录 Langfuse generation（未启用时静默短路）
+        from app.observability.llm_observe import record_generation
+
+        usage = getattr(response, "usage", None)
+        record_generation(
+            self._tracer,
+            "quality_check",
+            model=model,
+            input=prompt,
+            output=content,
+            prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+            completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+        )
 
         json_str = content.strip()
         if json_str.startswith("```"):
@@ -236,7 +252,7 @@ class RagChatExecutor(ConversationExecutor):
         # P0-1d: 简短回答（<30 字）跳过评审——自审对短答复区分度低，省一次 LLM 调用
         _reviewable_answer = "".join(self.task.answer_buffer)
         if not _answer_blocked and len(_reviewable_answer) >= 30:
-            quality_checker = AnswerQualityChecker()
+            quality_checker = AnswerQualityChecker(tracer=self.task.tracer)
             quality_result = await quality_checker.check(
                 question=plan.original_question,
                 answer=_reviewable_answer,
