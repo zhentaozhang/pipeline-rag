@@ -51,3 +51,11 @@ def shutdown_langfuse() -> None:
     if _client is not None:
         _client.flush()
         _client = None
+
+
+def get_trace_url(trace_id: str) -> str | None:
+    """返回 Langfuse trace 深链 URL（供自研 UI 跳转），未启用时返回 None。"""
+    client = get_langfuse()
+    if client is None:
+        return None
+    return client.get_trace_url(trace_id=trace_id)

@@ -58,3 +58,21 @@ def test_get_langfuse_enabled_builds_singleton_and_shutdown_flushes(monkeypatch)
     langfuse_client.shutdown_langfuse()
     assert calls["flushed"] is True
     assert langfuse_client._client is None
+
+
+def test_get_trace_url_disabled_returns_none(monkeypatch):
+    class FakeSettings:
+        langfuse = type("S", (), {"enabled": False})()
+
+    monkeypatch.setattr(langfuse_client, "get_settings", lambda: FakeSettings())
+    langfuse_client._client = None
+    assert langfuse_client.get_trace_url("t1") is None
+
+
+def test_get_trace_url_delegates_to_client(monkeypatch):
+    class FakeClient:
+        def get_trace_url(self, *, trace_id=None):
+            return f"http://langfuse/trace/{trace_id}"
+
+    monkeypatch.setattr(langfuse_client, "get_langfuse", lambda: FakeClient())
+    assert langfuse_client.get_trace_url("t1") == "http://langfuse/trace/t1"
