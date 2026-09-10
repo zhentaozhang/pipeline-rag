@@ -219,6 +219,19 @@ Skills 可在运行时热插拔，通过 MCP 协议与 Agent 交互，支持外�
 | **工具审批** | 危险操作需显式用户授权 |
 | **沙箱执行** | Code Executor 在隔离沙箱中运行 Python 代码 |
 
+### 可观测性
+
+| 层 | 能力 |
+|----|------|
+| **自研 Trace** | 一次对话 = 一条 trace，阶段/检索通道/LLM 调用以 span 树组织；落 MySQL 三表（`trace_observability*`），管理后台可视化 |
+| **Langfuse** | 应用层 LLM/RAG 可观测 + 评估：trace/generation/score、Prompt、Dataset/Experiment；与自研 trace 并行上报（`LANGFUSE_ENABLED`） |
+| **OpenTelemetry** | 基础设施级分布式追踪（FastAPI/SQLAlchemy/Redis/HTTPX），OTLP HTTP 导出（Langfuse 不支持 gRPC；`OTEL_ENABLED`） |
+| **RAG 评估** | faithfulness / answer_relevancy / context_precision / context_recall / answer_correctness，分数写入 Langfuse Score 与 MySQL；golden dataset 可跑 Langfuse Experiment |
+| **Prometheus** | `/metrics` 端点暴露阶段耗时、token、成本、缓存命中率等聚合指标 |
+| **结构化日志** | structlog JSON 输出，按 trace_id 关联 |
+
+> **默认关闭**：未设置 `LANGFUSE_ENABLED=true` / `OTEL_ENABLED=true` 时，所有 Langfuse/OTel 路径静默短路，仅保留自研 trace + Prometheus。
+
 ---
 
 ## 系统架构
@@ -337,7 +350,8 @@ flowchart TB
 | **Prompt 模板** | Jinja2 | — |
 | **MCP** | FastMCP | — |
 | **PII 检测** | Microsoft Presidio | — |
-| **追踪** | 自研 Trace（span 树 + MySQL 落库） | — |
+| **追踪** | 自研 Trace（span 树 + MySQL 落库） + Langfuse + OpenTelemetry | — |
+| **评估** | 自实现 RAGAS 指标（faithfulness/relevancy/precision/recall/correctness） | — |
 | **指标** | Prometheus | — |
 | **日志** | structlog | — |
 | **文档解析** | Unstructured + MarkItDown + MinerU（可选增强） | — |
@@ -525,6 +539,8 @@ npm run dev
 | `CONNECTOR_WEB_*` | 网页爬虫连接器（sitemap/种子递归抓取） |
 | `FEISHU_*` | 飞书机器人渠道（长连接事件订阅 + 卡片流式回复） |
 | `MINERU_*` | MinerU 复杂版式解析增强通道（失败自动降级） |
+| `LANGFUSE_*` | Langfuse 可观测平台（`ENABLED`/`PUBLIC_KEY`/`SECRET_KEY`/`HOST`/`SAMPLE_RATE`，默认关） |
+| `OTEL_*` | OpenTelemetry OTLP 导出（`ENABLED`/`EXPORTER_OTLP_ENDPOINT`/`SERVICE_NAME`，默认关） |
 
 完整变量清单见 `.env.example`。
 
