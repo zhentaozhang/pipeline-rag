@@ -107,3 +107,31 @@ def test_flush_calls_client_flush():
     exporter.flush()
 
     assert client.calls[-1][0] == "flush"
+
+
+def test_record_generation_maps_model_usage_cost():
+    client, exporter = _make_exporter()
+    root = exporter.start_root("exchange", kind="pipeline")
+    exporter.record_generation(
+        root,
+        "rag_answer",
+        model="deepseek-chat",
+        input="question",
+        output="answer",
+        usage_details={"input": 10, "output": 5, "total": 15},
+        cost_details={"input": 0.001, "output": 0.002, "total": 0.003},
+    )
+
+    # 父 observation 记录了一次 start_observation（as_type=generation + model）
+    start_call = next(c for c in root.calls if c[0] == "start_observation")
+    assert start_call[1]["as_type"] == "generation"
+    assert start_call[1]["model"] == "deepseek-chat"
+    assert start_call[1]["input"] == "question"
+
+    # generation observation 自身记录 update(usage/cost/output) + end
+    gen = root.children[0]
+    update_call = next(c for c in gen.calls if c[0] == "update")
+    assert update_call[1]["output"] == "answer"
+    assert update_call[1]["usage_details"] == {"input": 10, "output": 5, "total": 15}
+    assert update_call[1]["cost_details"] == {"input": 0.001, "output": 0.002, "total": 0.003}
+    assert any(c[0] == "end" for c in gen.calls)

@@ -90,5 +90,37 @@ class LangfuseTraceExporter:
     def add_score(self, obs, name: str, value: float, *, reason: str | None = None) -> None:
         obs.score(name=name, value=value, comment=reason)
 
+    def record_generation(
+        self,
+        parent,
+        name: str,
+        *,
+        model: str,
+        input: Any = None,
+        output: Any = None,
+        usage_details: dict[str, int] | None = None,
+        cost_details: dict[str, float] | None = None,
+        level: str | None = None,
+    ) -> None:
+        """记录一次完整的 LLM generation：start(model) -> update(usage/cost/output) -> end"""
+        gen = parent.start_observation(
+            name=name,
+            as_type="generation",
+            input=input,
+            model=model,
+        )
+        update_kwargs: dict[str, Any] = {}
+        if output is not None:
+            update_kwargs["output"] = output
+        if usage_details:
+            update_kwargs["usage_details"] = usage_details
+        if cost_details:
+            update_kwargs["cost_details"] = cost_details
+        if level is not None:
+            update_kwargs["level"] = level
+        if update_kwargs:
+            gen.update(**update_kwargs)
+        gen.end()
+
     def flush(self) -> None:
         self._client.flush()

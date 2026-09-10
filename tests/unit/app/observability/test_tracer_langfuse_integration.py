@@ -88,3 +88,25 @@ async def test_tracer_reports_child_span_lifecycle(monkeypatch):
     assert root_obs.children, "root 应有子 span"
     child = root_obs.children[0]
     assert any(c[0] == "end" for c in child.calls)
+
+
+def test_tracer_record_generation_nests_under_root(monkeypatch):
+    client, tracer = _make_tracer(monkeypatch)
+    tracer.root("exchange", kind=SpanKind.PIPELINE)
+
+    tracer.record_generation(
+        "rag_answer",
+        model="deepseek-chat",
+        input="q",
+        output="a",
+        usage={"input": 10, "output": 5, "total": 15},
+        cost={"input": 0.001, "output": 0.002, "total": 0.003},
+    )
+
+    root_obs = client.obs
+    assert root_obs.children, "root 下应有 generation"
+    gen = root_obs.children[0]
+    assert any(c[0] == "end" for c in gen.calls)
+    update = next(c for c in gen.calls if c[0] == "update")
+    assert update[1]["usage_details"]["total"] == 15
+    assert update[1]["cost_details"]["total"] == 0.003

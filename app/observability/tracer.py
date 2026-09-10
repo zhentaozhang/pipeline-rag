@@ -381,6 +381,38 @@ class Tracer:
             EVALUATION_SCORE_HISTOGRAM.labels(metric_name=metric_name).observe(value)
             self._lf_score(target_span, metric_name, value, reason)
 
+    def record_generation(
+        self,
+        name: str,
+        *,
+        model: str,
+        input: Any = None,
+        output: Any = None,
+        usage: dict[str, int] | None = None,
+        cost: dict[str, float] | None = None,
+        level: str | None = None,
+    ) -> None:
+        """记录一次 LLM generation（挂在当前活跃 span 或根 span 下）。Langfuse 未启用时短路。"""
+        if self._lf_exporter is None:
+            return
+        parent_obs = None
+        if self._stack:
+            parent_obs = self._lf_obs.get(self._stack[-1].span_id)
+        if parent_obs is None:
+            parent_obs = self._lf_root_obs
+        if parent_obs is None:
+            return
+        self._lf_exporter.record_generation(
+            parent_obs,
+            name,
+            model=model,
+            input=input,
+            output=output,
+            usage_details=usage,
+            cost_details=cost,
+            level=level,
+        )
+
     def append_span(self, span: SpanContext) -> None:
         if self._active:
             self._record_span_prometheus(span)
