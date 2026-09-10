@@ -182,6 +182,36 @@ async def run_evaluation_dataset(
     )
 
 
+class ExperimentRunRequest(BaseModel):
+    dataset_name: str = Field("rag-golden", alias="datasetName")
+    run_name: str | None = Field(default=None, alias="runName")
+    model_config = {"populate_by_name": True}
+
+
+@router.post(
+    "/evaluation/dataset/experiment",
+    summary="触发 golden experiment",
+    description=(
+        "把 golden dataset 同步到 Langfuse Dataset 并运行 Experiment"
+        "（需 LANGFUSE_ENABLED，结果可在 Langfuse UI 与历史 run 对比）。"
+    ),
+)
+async def trigger_golden_experiment(
+    req: ExperimentRunRequest,
+    _: str = Depends(get_current_user),
+) -> dict[str, Any]:
+    from app.chat.tasks import task_run_golden_experiment
+
+    task_run_golden_experiment.delay(req.dataset_name, req.run_name)
+    return ApiResponse.ok(
+        data={
+            "message": "已触发 golden experiment",
+            "datasetName": req.dataset_name,
+            "runName": req.run_name,
+        }
+    )
+
+
 @router.post(
     "/evaluation/dataset/delete",
     summary="删除评估数据",

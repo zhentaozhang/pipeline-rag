@@ -344,3 +344,65 @@ def task_evaluate_dataset_item(self, dataset_id: int) -> dict:
             "evaluate dataset item failed", dataset_id=dataset_id, error=str(e), exc_info=True
         )
         raise
+
+
+@celery_app.task(
+    bind=True,
+    name="chat.run_golden_experiment",
+)
+def task_run_golden_experiment(
+    self, dataset_name: str = "rag-golden", run_name: str | None = None
+) -> dict:
+    """在 Langfuse Dataset 上跑 golden experiment（需 LANGFUSE_ENABLED）。
+
+    先把 DB 里的 golden dataset 同步到 Langfuse Dataset，再用自实现 RAG metric
+    作为 evaluator 跑 Experiment，结果可在 Langfuse UI 与历史 run 对比。
+    """
+    from app.common.llm_client import get_eval_client
+    from app.config import get_settings
+    from app.observability.langfuse_client import get_langfuse
+
+    logger.info("task run golden experiment started", dataset_name=dataset_name)
+
+    async def _do() -> dict:
+        client = get_langfuse()
+        if client is None:
+            return {"status": "skipped_langfuse_disabled"}
+
+        from app.db.session import get_session_factory
+        from app.observability.langfuse_dataset import sync_golden_dataset
+        from app.observability.langfuse_experiment import (
+            build_standard_evaluators,
+            make_golden_task,
+            run_golden_experiment,
+        )
+
+        sf = get_session_factory()
+        if sf is None:
+            raise RuntimeError("Session factory not initialized")
+
+        settings = get_settings()
+        eval_llm = get_eval_client()
+        model = settings.rag.evaluation_model or settings.llm.model
+
+        async with sf() as session:
+            synced = await sync_golden_dataset(session, client, dataset_name=dataset_name)
+
+        evaluators = build_standard_evaluators(eval_llm, model)
+        task = make_golden_task(eval_llm, model)
+        result = await run_golden_experiment(
+            client, dataset_name, task=task, evaluators=evaluators, run_name=run_name
+        )
+        return {
+            "status": "ok",
+            "synced_items": synced,
+            "experiment": getattr(result, "name", None),
+        }
+
+    try:
+        out = run_async(_do())
+        logger.info("task run golden experiment completed", result=out)
+        return out
+    except Exception as e:
+        logger.error("golden experiment failed", error=str(e), exc_info=True)
+        raise
