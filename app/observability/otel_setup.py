@@ -8,6 +8,7 @@ otlp-proto-http。OTel 用于基础设施级分布式追踪（DB/Redis/HTTP/Cele
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 _provider: TracerProvider | None = None
 
 
-def init_otel() -> TracerProvider | None:
+def init_otel(app: Any = None) -> TracerProvider | None:
     global _provider
     settings = get_settings().otel
     if not settings.enabled:
@@ -35,6 +36,19 @@ def init_otel() -> TracerProvider | None:
     provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
     _provider = provider
+
+    # 基础设施 auto-instrumentation（使用全局 tracer provider）
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+    from opentelemetry.instrumentation.redis import RedisInstrumentor
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+    if app is not None:
+        FastAPIInstrumentor().instrument_app(app)
+    SQLAlchemyInstrumentor().instrument()
+    RedisInstrumentor().instrument()
+    HTTPXClientInstrumentor().instrument()
+
     logger.info("otel initialized", endpoint=settings.exporter_otlp_endpoint)
     return provider
 

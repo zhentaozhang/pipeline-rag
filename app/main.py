@@ -86,7 +86,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # OpenTelemetry（OTLP HTTP → Langfuse/独立后端），先于业务初始化
     from app.observability.otel_setup import init_otel
 
-    init_otel()
+    init_otel(app)
 
     # 事件总线默认监听者（指标 + 结构化日志），先于业务启动注册
     from app.eventbus.listeners.metrics_listener import register_listeners
