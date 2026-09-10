@@ -110,3 +110,16 @@ def test_tracer_record_generation_nests_under_root(monkeypatch):
     update = next(c for c in gen.calls if c[0] == "update")
     assert update[1]["usage_details"]["total"] == 15
     assert update[1]["cost_details"]["total"] == 0.003
+
+
+def test_tracer_langfuse_enabled_flag_true_when_client_present(monkeypatch):
+    _client, tracer = _make_tracer(monkeypatch)
+    assert tracer.langfuse_enabled is True
+
+
+def test_tracer_langfuse_enabled_flag_false_when_disabled(monkeypatch):
+    monkeypatch.setattr(lfc, "get_langfuse", lambda: None)
+    tracer = Tracer(
+        db=None, trace_id="t1", conversation_id="c1", exchange_id=1, sample_rate=1.0
+    )
+    assert tracer.langfuse_enabled is False

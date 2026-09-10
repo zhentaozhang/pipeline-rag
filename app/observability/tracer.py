@@ -430,6 +430,10 @@ class Tracer:
     def trace_id(self) -> str:
         return self._trace_id
 
+    @property
+    def langfuse_enabled(self) -> bool:
+        return self._lf_exporter is not None
+
     # ── internal ─────────────────────────────────────────────
     def _push(self, span: SpanContext) -> None:
         self._stack.append(span)
