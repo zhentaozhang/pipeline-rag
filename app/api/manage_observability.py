@@ -241,6 +241,16 @@ class TracePageRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+def _langfuse_url(trace_id: str) -> str | None:
+    """Langfuse trace 深链（未启用 Langfuse 时返回 None）。"""
+    try:
+        from app.observability.langfuse_client import get_trace_url
+
+        return get_trace_url(trace_id)
+    except Exception:
+        return None
+
+
 async def _query_traces(
     db: AsyncSession,
     page_no: int,
@@ -477,5 +487,6 @@ async def get_trace_detail(
             "flushedAt": trace_row["flushed_at"].isoformat() if trace_row["flushed_at"] else None,
             "spans": span_list,
             "scores": score_list,
+            "langfuseUrl": _langfuse_url(trace_id),
         }
     )

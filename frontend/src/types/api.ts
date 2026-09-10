@@ -395,4 +395,5 @@ export interface TraceDetail {
   flushedAt: string | null;
   spans: TraceSpan[];
   scores: TraceScore[];
+  langfuseUrl: string | null;
 }
