@@ -539,8 +539,8 @@ npm run dev
 | `CONNECTOR_WEB_*` | 网页爬虫连接器（sitemap/种子递归抓取） |
 | `FEISHU_*` | 飞书机器人渠道（长连接事件订阅 + 卡片流式回复） |
 | `MINERU_*` | MinerU 复杂版式解析增强通道（失败自动降级） |
-| `LANGFUSE_*` | Langfuse 可观测平台（`ENABLED`/`PUBLIC_KEY`/`SECRET_KEY`/`HOST`/`SAMPLE_RATE`，默认关） |
-| `OTEL_*` | OpenTelemetry OTLP 导出（`ENABLED`/`EXPORTER_OTLP_ENDPOINT`/`SERVICE_NAME`，默认关） |
+| `LANGFUSE_*` | Langfuse 可观测平台（`ENABLED`/`PUBLIC_KEY`/`SECRET_KEY`/`HOST`/`PUBLIC_URL`/`SAMPLE_RATE`，默认关） |
+| `OTEL_*` | OpenTelemetry OTLP 导出（`ENABLED`/`EXPORTER_OTLP_ENDPOINT`/`EXPORTER_OTLP_HEADERS`/`SERVICE_NAME`，默认关） |
 
 完整变量清单见 `.env.example`。
 
@@ -561,4 +561,57 @@ pytest --cov=app --cov-report=term-missing
 
 # 集成测试（需先 docker compose up -d 起基础设施，不可达自动 skip）
 pytest tests/integration -v
+```
+
+---
+
+## Docker 部署
+
+### 一键部署（幂等，可重复执行）
+
+```bash
+cp .env.example .env    # 首次：填写密钥（外部 LLM key、JWT、Langfuse 等）
+
+# 基础栈：基础设施（MySQL/PG/ES/Neo4j/Redis/MinIO）+ 业务（app/celery-worker/beat）
+./bin/deploy.sh
+
+# 额外启动可观测性栈（Langfuse 自托管：web/worker/clickhouse + 自带 PG/Redis/MinIO）
+./bin/deploy.sh --with-observability
+```
+
+### 分层验证（不要只看 `docker ps`）
+
+```bash
+./bin/verify-deploy.sh                     # L1 容器 → L2 应用健康 → L3 基础设施
+                                           # → L4 业务链路 → L5 监控
+./bin/verify-deploy.sh --with-observability # 额外验证 Langfuse 与 OTLP 端点
+```
+
+### 服务与端口
+
+| 层 | 服务 | 宿主机端口（默认） |
+|---|---|---|
+| 基础设施 | mysql / postgres / elasticsearch / neo4j / redis / minio | 3306 / 5432 / 9200 / 7474·7687 / 6379 / 9000·9001 |
+| 业务 | app（FastAPI，含 `/metrics` `/health/*`） | `APP_PORT`（默认 8080） |
+| 业务 | celery-worker / celery-beat | —（无对外端口） |
+| 可观测性（profile） | langfuse-web | `LANGFUSE_WEB_PORT`（默认 3000） |
+| 可观测性（profile） | langfuse-worker / clickhouse / postgres / redis / minio | —（仅容器内可达） |
+
+### 设计要点
+
+- **配置外部化**：所有基础设施地址经环境变量注入；容器内用服务名（`mysql`/`redis`/…），`docker-compose.yml` 覆盖 `.env` 的 `localhost` 值（含 `CELERY_BROKER_URL`、`NEO4J_URI`）。
+- **启动依赖**：`depends_on: service_healthy` + 健康检查，等基础设施真正就绪再起业务（非 `sleep`）。
+- **持久化**：所有有状态服务挂载 Volume；MySQL 首次启动执行 `./sql` 初始化。
+- **可观测性默认关**：`LANGFUSE_ENABLED`/`OTEL_ENABLED` 默认 `false`，未启观测 profile 时仅自研 trace + Prometheus，行为与之前一致。
+- **Langfuse 自包含**：观测栈自带 PG/ClickHouse/Redis/MinIO，与被观测应用隔离，可独立升降级。
+- **深链**：容器内 `LANGFUSE_HOST` 是服务名，浏览器深链用 `LANGFUSE_PUBLIC_URL`。
+
+### 观测数据流
+
+```text
+app / celery
+  ├── Langfuse SDK ──► langfuse-web:3000（trace/generation/score）
+  └── OTel OTLP HTTP ─► langfuse-web:3000/api/public/otel/v1/traces
+                          （Basic auth 自动派生自 LANGFUSE_PUBLIC_KEY/SECRET_KEY）
+  └── Prometheus /metrics ─► 外部抓取
 ```
