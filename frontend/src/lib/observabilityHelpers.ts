@@ -95,7 +95,7 @@ function uniqueStrings(values) {
   return result
 }
 
-export function normalizeError(error, fallbackMessage) {
+export function normalizeError(error, fallbackMessage = '请求失败') {
   if (error instanceof APIError && error.message) {
     return error.message
   }
@@ -283,7 +283,12 @@ export function resolvePreferredExchange(exchanges, preferredId) {
   return String(exchanges[exchanges.length - 1].exchangeId)
 }
 
-function pushTextBlock(target, label, value, options = {}) {
+type PushOptions = {
+  code?: boolean
+  ordered?: boolean
+}
+
+function pushTextBlock(target, label, value, options: PushOptions = {}) {
   if (!value) {
     return
   }
@@ -294,7 +299,7 @@ function pushTextBlock(target, label, value, options = {}) {
   })
 }
 
-function pushListBlock(target, label, items, options = {}) {
+function pushListBlock(target, label, items, options: PushOptions = {}) {
   const values = asList(items)
   if (!values.length) {
     return
@@ -668,7 +673,7 @@ function snapshotList(snapshot, key) {
   return Array.isArray(value) ? value.filter(Boolean) : []
 }
 
-function pushPair(target, label, value, options = {}) {
+function pushPair(target, label, value, options: PushOptions = {}) {
   if (value == null || value === '') {
     return
   }

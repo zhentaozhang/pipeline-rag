@@ -6,6 +6,9 @@
     "module": "esnext",
     "types": ["vite/client"],
     "skipLibCheck": true,
+    // TypeScript 6 将 strict 默认值翻转为 true；本前端按非 strict 编写，
+    // 显式声明以恢复作者原意（否则 tsc -b 会报大量 noImplicitAny）。
+    "strict": false,
 
     /* Bundler mode */
     "moduleResolution": "bundler",

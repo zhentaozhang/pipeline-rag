@@ -6,6 +6,8 @@
     "module": "esnext",
     "types": ["node"],
     "skipLibCheck": true,
+    // 同 tsconfig.app.json：TS 6 默认 strict=true，显式关闭以保持一致性。
+    "strict": false,
 
     /* Bundler mode */
     "moduleResolution": "bundler",
