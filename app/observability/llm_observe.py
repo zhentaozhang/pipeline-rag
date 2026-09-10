@@ -25,11 +25,11 @@ def record_generation(
         return
 
     from app.config import get_settings
-    from app.observability.traced_llm import _estimate_cost
+    from app.observability.cost import estimate_cost
 
     settings = get_settings()
     total = prompt_tokens + completion_tokens
-    cost = _estimate_cost(
+    cost = estimate_cost(
         model,
         prompt_tokens,
         completion_tokens,

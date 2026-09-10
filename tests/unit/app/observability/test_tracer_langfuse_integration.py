@@ -1,8 +1,8 @@
 """Tracer 与 LangfuseTraceExporter 的接线测试（mock 外部 langfuse 客户端）"""
 
 from app.observability import langfuse_client as lfc
-from app.observability.enums import SpanKind
-from app.observability.models import Trace
+from app.observability.enums import SpanKind, SpanStatus
+from app.observability.models import SpanContext, Trace
 from app.observability.tracer import Tracer
 
 
@@ -123,3 +123,23 @@ def test_tracer_langfuse_enabled_flag_false_when_disabled(monkeypatch):
         db=None, trace_id="t1", conversation_id="c1", exchange_id=1, sample_rate=1.0
     )
     assert tracer.langfuse_enabled is False
+
+
+def test_tracer_append_span_reports_completed_span_to_langfuse(monkeypatch):
+    client, tracer = _make_tracer(monkeypatch)
+    tracer.root("exchange", kind=SpanKind.PIPELINE)
+
+    span = SpanContext(
+        span_id="sp1",
+        trace_id="t1",
+        parent_span_id=tracer._root_span.span_id,
+        kind=SpanKind.CHANNEL,
+        name="vector_channel",
+        status=SpanStatus.OK,
+    )
+    tracer.append_span(span)
+
+    root_obs = client.obs
+    assert root_obs.children, "root 下应有 channel span"
+    child = root_obs.children[0]
+    assert any(c[0] == "end" for c in child.calls)

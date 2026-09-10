@@ -138,6 +138,13 @@ class _DummyTracer:
     def attach_score(self, **kwargs):
         pass
 
+    def record_generation(self, *args, **kwargs):
+        pass
+
+    @property
+    def langfuse_enabled(self):
+        return False
+
     @property
     def current_span_id(self):
         return None
@@ -417,6 +424,7 @@ class Tracer:
         if self._active:
             self._record_span_prometheus(span)
             self._completed_spans.append(span)
+            self._lf_append(span)
 
     @property
     def current_span_id(self) -> str | None:
@@ -459,20 +467,37 @@ class Tracer:
         STAGE_CALL_TOTAL.labels(kind=kind, name=name, status=status).inc()
 
     # ── Langfuse 并行上报（enabled 时；未启用则 _lf_exporter 为 None，全部短路）──
-    def _lf_start(self, span: SpanContext) -> None:
-        if self._lf_exporter is None:
-            return
+    def _lf_parent_obs(self, span: SpanContext) -> Any:
         parent_obs = (
             self._lf_obs.get(span.parent_span_id or "") if span.parent_span_id else None
         )
         if parent_obs is None:
             parent_obs = self._lf_root_obs
+        return parent_obs
+
+    def _lf_start(self, span: SpanContext) -> None:
+        if self._lf_exporter is None:
+            return
+        parent_obs = self._lf_parent_obs(span)
         if parent_obs is None:
             return
         obs = self._lf_exporter.start_span(
             parent_obs, span.name, input=span.input, kind=span.kind.value
         )
         self._lf_obs[span.span_id] = obs
+
+    def _lf_append(self, span: SpanContext) -> None:
+        """上报已完成的 span（如检索通道 span）：创建 observation 并立即结束。"""
+        if self._lf_exporter is None:
+            return
+        parent_obs = self._lf_parent_obs(span)
+        if parent_obs is None:
+            return
+        obs = self._lf_exporter.start_span(
+            parent_obs, span.name, input=span.input, kind=span.kind.value
+        )
+        level = "ERROR" if span.status == SpanStatus.ERROR else None
+        self._lf_exporter.end_span(obs, output=span.output, level=level)
 
     def _lf_end(self, span: SpanContext) -> None:
         if self._lf_exporter is None:
