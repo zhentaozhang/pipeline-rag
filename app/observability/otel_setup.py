@@ -44,6 +44,19 @@ def current_otel_trace_id() -> str | None:
     return format(ctx.trace_id, "032x")
 
 
+async def otel_trace_context_middleware(request: Any, call_next: Any) -> Any:
+    """在 OTel server span 内读取其 trace_id 挂到 ``request.state.app_trace_id``。
+
+    在请求处理上下文（span 活跃）中同步读取，避免依赖 contextvar 传播到 SSE 生成器。
+    未启用 OTel 时值为 None，由业务层回退自研 trace id。
+    """
+    try:
+        request.state.app_trace_id = current_otel_trace_id()
+    except Exception:
+        logger.debug("otel_trace_context_middleware failed", exc_info=True)
+    return await call_next(request)
+
+
 def tag_current_otel_span(
     *,
     trace_id: str,

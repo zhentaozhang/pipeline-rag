@@ -211,6 +211,11 @@ def next_id_str() -> str:
     return uuid.uuid4().hex[:16]
 
 
+def new_trace_id() -> str:
+    """32-hex trace id（Langfuse 要求 32 位小写 hex；与 OTel trace_id 同格式）。"""
+    return uuid.uuid4().hex
+
+
 class Tracer:
     def __init__(
         self,

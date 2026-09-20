@@ -215,6 +215,11 @@ def create_app() -> FastAPI:
 
         app.middleware("http")(chat_auth_middleware)
 
+    # 读取 OTel server span 的 trace_id 挂到 request.state（业务层复用 → OTel/应用同 trace）
+    from app.observability.otel_setup import otel_trace_context_middleware
+
+    app.middleware("http")(otel_trace_context_middleware)
+
     # ── 路由注册 ──────────────────────────────────────────────────────────
     from app.api.health import router as health_router
     from app.api.router import api_router
