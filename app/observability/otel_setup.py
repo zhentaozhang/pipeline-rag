@@ -1,8 +1,13 @@
 """OpenTelemetry 初始化（OTLP HTTP 导出）
 
 Langfuse 只支持 HTTP（protobuf/JSON），不支持 gRPC，因此 exporter 固定用
-otlp-proto-http。OTel 用于基础设施级分布式追踪（DB/Redis/HTTP/Celery），
-与应用层 Langfuse SDK trace 通过 trace_id 关联。
+otlp-proto-http。OTel 用于基础设施级分布式追踪（DB/Redis/HTTP/Celery）。
+
+注意：OTel 的 trace_id 由 SDK 独立生成，与应用层 Tracer/Langfuse 的 trace_id
+**并不相同**，因此基础设施 span 在 Langfuse 中是**独立 trace**，不是 exchange
+trace 的子 span。两条链路通过 span 属性关联（``app.trace_id`` /
+``app.conversation_id`` / ``app.exchange_id``，由 ``tag_current_otel_span`` 注入），
+而非 trace_id 相同。
 """
 
 from __future__ import annotations
@@ -16,12 +21,36 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 _provider: TracerProvider | None = None
+
+
+def tag_current_otel_span(
+    *,
+    trace_id: str,
+    conversation_id: str | None = None,
+    exchange_id: int | None = None,
+) -> None:
+    """给当前 OTel span 打上应用层标识，供 Langfuse 里关联基础设施 trace。
+
+    未启用 OTel（无 provider / 非 recording span）时静默 no-op。
+    """
+    try:
+        span = trace.get_current_span()
+        if span is None or not span.is_recording():
+            return
+        span.set_attribute("app.trace_id", trace_id)
+        if conversation_id:
+            span.set_attribute("app.conversation_id", conversation_id)
+        if exchange_id is not None:
+            span.set_attribute("app.exchange_id", exchange_id)
+    except Exception:
+        logger.debug("tag_current_otel_span failed", exc_info=True)
 
 
 def build_otlp_headers(
@@ -71,7 +100,11 @@ def init_otel(app: Any = None) -> TracerProvider | None:
     exporter = OTLPSpanExporter(
         endpoint=settings.exporter_otlp_endpoint, headers=headers or None
     )
-    provider = TracerProvider(resource=resource)
+    # 采样可配置：默认 1.0（全采）。低流量/高并发热点可按比例降采样。
+    ratio = min(max(settings.sample_rate, 0.0), 1.0)
+    provider = TracerProvider(
+        resource=resource, sampler=ParentBased(TraceIdRatioBased(ratio))
+    )
     provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
     _provider = provider

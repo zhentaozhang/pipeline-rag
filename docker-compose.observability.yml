@@ -199,13 +199,9 @@ services:
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-pipeline-rag}-worker
 
   celery-beat:
-    environment:
-      LANGFUSE_ENABLED: "true"
-      LANGFUSE_HOST: http://langfuse-web:3000
-      LANGFUSE_PUBLIC_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3000}
-      OTEL_ENABLED: "true"
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://langfuse-web:3000/api/public/otel/v1/traces
-      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-pipeline-rag}-beat
+    # 注：beat 是独立进程，不触发 worker_process_init 信号，因此不会初始化
+    # OTel/Langfuse（这里注入观测 env 也不会生效），故不注入。
+    environment: {}
 
 volumes:
   langfuse_pg_data:

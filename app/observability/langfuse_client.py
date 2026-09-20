@@ -49,7 +49,8 @@ def get_langfuse() -> Langfuse | None:
 def shutdown_langfuse() -> None:
     global _client
     if _client is not None:
-        _client.flush()
+        # shutdown 会先 flush 队列再释放后台线程/资源（仅 flush 会残留线程）
+        _client.shutdown()
         _client = None
 
 

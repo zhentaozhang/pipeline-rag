@@ -1,6 +1,6 @@
 """LangfuseTraceExporter 适配层测试（mock 外部 langfuse 客户端）"""
 
-from app.observability.langfuse_backend import KIND_TO_AS_TYPE, LangfuseTraceExporter
+from app.observability.langfuse_backend import KIND_TO_AS_TYPE, LangfuseTraceExporter, _clip
 
 
 class FakeObs:
@@ -51,6 +51,18 @@ def test_kind_mapping():
     assert KIND_TO_AS_TYPE["retrieval"] == "retriever"
     assert KIND_TO_AS_TYPE["pipeline"] == "span"
     assert KIND_TO_AS_TYPE["channel"] == "span"
+
+
+def test_clip_truncates_long_string():
+    out = _clip("x" * 8000)
+    assert isinstance(out, str)
+    assert out.endswith("…[truncated]")
+    assert len(out) < 8000
+
+
+def test_clip_keeps_short_and_none():
+    assert _clip("hi") == "hi"
+    assert _clip(None) is None
 
 
 def test_start_root_maps_trace_context_and_metadata():

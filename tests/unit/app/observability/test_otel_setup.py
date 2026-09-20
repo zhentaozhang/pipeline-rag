@@ -13,6 +13,7 @@ def _fake_settings(enabled: bool, headers: str = ""):
     FakeOtelSettings.exporter_otlp_endpoint = "http://otel:4318/v1/traces"
     FakeOtelSettings.exporter_otlp_headers = headers
     FakeOtelSettings.service_name = "pipeline-rag-test"
+    FakeOtelSettings.sample_rate = 1.0
 
     class FakeSettings:
         otel = FakeOtelSettings()
@@ -72,8 +73,9 @@ def test_init_otel_enabled_wires_provider_and_instrumentors(monkeypatch):
             return "RESOURCE"
 
     class FakeProvider:
-        def __init__(self, resource=None):
+        def __init__(self, resource=None, sampler=None):
             calls["resource"] = resource
+            calls["sampler"] = sampler
 
         def add_span_processor(self, processor):
             calls["processor"] = processor

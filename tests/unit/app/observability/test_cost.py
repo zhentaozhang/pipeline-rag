@@ -24,3 +24,9 @@ def test_estimate_cost_mixed():
 def test_estimate_cost_unknown_model_uses_fallback():
     cost = estimate_cost("unknown-model", 1000, 1000)
     assert cost > 0
+
+
+def test_estimate_cost_configured_flash_model_uses_table_price():
+    # deepseek-v4-flash 在价表内，按 (0.0005, 0.0015) 计，而非默认兜底价 (0.001, 0.002)
+    cost = estimate_cost("deepseek-v4-flash", 1000, 1000)
+    assert cost == pytest.approx(0.0005 + 0.0015, abs=1e-7)

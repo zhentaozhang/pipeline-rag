@@ -70,7 +70,11 @@ class RAGSettings(BaseSettings):
     rewrite_temperature: float = 0.1
     rewrite_top_p: float = 0.3
     rewrite_thinking: bool = False
-    evaluation_enabled: bool = True
+    # 在线评估：生成后对成功回答做 LLM 打分（Faithfulness/Relevancy/ContextPrecision…）。
+    # 默认关：每轮额外 3~5 次 LLM 调用，成本敏感场景不背锅。
+    # 启用必须同时满足 evaluation_enabled=true 且 evaluation_sample_rate>0；
+    # 离线评估走 Langfuse dataset/experiment，不依赖此开关。
+    evaluation_enabled: bool = False
     evaluation_model: str = ""
     evaluation_base_url: str = ""
     evaluation_api_key: str = ""

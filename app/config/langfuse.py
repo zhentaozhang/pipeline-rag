@@ -18,5 +18,7 @@ class LangfuseSettings(BaseSettings):
     flush_at: int = 15
     flush_interval: float = 0.5
     release: str | None = None
+    # 上报到 Langfuse 的 input/output 最大字符数（0=不限）。超出部分截断，避免全量明文。
+    max_io_chars: int = 4000
 
     model_config = SettingsConfigDict(env_prefix="LANGFUSE_", env_file=_ENV_FILE, extra="ignore")

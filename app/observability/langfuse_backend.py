@@ -8,6 +8,7 @@ Tracer 中按 feature flag 无缝切换。
 
 from __future__ import annotations
 
+import json
 from typing import Any, Literal, cast
 
 from langfuse import Langfuse
@@ -42,6 +43,26 @@ KIND_TO_AS_TYPE: dict[str, AsType] = {
 }
 
 
+def _clip(value: Any) -> Any:
+    """按 ``LANGFUSE_MAX_IO_CHARS`` 截断 input/output，避免全量明文上报。"""
+    if value is None:
+        return None
+    from app.config import get_settings
+
+    max_chars = get_settings().langfuse.max_io_chars
+    if max_chars <= 0:
+        return value
+    if isinstance(value, str):
+        return value if len(value) <= max_chars else value[:max_chars] + "…[truncated]"
+    try:
+        text = json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:
+        text = str(value)
+    if len(text) <= max_chars:
+        return value
+    return text[:max_chars] + "…[truncated]"
+
+
 class LangfuseTraceExporter:
     """一次 exchange 对应的 langfuse trace 上报器"""
 
@@ -69,7 +90,7 @@ class LangfuseTraceExporter:
             trace_context={"trace_id": self._trace_id},
             name=name,
             as_type=cast(Any, self._as_type(kind)),
-            input=input,
+            input=_clip(input),
             metadata={
                 "conversation_id": self.conversation_id,
                 "exchange_id": self.exchange_id,
@@ -81,7 +102,7 @@ class LangfuseTraceExporter:
         return parent.start_observation(
             name=name,
             as_type=self._as_type(kind),
-            input=input,
+            input=_clip(input),
         )
 
     def end_span(
@@ -94,7 +115,7 @@ class LangfuseTraceExporter:
         """结束 span：output/level 需在 end() 前通过 update() 写入（langfuse 4.x end 仅收 end_time）"""
         update_kwargs: dict[str, Any] = {}
         if output is not None:
-            update_kwargs["output"] = output
+            update_kwargs["output"] = _clip(output)
         if level is not None:
             update_kwargs["level"] = level
         if update_kwargs:
@@ -120,12 +141,12 @@ class LangfuseTraceExporter:
         gen = parent.start_observation(
             name=name,
             as_type="generation",
-            input=input,
+            input=_clip(input),
             model=model,
         )
         update_kwargs: dict[str, Any] = {}
         if output is not None:
-            update_kwargs["output"] = output
+            update_kwargs["output"] = _clip(output)
         if usage_details:
             update_kwargs["usage_details"] = usage_details
         if cost_details:

@@ -62,6 +62,15 @@ async def execute_stream(
     ACTIVE_EXCHANGES.inc()
     tracer.root("exchange", kind=SpanKind.PIPELINE)
 
+    # 给当前 OTel span 打上应用层标识（未启用 OTel 时静默 no-op）
+    from app.observability.otel_setup import tag_current_otel_span
+
+    tag_current_otel_span(
+        trace_id=tracer.trace_id,
+        conversation_id=conversation_id,
+        exchange_id=temp_exchange_id,
+    )
+
     async with tracer.span("memory_load", kind=SpanKind.PIPELINE):
         memory_ctx = await memory_service.load(conversation_id)
 

@@ -15,15 +15,15 @@ def test_get_langfuse_disabled_returns_none(monkeypatch):
     assert langfuse_client.get_langfuse() is None
 
 
-def test_get_langfuse_enabled_builds_singleton_and_shutdown_flushes(monkeypatch):
+def test_get_langfuse_enabled_builds_singleton_and_shutdown_calls_client(monkeypatch):
     calls: dict = {}
 
     class FakeLangfuse:
         def __init__(self, **kwargs):
             calls["kwargs"] = kwargs
 
-        def flush(self):
-            calls["flushed"] = True
+        def shutdown(self):
+            calls["shutdown"] = True
 
     class FakeLangfuseSettings:
         enabled = True
@@ -56,7 +56,7 @@ def test_get_langfuse_enabled_builds_singleton_and_shutdown_flushes(monkeypatch)
     assert kwargs["release"] == "test"
 
     langfuse_client.shutdown_langfuse()
-    assert calls["flushed"] is True
+    assert calls["shutdown"] is True
     assert langfuse_client._client is None
 
 
