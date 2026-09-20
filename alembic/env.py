@@ -27,15 +27,13 @@ _EXTERNAL_TABLES = {
 
 
 def _include_object(obj, name, type_, reflected, compare_to):
-    if type_ == "table" and name in _EXTERNAL_TABLES:
-        return False
-    if (
+    is_external_table = type_ == "table" and name in _EXTERNAL_TABLES
+    is_external_index = (
         type_ == "index"
         and getattr(obj, "table", None) is not None
         and obj.table.name in _EXTERNAL_TABLES
-    ):
-        return False
-    return True
+    )
+    return not (is_external_table or is_external_index)
 
 
 # ── 从 Pydantic Settings 动态读取 DSN（不依赖 alembic.ini 硬编码）────────────
