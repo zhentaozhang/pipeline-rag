@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ── 静态检查 + 单元测试 + 编排语法 ─────────────────────────────────────────
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Prepare .env (for settings)
+        run: cp .env.example .env
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Type check (mypy)
+        run: uv run mypy app
+
+      - name: Unit tests
+        run: uv run pytest tests/unit -q
+
+      - name: Validate docker compose files
+        run: |
+          docker compose -f docker-compose.yml config >/dev/null
+          docker compose -f docker-compose.frontend.yml config >/dev/null
+
+  # ── 全新库迁移冒烟：upgrade → downgrade → upgrade，并断言与 ORM 一致 ──────
+  migration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-pass
+          MYSQL_DATABASE: pipeline_rag
+          MYSQL_USER: pipeline_rag
+          MYSQL_PASSWORD: ci-app-pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --protocol=tcp"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: "3306"
+      MYSQL_DB: pipeline_rag
+      MYSQL_USER: pipeline_rag
+      MYSQL_PASSWORD: ci-app-pass
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Fresh upgrade on empty DB
+        run: uv run alembic upgrade head
+
+      - name: Downgrade to base
+        run: uv run alembic downgrade base
+
+      - name: Upgrade again
+        run: uv run alembic upgrade head
+
+      - name: Assert schema matches ORM (autogenerate must be empty)
+        run: |
+          uv run alembic revision --autogenerate -m ci_check --rev-id cicheck
+          file=$(ls alembic/versions/cicheck*.py)
+          if grep -qE "op\.(create_table|drop_table|add_column|drop_column|create_index|drop_index|alter_column|create_foreign_key)" "$file"; then
+            echo "::error::ORM 与迁移结果不一致，autogenerate 产生非空变更"
+            cat "$file"
+            exit 1
+          fi
