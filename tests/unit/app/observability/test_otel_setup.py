@@ -161,3 +161,22 @@ def test_init_otel_enabled_wires_provider_and_instrumentors(monkeypatch):
     otel_setup.shutdown_otel()
     assert calls["shutdown"] is True
     assert otel_setup._provider is None
+
+
+def test_current_otel_trace_id_none_without_recording_span():
+    from app.observability.otel_setup import current_otel_trace_id
+
+    assert current_otel_trace_id() is None
+
+
+def test_current_otel_trace_id_returns_active_span_trace_id():
+    from opentelemetry.sdk.trace import TracerProvider
+
+    from app.observability.otel_setup import current_otel_trace_id
+
+    provider = TracerProvider()
+    tracer = provider.get_tracer("test")
+    with tracer.start_as_current_span("x") as span:
+        tid = current_otel_trace_id()
+        assert tid == format(span.get_span_context().trace_id, "032x")
+        assert len(tid) == 32

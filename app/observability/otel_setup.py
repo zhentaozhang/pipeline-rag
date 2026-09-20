@@ -3,11 +3,11 @@
 Langfuse 只支持 HTTP（protobuf/JSON），不支持 gRPC，因此 exporter 固定用
 otlp-proto-http。OTel 用于基础设施级分布式追踪（DB/Redis/HTTP/Celery）。
 
-注意：OTel 的 trace_id 由 SDK 独立生成，与应用层 Tracer/Langfuse 的 trace_id
-**并不相同**，因此基础设施 span 在 Langfuse 中是**独立 trace**，不是 exchange
-trace 的子 span。两条链路通过 span 属性关联（``app.trace_id`` /
-``app.conversation_id`` / ``app.exchange_id``，由 ``tag_current_otel_span`` 注入），
-而非 trace_id 相同。
+关联机制：请求处理期间 OTel server span 活跃时，应用层 Tracer **复用该 span 的
+trace_id**（见 ``current_otel_trace_id``），因此 Langfuse SDK 上报的业务 span 与
+OTLP 上报的基础设施 span 在 Langfuse 中归并为**同一条 trace**。
+``tag_current_otel_span`` 额外注入业务属性（app.trace_id/conversation_id/
+exchange_id）。OTel 未启用（无 recording span）时回退自研 id，两条链路相互独立。
 """
 
 from __future__ import annotations
@@ -28,6 +28,20 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 _provider: TracerProvider | None = None
+
+
+def current_otel_trace_id() -> str | None:
+    """当前活跃 OTel span 的 trace_id（32 hex）；无 recording span 时返回 None。
+
+    供应用层 Tracer 复用，使 Langfuse 业务 span 与 OTLP 基础设施 span 同 trace。
+    """
+    span = trace.get_current_span()
+    if span is None or not span.is_recording():
+        return None
+    ctx = span.get_span_context()
+    if ctx is None or not ctx.is_valid:
+        return None
+    return format(ctx.trace_id, "032x")
 
 
 def tag_current_otel_span(

@@ -43,11 +43,14 @@ async def execute_stream(
 
     from app.observability import SpanKind, Tracer
     from app.observability.models import Trace
+    from app.observability.otel_setup import current_otel_trace_id
     from app.observability.tracer import next_id_str
 
     tracer = Tracer(
         db=db,
-        trace_id=next_id_str(),
+        # OTel server span 活跃时复用其 trace_id，使基础设施 span 与业务 trace 在
+        # Langfuse 归并为同一条；未启用 OTel 时回退自研 id。
+        trace_id=current_otel_trace_id() or next_id_str(),
         conversation_id=conversation_id,
         exchange_id=temp_exchange_id,
         sample_rate=settings.observability.sample_rate,
