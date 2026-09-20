@@ -40,6 +40,17 @@ command -v docker >/dev/null 2>&1 || { err "未安装 docker"; exit 1; }
 docker info >/dev/null 2>&1 || { err "docker daemon 未运行"; exit 1; }
 docker compose version >/dev/null 2>&1 || { err "缺少 docker compose 插件"; exit 1; }
 [ -f .env ] || { err "缺少 .env（cp .env.example .env 并填写密钥）"; exit 1; }
+# 生产环境强制校验：占位符/默认密钥不得上线
+env_app_env="$(grep -E '^APP_ENV=' .env 2>/dev/null | tail -1 | cut -d= -f2 || true)"
+placeholder_hits="$(grep -nE 'your_[a-z_]+|change-me|CHANGEME' .env || true)"
+if [ -n "$placeholder_hits" ]; then
+  if [ "${env_app_env:-development}" = "production" ]; then
+    err "检测到未替换的占位密钥（APP_ENV=production 拒绝启动）："
+    printf '%s\n' "$placeholder_hits" | sed 's/=.*/=<已隐藏>/; s/^/    /' >&2
+    exit 1
+  fi
+  log "提示：.env 仍有占位密钥（非生产环境可忽略）"
+fi
 if [ "$WITH_OBS" = 1 ]; then
   grep -q '^LANGFUSE_PUBLIC_KEY=.+' .env || log "提示：未设置 LANGFUSE_PUBLIC_KEY（Langfuse 项目自动开通需要）"
 fi

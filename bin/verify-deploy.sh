@@ -4,6 +4,7 @@
 # 用法：
 #   ./bin/verify-deploy.sh                     # 基础栈
 #   ./bin/verify-deploy.sh --with-observability # 额外验证 Langfuse 栈
+#   ./bin/verify-deploy.sh --with-frontend      # 额外验证前端（独立部署）
 #
 # 分层：
 #   L1 容器层       —— 容器 running / healthy
@@ -11,6 +12,7 @@
 #   L3 基础设施层   —— app→依赖 逐项状态 + mysql/redis 容器内直探
 #   L4 业务链路层   —— 登录取 token → 真实业务读接口 → 返回真实数据
 #   L5 监控层       —— /metrics 聚合指标非空
+#   FE 前端层（可选）—— 前端首页可访问
 #
 # 说明：基础设施直探一律走 `docker compose exec`（容器内），避免宿主机端口
 # 与其它系统（如 ticketflow 占用 3306/9200/6379）冲突导致误判。
@@ -20,9 +22,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 WITH_OBS=0
+WITH_FE=0
 for arg in "$@"; do
   case "$arg" in
     --with-observability) WITH_OBS=1 ;;
+    --with-frontend) WITH_FE=1 ;;
     -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
     *) echo "未知参数: $arg"; exit 2 ;;
   esac
@@ -113,6 +117,9 @@ fi
 layer "L4 业务链路层"
 ADMIN_USER="$(grep -E '^JWT_ADMIN_USERNAME=' .env 2>/dev/null | tail -1 | cut -d= -f2 || true)"
 ADMIN_PASS="$(grep -E '^JWT_ADMIN_PASSWORD=' .env 2>/dev/null | tail -1 | cut -d= -f2 || true)"
+# .env 未显式配置时回退到应用默认（app/config/security.py），与启动时的管理员 seed 一致
+ADMIN_USER="${ADMIN_USER:-admin}"
+ADMIN_PASS="${ADMIN_PASS:-admin123456}"
 if [ -z "${ADMIN_USER:-}" ] || [ -z "${ADMIN_PASS:-}" ]; then
   fail "未取到 JWT_ADMIN_USERNAME/PASSWORD，跳过业务链路验证"
 else
@@ -146,6 +153,19 @@ if [ -n "$metrics" ]; then
   pass "/metrics 可访问（stage_duration_seconds 系列=${stagelines}，llm_* 系列=${llmlines}）"
 else
   fail "/metrics 无响应"
+fi
+
+# ── 前端层（可选，独立部署）─────────────────────────────────────────────────
+if [ "$WITH_FE" = 1 ]; then
+  layer "前端层"
+  FE_PORT="$(grep -E '^FRONTEND_PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2 || true)"
+  FE_PORT="${FE_PORT:-80}"
+  fe_code="$(curl -s -o /dev/null -w '%{http_code}' -m 10 "http://localhost:${FE_PORT}/" 2>/dev/null)"
+  if [ "$fe_code" = "200" ]; then
+    pass "前端首页 200（http://localhost:${FE_PORT}/）"
+  else
+    fail "前端首页返回 ${fe_code:-无响应}"
+  fi
 fi
 
 # ── 可观测性栈（可选）──────────────────────────────────────────────────────

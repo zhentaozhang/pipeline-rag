@@ -498,6 +498,9 @@ uv sync --extra full-parsing
 
 # 数据库迁移
 alembic upgrade head
+# 说明：迁移链已 squash 为单一 baseline（revision=0001_baseline），可从空库直接重建完整 schema。
+#   若旧库仍记为历史版本号（如 e2f3a4b5c6d7），其 schema 与 baseline 等价，执行一次：
+#   alembic stamp 0001_baseline
 
 # 启动 API 服务
 # ⚠️ 必须单 worker 运行：SSE 会话状态为进程内实现（ChatRuntimeRegistry），
@@ -579,6 +582,26 @@ cp .env.example .env    # 首次：填写密钥（外部 LLM key、JWT、Langfus
 ./bin/deploy.sh --with-observability
 ```
 
+### 常用命令（Makefile）
+
+```bash
+make help         # 查看全部命令
+make init         # 首次：cp .env.example .env
+make up           # 启动后端栈（= ./bin/deploy.sh）
+make up-obs       # 后端 + Langfuse 可观测性
+make ps / logs / shell
+make migrate      # 手动补跑数据库迁移（alembic upgrade head）
+make verify       # 后端分层验证（L1-L5）
+make down / down-all / clean / reset
+
+make fe-up        # 启动前端（独立部署）
+make fe-logs / fe-down
+make up-all       # 后端 + 前端
+```
+
+数据库表结构由 compose 的一次性 `migrate` 服务在 app 启动前自动执行
+（`alembic upgrade head`），无需手工建表。
+
 ### 分层验证（不要只看 `docker ps`）
 
 ```bash
@@ -586,6 +609,20 @@ cp .env.example .env    # 首次：填写密钥（外部 LLM key、JWT、Langfus
                                            # → L4 业务链路 → L5 监控
 ./bin/verify-deploy.sh --with-observability # 额外验证 Langfuse 与 OTLP 端点
 ```
+
+### 前端（独立部署）
+
+前后端完全解耦，各用一套 compose：
+
+```bash
+make up                    # 后端（含基础设施）
+make fe-up                 # 前端（nginx 托管静态产物 + 反代后端），默认 http://localhost:80
+BACKEND_URL=http://10.0.0.12:8080 make fe-up   # 前后端不在同一宿主机时
+```
+
+前端容器按 `BACKEND_URL` 反代 `/api` `/admin` `/manage` `/health`；默认指向宿主机
+（`host.docker.internal`）上发布的后端端口。构建期可用 `VITE_API_BASE_URL` 注入 API
+绝对地址（留空则走同源相对路径，由 nginx 反代）。
 
 ### 服务与端口
 
@@ -596,12 +633,19 @@ cp .env.example .env    # 首次：填写密钥（外部 LLM key、JWT、Langfus
 | 业务 | celery-worker / celery-beat | —（无对外端口） |
 | 可观测性（profile） | langfuse-web | `LANGFUSE_WEB_PORT`（默认 3000） |
 | 可观测性（profile） | langfuse-worker / clickhouse / postgres / redis / minio | —（仅容器内可达） |
+| 前端（独立 compose） | frontend（nginx 静态托管 + 反代） | `FRONTEND_PORT`（默认 80） |
+
+> 基础设施端口（mysql/postgres/es/neo4j/redis/minio）**仅在开发模式发布**：裸
+> `docker compose up` 会自动加载 `docker-compose.override.yml`；`bin/deploy.sh` /
+> `make up` 显式指定 `-f docker-compose.yml`，不发布基础设施端口，降低暴露面。
 
 ### 设计要点
 
 - **配置外部化**：所有基础设施地址经环境变量注入；容器内用服务名（`mysql`/`redis`/…），`docker-compose.yml` 覆盖 `.env` 的 `localhost` 值（含 `CELERY_BROKER_URL`、`NEO4J_URI`）。
-- **启动依赖**：`depends_on: service_healthy` + 健康检查，等基础设施真正就绪再起业务（非 `sleep`）。
-- **持久化**：所有有状态服务挂载 Volume；MySQL 首次启动执行 `./sql` 初始化。
+- **启动依赖**：`depends_on: service_healthy` + 健康检查，等基础设施真正就绪再起业务（非 `sleep`）；`migrate` 一次性成功后才启动 app/worker。
+- **持久化**：所有有状态服务挂载 Volume；数据库表结构由一次性 `migrate` 服务（`alembic upgrade head`）在 app 启动前自动迁移。
+- **非 root 运行**：后端镜像以 uid 10001 运行；日志统一 json-file 轮转（10m×3）。
+- **ES 中文分词（IK 插件）**：ES 容器启动时经 `curl` 按 `ES_IK_PLUGIN_URL`（默认国内 CDN）安装，并持久化到 `es_plugins` 卷；下载需经代理时设置 `ES_HTTP_PROXY`（如 `http://host.docker.internal:7897`）。安装失败不阻断 ES 启动（中文分词降级为默认分析器）。
 - **可观测性默认关**：`LANGFUSE_ENABLED`/`OTEL_ENABLED` 默认 `false`，未启观测 profile 时仅自研 trace + Prometheus，行为与之前一致。
 - **Langfuse 自包含**：观测栈自带 PG/ClickHouse/Redis/MinIO，与被观测应用隔离，可独立升降级。
 - **深链**：容器内 `LANGFUSE_HOST` 是服务名，浏览器深链用 `LANGFUSE_PUBLIC_URL`。
