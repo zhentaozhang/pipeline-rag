@@ -586,7 +586,7 @@ def upgrade() -> None:
         'trace_observability',
         sa.Column('trace_id', sa.String(64), primary_key=True),
         sa.Column('conversation_id', sa.String(64), nullable=False),
-        sa.Column('exchange_id', sa.Integer(), nullable=False),
+        sa.Column('exchange_id', sa.BigInteger(), nullable=False),
         sa.Column('session_id', sa.String(64), nullable=True),
         sa.Column('root_span_id', sa.String(64), nullable=True),
         sa.Column('input', sa.Text(), nullable=True),
