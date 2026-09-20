@@ -63,6 +63,8 @@ class RAGSettings(BaseSettings):
     answer_system_prompt: str = ""
     answer_max_chars: int = 0  # 回答长度上限（0=不限；>0 时 prompt 注入简明约束，D 项 A/B）
     citation_verify_enabled: bool = True  # 017 生成侧：引用验证器（每轮 1 次轻量 LLM 自检引用-证据对应）
+    citation_verify_parallel_enabled: bool = True  # P1-c：引用校验与质量自审并发预跑（False 回退串行）
+    route_candidate_embed_cache_enabled: bool = True  # P2：路由候选 route_text 嵌入内容哈希缓存
     rewrite_enabled: bool = True
     rewrite_history_turns: int = 4
     rewrite_temperature: float = 0.1
@@ -89,6 +91,7 @@ class RAGSettings(BaseSettings):
     quality_max_retries: int = 2
     quality_min_score: float = 7.0
     quality_model: str = ""
+    quality_check_timeout_seconds: float = 5.0
     corrective_retrieval_enabled: bool = True
     corrective_retrieval_max_rounds: int = 1
 

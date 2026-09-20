@@ -5,6 +5,7 @@ RAG 知识问答执行器
 RAG 引擎检索 → 无证据短路 → Prompt 组装（含预算控制）→ LLM 流式生成（per-chunk 安全过滤）→ SSE 推送
 """
 
+import asyncio
 import json
 import random
 import time
@@ -14,6 +15,12 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.chat.citation_verifier import (
+    citation_verify_enabled,
+    dedupe_references,
+    extract_citations,
+    verify_citations,
+)
 from app.chat.schema import ExecutionPlan
 from app.chat.task_info import ChatTaskInfo
 from app.common.enums import ExecutionMode
@@ -73,7 +80,17 @@ class AnswerQualityChecker:
 
         prompt = self._build_prompt(question, answer)
         try:
-            result_dict = await self._call_llm(prompt)
+            if self._tracer is not None:
+                async with self._tracer.span("quality_check", kind=SpanKind.LLM):
+                    result_dict = await asyncio.wait_for(
+                        self._call_llm(prompt),
+                        timeout=settings.rag.quality_check_timeout_seconds,
+                    )
+            else:
+                result_dict = await asyncio.wait_for(
+                    self._call_llm(prompt),
+                    timeout=settings.rag.quality_check_timeout_seconds,
+                )
         except Exception as e:
             logger.warning("quality_check_failed", error=str(e))
             return QualityResult(passed=True, score=10.0, issues=[])
@@ -116,8 +133,8 @@ class AnswerQualityChecker:
                 {"role": "user", "content": prompt},
             ],
             temperature=0.1,
-            max_tokens=500,
-            timeout=15,
+            max_tokens=256,
+            timeout=settings.rag.quality_check_timeout_seconds,
         )
         content = response.choices[0].message.content or "{}"
 
@@ -155,6 +172,50 @@ class RagChatExecutor(ConversationExecutor):
     def __init__(self, db: AsyncSession, task: ChatTaskInfo) -> None:
         self.db = db
         self.task = task
+
+    def _start_citation_task(self, answer: str, question: str) -> None:
+        """P1-c：与质量自审并发预跑引用校验。
+
+        结果存于 ``task._citation_task``；service_executor 若可复用则直接 await，
+        否则回退到原有串行调用。仅在存在引用、且开关开启时启动。
+        """
+        self.task._citation_task = None
+        if self._worker_execution:
+            # 并行 Worker 内部执行：其答案并非最终输出，预跑无意义且会互相覆盖
+            return
+        if not (
+            settings.rag.citation_verify_parallel_enabled
+            and citation_verify_enabled()
+            and self.task.references
+            and extract_citations(answer)
+        ):
+            return
+        from app.common.llm_client import get_chat_client
+        from app.infra.model_fallback import ModelFallbackManager
+
+        fallback = ModelFallbackManager(client=get_chat_client())
+        refs = list(self.task.references)
+        tracer = self.task.tracer
+
+        async def _run() -> tuple[str, str, list[int], dict[str, Any]]:
+            if tracer is not None:
+                async with tracer.span("citation_verify", kind=SpanKind.PIPELINE):
+                    verified, bad_refs, meta = await verify_citations(
+                        fallback=fallback,
+                        answer=answer,
+                        references=refs,
+                        question=question,
+                    )
+            else:
+                verified, bad_refs, meta = await verify_citations(
+                    fallback=fallback,
+                    answer=answer,
+                    references=refs,
+                    question=question,
+                )
+            return answer, verified, bad_refs, meta
+
+        self.task._citation_task = asyncio.create_task(_run())
 
     async def execute(self, plan: ExecutionPlan) -> AsyncIterator[str]:
         tracer = self.task.tracer
@@ -206,6 +267,8 @@ class RagChatExecutor(ConversationExecutor):
                     }
                 )
 
+        self.task.references = dedupe_references(self.task.references)
+
         self.task.thinking_steps.append("证据整理完成，正在基于证据生成回答。")
         yield self._emit(SSEEventType.THINKING, "证据整理完成，正在基于证据生成回答。")
 
@@ -248,6 +311,9 @@ class RagChatExecutor(ConversationExecutor):
                     exchange_id=self.task.exchange_id,
                 )
 
+        # P1-c：引用校验与质量自审并发预跑（结果由 service_executor 复用）
+        self._start_citation_task("".join(self.task.answer_buffer), plan.original_question)
+
         # ── 回答质量审核（自审 + 可选重生成）─────────────────────────
         # P0-1d: 简短回答（<30 字）跳过评审——自审对短答复区分度低，省一次 LLM 调用
         _reviewable_answer = "".join(self.task.answer_buffer)
@@ -263,6 +329,10 @@ class RagChatExecutor(ConversationExecutor):
                 not quality_result.passed and plan.review_round < settings.rag.quality_max_retries
             ):
                 plan.review_round += 1
+                # 重生成会改变答案，预跑的校验结果作废：取消并回退串行校验
+                if self.task._citation_task is not None:
+                    self.task._citation_task.cancel()
+                    self.task._citation_task = None
                 self.task.thinking_steps.append(
                     f"回答质量审核未通过（得分 {quality_result.score}），"
                     f"正在进行第 {plan.review_round} 轮优化。"

@@ -133,3 +133,15 @@ def _parse_json(raw: str) -> dict[str, Any]:
 
 def citation_verify_enabled() -> bool:
     return bool(getattr(get_settings().rag, "citation_verify_enabled", True))
+
+
+def dedupe_references(refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """引用条目去重（按 id/title/url 首个非空键保序）。"""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for ref in refs or []:
+        key = str(ref.get("id", "")) or str(ref.get("title", "")) or str(ref.get("url", ""))
+        if key and key not in seen:
+            seen.add(key)
+            out.append(ref)
+    return out

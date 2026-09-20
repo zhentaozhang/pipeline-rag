@@ -275,19 +275,18 @@ async def execute_stream(
                 )
 
     if state.turn_stopped:
+        _ct = getattr(task, "_citation_task", None)
+        if _ct is not None:
+            _ct.cancel()
         task.finalize()
         return
 
     state.collected_references.clear()
     state.collected_references.extend(task.references or [])
     if state.collected_references:
-        seen_keys: set[str] = set()
-        unique_refs: list[dict] = []
-        for ref in state.collected_references:
-            key = str(ref.get("id", "")) or str(ref.get("title", "")) or str(ref.get("url", ""))
-            if key and key not in seen_keys:
-                seen_keys.add(key)
-                unique_refs.append(ref)
+        from app.chat.citation_verifier import dedupe_references
+
+        unique_refs = dedupe_references(state.collected_references)
         if unique_refs:
             yield sse_event(
                 SSEEventType.REFERENCE,
@@ -361,46 +360,58 @@ async def execute_stream(
 
                 _fallback = ModelFallbackManager(client=get_chat_client())
                 _ref_input = list(state.collected_references or []) or list(task.references or [])
-                async with tracer.span(
-                    "citation_verify",
-                    kind=SpanKind.PIPELINE,
-                    input={
-                        "refs": _refs,
-                        "ref_count": len(_ref_input),
-                        "ref_preview": [
-                            str(r.get("content") or r.get("title") or r)[:50]
-                            for r in _ref_input[:3]
-                        ],
-                        "has_content": any(r.get("content") for r in _ref_input[:3]),
-                    },
-                ):
-                    _verified, _bad_refs, _vmeta = await verify_citations(
-                        fallback=_fallback,
-                        answer=_answer_full,
-                        references=_ref_input,
-                        question=question,
-                    )
-                    tracer.attach_score(
-                        "citation_accuracy",
-                        1.0 - (len(_bad_refs) / max(1, len(_refs))),
-                        reason=f"verify {_vmeta.get('status')}",
-                    )
-                    if _bad_refs and _verified != _answer_full:
-                        state.full_answer.append(_verified[len(_answer_full):])
-                        # 回答正文已流式发出，追加说明对用户不可见——
-                        # 通过独立 SSE 事件提示（用户可见），并落库修正
-                        yield sse_event(
-                            SSEEventType.STATUS,
-                            "⚠️ 回答中部分引用未能从当前知识库证据中找到支持，"
-                            "相关表述请以官方文件为准。",
-                            conversation_id=conversation_id,
-                            exchange_id=temp_exchange_id,
+                # P1-c：优先复用 RagChatExecutor 与质量自审并发预跑的校验结果
+                _task = getattr(task, "_citation_task", None)
+                _base_answer = _answer_full
+                _parallel = False
+                if _task is not None:
+                    try:
+                        _t_base, _verified, _bad_refs, _vmeta = await _task
+                        if _t_base == _answer_full:
+                            _base_answer, _parallel = _t_base, True
+                    except Exception as _e:
+                        logger.warning("citation verify task failed", error=str(_e)[:120])
+                if not _parallel:
+                    async with tracer.span(
+                        "citation_verify",
+                        kind=SpanKind.PIPELINE,
+                        input={
+                            "refs": _refs,
+                            "ref_count": len(_ref_input),
+                            "ref_preview": [
+                                str(r.get("content") or r.get("title") or r)[:50]
+                                for r in _ref_input[:3]
+                            ],
+                            "has_content": any(r.get("content") for r in _ref_input[:3]),
+                        },
+                    ):
+                        _verified, _bad_refs, _vmeta = await verify_citations(
+                            fallback=_fallback,
+                            answer=_answer_full,
+                            references=_ref_input,
+                            question=question,
                         )
-                        logger.info(
-                            "citation verify flagged",
-                            conversation_id=conversation_id,
-                            bad_refs=_bad_refs,
-                        )
+                tracer.attach_score(
+                    "citation_accuracy",
+                    1.0 - (len(_bad_refs) / max(1, len(_refs))),
+                    reason=f"verify {_vmeta.get('status')}",
+                )
+                if _bad_refs and _verified != _base_answer:
+                    state.full_answer.append(_verified[len(_base_answer):])
+                    # 回答正文已流式发出，追加说明对用户不可见——
+                    # 通过独立 SSE 事件提示（用户可见），并落库修正
+                    yield sse_event(
+                        SSEEventType.STATUS,
+                        "⚠️ 回答中部分引用未能从当前知识库证据中找到支持，"
+                        "相关表述请以官方文件为准。",
+                        conversation_id=conversation_id,
+                        exchange_id=temp_exchange_id,
+                    )
+                    logger.info(
+                        "citation verify flagged",
+                        conversation_id=conversation_id,
+                        bad_refs=_bad_refs,
+                    )
         except Exception as _e:
             logger.warning("citation verify skipped", error=str(_e)[:120])
 

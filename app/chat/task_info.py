@@ -71,6 +71,9 @@ class ChatTaskInfo(BaseModel):
     # ── 性能指标 ────────────────────────────────────────────────────────
     _first_response_time_ms: int = 0
 
+    # ── P1-c：与质量自审并发预跑的引用校验任务 ───────────────────────────
+    _citation_task: Any | None = None
+
     # ── 终态保护 ────────────────────────────────────────────────────────
     finalized: bool = False
 

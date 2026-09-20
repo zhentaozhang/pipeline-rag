@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import decimal
 import json
 from collections.abc import Callable
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.enums import BusinessStatus, DocumentIndexStatusEnum
 from app.common.text_utils import first_non_blank
+from app.config import get_settings
 from app.db.models.document import Document, DocumentProfile
 from app.db.models.knowledge import KnowledgeScope, KnowledgeTopic, TopicDocumentRelation
 from app.infra.embedding import get_embedding_provider
@@ -32,6 +34,15 @@ from app.orchestrator.route_scorer import (
 
 logger = structlog.get_logger(__name__)
 ROUTE_EMBEDDING_BATCH_SIZE = 10
+_ROUTE_EMBED_KEY_PREFIX = "pipeline_rag:route_embed:"
+_ROUTE_EMBED_CACHE_TTL_SECONDS = 86400
+
+
+def _route_embed_key(text: str) -> str:
+    """路由文本的内容哈希缓存键（query 与候选共用，内容变即换键）。"""
+    import hashlib
+
+    return _ROUTE_EMBED_KEY_PREFIX + hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
 class RouteRepository:
@@ -60,11 +71,9 @@ class RouteRepository:
 
     async def _embed_with_cache(self, routing_text: str) -> list[float] | None:
         """路由 query 向量化（019 延迟优化 #1：Redis 哈希缓存，省 ~300-800ms/轮）"""
-        import hashlib
-
         from app.infra.redis_lease import get_redis
 
-        key = "pipeline_rag:route_embed:" + hashlib.sha1(routing_text.encode("utf-8")).hexdigest()
+        key = _route_embed_key(routing_text)
         try:
             redis = get_redis()
             cached = await redis.get(key)
@@ -90,6 +99,50 @@ class RouteRepository:
         except Exception:
             logger.warning("Route embedding failed for text", exc_info=True)
             return None
+
+    async def _embed_many_with_cache(self, texts: list[str]) -> list[list[float] | None]:
+        """候选 route_text 批量向量化（P2：内容哈希 cache-aside，稳态免重复嵌入）。
+
+        与 query 侧共用键空间；route_text 是文档/画像的纯函数，内容变化即换键，
+        无需显式失效。Redis 不可用时整体回退为直接 ``embed_batch``（与旧行为一致）。
+        """
+        from app.infra.redis_lease import get_redis
+
+        if not texts:
+            return []
+        enabled = bool(getattr(get_settings().rag, "route_candidate_embed_cache_enabled", True))
+        keys = [_route_embed_key(t) for t in texts]
+        results: list[list[float] | None] = [None] * len(texts)
+        redis = None
+        if enabled:
+            try:
+                redis = get_redis()
+                for i, key in enumerate(keys):
+                    cached = await redis.get(key)
+                    if cached:
+                        if isinstance(cached, bytes):
+                            cached = cached.decode("utf-8")
+                        results[i] = [float(x) for x in cached.split(",")]
+            except Exception:
+                logger.warning("Route candidate embedding cache read failed", exc_info=True)
+                redis = None
+                results = [None] * len(texts)
+
+        missing = [i for i, emb in enumerate(results) if emb is None]
+        for start in range(0, len(missing), ROUTE_EMBEDDING_BATCH_SIZE):
+            chunk = missing[start : start + ROUTE_EMBEDDING_BATCH_SIZE]
+            embeddings = await self.embedding_provider.embed_batch([texts[i] for i in chunk])
+            for offset, emb in enumerate(embeddings):
+                idx = chunk[offset]
+                results[idx] = emb
+                if redis is not None and emb:
+                    with contextlib.suppress(Exception):
+                        await redis.set(
+                            keys[idx],
+                            ",".join(str(f) for f in emb),
+                            ex=_ROUTE_EMBED_CACHE_TTL_SECONDS,
+                        )
+        return results
 
     def _build_routing_text(self, question: str, rewrite_question: str) -> str:
         orig = (question or "").strip()
@@ -144,13 +197,11 @@ class RouteRepository:
         if not ctx.query_embedding or not route_texts:
             return [0.0] * len(route_texts)
         try:
-            scores: list[float] = [0.0] * len(route_texts)
-            for i in range(0, len(route_texts), ROUTE_EMBEDDING_BATCH_SIZE):
-                batch = route_texts[i : i + ROUTE_EMBEDDING_BATCH_SIZE]
-                embeddings = await self.embedding_provider.embed_batch(batch)
-                for j, emb in enumerate(embeddings):
-                    scores[i + j] = scorer.cosine_similarity(ctx.query_embedding, emb)
-            return scores
+            embeddings = await self._embed_many_with_cache(route_texts)
+            return [
+                scorer.cosine_similarity(ctx.query_embedding, emb) if emb else 0.0
+                for emb in embeddings
+            ]
         except Exception:
             logger.warning(
                 "Batch embedding computation failed",

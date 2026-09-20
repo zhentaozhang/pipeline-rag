@@ -72,6 +72,20 @@ class FakeES:
         return self.fallback
 
 
+class FakeRedis:
+    """内存 Redis：让路由嵌入缓存测试保持 hermetic。"""
+
+    def __init__(self):
+        self.store: dict[str, str] = {}
+
+    async def get(self, key):
+        return self.store.get(key)
+
+    async def set(self, key, value, ex=None):
+        self.store[key] = value
+        return True
+
+
 def make_doc(doc_id, name, scope_code="ops", tags="安装,部署", index_status=3, task_id="t1"):
     return Document(
         id=doc_id,
@@ -116,6 +130,10 @@ def repo(monkeypatch):
         return FakeProvider([])
 
     monkeypatch.setattr("app.orchestrator.route_repository.get_embedding_provider", fake_get_provider)
+    import app.infra.redis_lease as redis_lease
+
+    fake_redis = FakeRedis()
+    monkeypatch.setattr(redis_lease, "get_redis", lambda: fake_redis)
     return RouteRepository()
 
 
@@ -198,6 +216,46 @@ class TestComputeSemanticScores:
         repo.embedding_provider = FakeProvider([])
         scores = await repo._compute_semantic_scores(make_ctx(None), ["a"], RouteScorer())
         assert scores == [0.0]
+
+    @pytest.mark.asyncio
+    async def test_candidate_cache_avoids_reembed(self, repo):
+        provider = FakeProvider([[1.0, 0.0], [0.0, 1.0]])
+        repo.embedding_provider = provider
+        ctx = make_ctx([1.0, 0.0])
+
+        first = await repo._compute_semantic_scores(ctx, ["a", "b"], RouteScorer())
+        second = await repo._compute_semantic_scores(ctx, ["a", "b"], RouteScorer())
+
+        assert first == second
+        assert len(provider.batches) == 1
+
+    @pytest.mark.asyncio
+    async def test_candidate_cache_disabled_reembeds(self, repo, monkeypatch):
+        from app.config import get_settings
+
+        monkeypatch.setattr(get_settings().rag, "route_candidate_embed_cache_enabled", False)
+        provider = FakeProvider([[1.0, 0.0]])
+        repo.embedding_provider = provider
+        ctx = make_ctx([1.0, 0.0])
+
+        await repo._compute_semantic_scores(ctx, ["a"], RouteScorer())
+        await repo._compute_semantic_scores(ctx, ["a"], RouteScorer())
+
+        assert len(provider.batches) == 2
+
+    @pytest.mark.asyncio
+    async def test_candidate_cache_unavailable_falls_back(self, repo, monkeypatch):
+        import app.infra.redis_lease as redis_lease
+
+        def _boom():
+            raise RuntimeError("redis down")
+
+        monkeypatch.setattr(redis_lease, "get_redis", _boom)
+        repo.embedding_provider = FakeProvider([[1.0, 0.0]])
+
+        scores = await repo._compute_semantic_scores(make_ctx([1.0, 0.0]), ["a"], RouteScorer())
+
+        assert scores[0] == pytest.approx(1.0)
 
 
 class TestBuildQueryContext:
