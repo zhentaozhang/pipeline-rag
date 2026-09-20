@@ -29,9 +29,12 @@ _EXTERNAL_TABLES = {
 def _include_object(obj, name, type_, reflected, compare_to):
     if type_ == "table" and name in _EXTERNAL_TABLES:
         return False
-    if type_ == "index" and getattr(obj, "table", None) is not None:
-        if obj.table.name in _EXTERNAL_TABLES:
-            return False
+    if (
+        type_ == "index"
+        and getattr(obj, "table", None) is not None
+        and obj.table.name in _EXTERNAL_TABLES
+    ):
+        return False
     return True
 
 
