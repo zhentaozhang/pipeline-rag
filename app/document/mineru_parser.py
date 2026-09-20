@@ -65,7 +65,9 @@ class MineruParser:
                 )
             resp.raise_for_status()
             data = resp.json()
-        task_id = (data.get("data") or {}).get("taskId") if isinstance(data.get("data"), dict) else None
+        task_id = (
+            (data.get("data") or {}).get("taskId") if isinstance(data.get("data"), dict) else None
+        )
         if not task_id:
             raise RuntimeError(f"MinerU agent parse failed: {data}")
         markdown, meta = await self._poll_result(task_id, result_endpoint="agent")
@@ -85,7 +87,9 @@ class MineruParser:
                 )
             resp.raise_for_status()
             data = resp.json()
-        task_id = (data.get("data") or {}).get("taskId") if isinstance(data.get("data"), dict) else None
+        task_id = (
+            (data.get("data") or {}).get("taskId") if isinstance(data.get("data"), dict) else None
+        )
         if not task_id:
             raise RuntimeError(f"MinerU extract parse failed: {data}")
         markdown, meta = await self._poll_result(task_id, result_endpoint="extract")

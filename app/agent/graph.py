@@ -64,7 +64,12 @@ async def _call_with_retry(tool_fn: Any, args: dict, max_retries: int = 2) -> st
             return str(result)
         except Exception as e:
             last_error = str(e)
-            logger.debug("tool call attempt failed: attempt=%s max_retries=%s error=%s", attempt + 1, max_retries, str(e))
+            logger.debug(
+                "tool call attempt failed: attempt=%s max_retries=%s error=%s",
+                attempt + 1,
+                max_retries,
+                str(e),
+            )
             if attempt < max_retries:
                 delay_ms = min(200 * (2**attempt), 1200)
                 delay_ms += _random.randint(0, 100)
