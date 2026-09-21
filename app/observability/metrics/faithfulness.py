@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 from app.observability.metrics.base import Metric, MetricResult, parse_json_safe
@@ -54,6 +56,7 @@ class FaithfulnessMetric(Metric):
         answer: str,
         contexts: list[str],
         ground_truth: str | None = None,
+        tracer: Any = None,
     ) -> MetricResult:
         if not answer or not contexts:
             return MetricResult(
@@ -62,15 +65,18 @@ class FaithfulnessMetric(Metric):
                 reason="empty answer or context",
                 metadata={},
             )
-        resp = await self.eval_llm.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": _EXTRACT_PROMPT},
-                {"role": "user", "content": f"Question: {question}\n\nAnswer: {answer}"},
-            ],
-            temperature=0.0,
+        raw = (
+            await self._call_llm(
+                tracer=tracer,
+                name="faithfulness_extract",
+                messages=[
+                    {"role": "system", "content": _EXTRACT_PROMPT},
+                    {"role": "user", "content": f"Question: {question}\n\nAnswer: {answer}"},
+                ],
+                temperature=0.0,
+            )
+            or "{}"
         )
-        raw = resp.choices[0].message.content or "{}"
         data = parse_json_safe(raw, default={"statements": []})
         try:
             extracted = StatementExtraction(**data)  # type: ignore[arg-type]
@@ -87,21 +93,24 @@ class FaithfulnessMetric(Metric):
         context_str = "\n\n".join(contexts)
         if len(context_str) > _MAX_CONTEXT_CHARS:
             context_str = context_str[:_MAX_CONTEXT_CHARS] + "\n\n[...truncated]"
-        resp2 = await self.eval_llm.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": _NLI_PROMPT},
-                {
-                    "role": "user",
-                    "content": (
-                        f"Context:\n{context_str}\n\n"
-                        f"Statements:\n" + "\n".join(f"- {s}" for s in extracted.statements)
-                    ),
-                },
-            ],
-            temperature=0.0,
+        raw2 = (
+            await self._call_llm(
+                tracer=tracer,
+                name="faithfulness_nli",
+                messages=[
+                    {"role": "system", "content": _NLI_PROMPT},
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Context:\n{context_str}\n\n"
+                            f"Statements:\n" + "\n".join(f"- {s}" for s in extracted.statements)
+                        ),
+                    },
+                ],
+                temperature=0.0,
+            )
+            or "{}"
         )
-        raw2 = resp2.choices[0].message.content or "{}"
         nli_data = parse_json_safe(raw2, default={"verdicts": [], "reasons": []})
         try:
             nli = NLIResult(**nli_data)  # type: ignore[arg-type]

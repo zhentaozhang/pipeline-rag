@@ -1,0 +1,39 @@
+# ── 前端（独立部署）─────────────────────────────────────────────────────────
+# 与后端完全解耦：只通过 BACKEND_URL 访问后端，不共享 compose 网络。
+# 独立 project 名，避免与后端 `docker compose down --remove-orphans` 相互影响。
+# 用法：
+#   docker compose -f docker-compose.frontend.yml up -d --build
+#   BACKEND_URL=http://10.0.0.12:8080 docker compose -f docker-compose.frontend.yml up -d
+#
+# 说明：默认 host.docker.internal 指向宿主机（Linux 下由 extra_hosts 注入），
+#       因此前端可直接访问宿主机上发布的后端端口（默认 8080）。
+
+name: pipeline-rag-frontend
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # 构建期可注入 API 绝对地址；留空则走同源相对路径 + nginx 反代
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    image: pipeline-rag-frontend:latest
+    container_name: pipeline-rag-frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: ${BACKEND_URL:-http://host.docker.internal:8080}
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

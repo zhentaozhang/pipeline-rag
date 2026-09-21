@@ -4,6 +4,7 @@ from typing import Any
 import structlog
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_process_init, worker_process_shutdown
 
 from app.config import get_settings
 
@@ -83,3 +84,30 @@ def run_async(coro: Any) -> Any:
     global _worker_loop
     loop = _ensure_worker_loop()
     return loop.run_until_complete(coro)
+
+
+# ── Worker 进程可观测性初始化 ────────────────────────────────────────
+# Celery worker 是独立进程，不经过 FastAPI lifespan，需自行初始化 OTel/Langfuse
+# （默认关：未启用时 init_otel/get_langfuse 均为 no-op）。
+
+
+@worker_process_init.connect
+def _init_worker_observability(**kwargs: Any) -> None:
+    try:
+        from app.observability.otel_setup import init_otel
+
+        init_otel()  # worker 无 FastAPI app，只启用 DB/Redis/HTTPX instrumentation
+    except Exception:
+        logger.warning("worker otel init failed", exc_info=True)
+
+
+@worker_process_shutdown.connect
+def _shutdown_worker_observability(**kwargs: Any) -> None:
+    try:
+        from app.observability.langfuse_client import shutdown_langfuse
+        from app.observability.otel_setup import shutdown_otel
+
+        shutdown_otel()
+        shutdown_langfuse()
+    except Exception:
+        logger.warning("worker observability shutdown failed", exc_info=True)

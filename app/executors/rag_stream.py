@@ -33,6 +33,28 @@ async def run_output_filter(text: str):
     return await OutputFilter().filter(text)
 
 
+def _record_generation(
+    task,
+    name: str,
+    input_text: str,
+    output_text: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+) -> None:
+    """把一次 LLM 调用作为 Langfuse generation 记录（委托共享入口）。"""
+    from app.observability.llm_observe import record_generation
+
+    record_generation(
+        getattr(task, "tracer", None),
+        name,
+        model=settings.llm.model,
+        input=input_text,
+        output=output_text,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )
+
+
 async def stream_llm_with_tools(
     task, system_prompt: str, user_prompt: str, emit_fn
 ) -> AsyncIterator[str]:
@@ -87,9 +109,13 @@ async def stream_llm_with_tools(
     tool_calls: dict[int, dict] = {}
 
     last_finish_reason: str = ""
+    prompt_tokens = 0
+    completion_tokens = 0
     async for event in stream:
         if not event.choices:
             if hasattr(event, "usage") and event.usage:
+                prompt_tokens += event.usage.prompt_tokens or 0
+                completion_tokens += event.usage.completion_tokens or 0
                 task.add_token_usage(
                     event.usage.prompt_tokens or 0,
                     event.usage.completion_tokens or 0,
@@ -121,6 +147,8 @@ async def stream_llm_with_tools(
                         tool_calls[idx]["function"]["arguments"] += tc_delta.function.arguments
 
         if hasattr(event, "usage") and event.usage:
+            prompt_tokens += event.usage.prompt_tokens or 0
+            completion_tokens += event.usage.completion_tokens or 0
             task.add_token_usage(
                 event.usage.prompt_tokens or 0,
                 event.usage.completion_tokens or 0,
@@ -128,6 +156,15 @@ async def stream_llm_with_tools(
 
     if last_finish_reason:
         LLM_FINISH_REASON_TOTAL.labels(model=settings.llm.model, reason=last_finish_reason).inc()
+
+    _record_generation(
+        task,
+        "rag_answer",
+        input_text=user_prompt,
+        output_text="".join(text_buffer),
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )
 
     if not tool_calls:
         return
@@ -193,9 +230,14 @@ async def stream_llm_with_tools(
         messages=messages,
     )
     task.model_call_count += 1
+    prompt_tokens = 0
+    completion_tokens = 0
+    text_buffer2: list[str] = []
     async for event in stream2:
         if not event.choices:
             if hasattr(event, "usage") and event.usage:
+                prompt_tokens += event.usage.prompt_tokens or 0
+                completion_tokens += event.usage.completion_tokens or 0
                 task.add_token_usage(
                     event.usage.prompt_tokens or 0,
                     event.usage.completion_tokens or 0,
@@ -205,9 +247,21 @@ async def stream_llm_with_tools(
         if delta.content:
             block_reason = check_chunk_safety(delta.content)
             safe = _SAFETY_PLACEHOLDER if block_reason else delta.content
+            text_buffer2.append(safe)
             yield emit_fn(SSEEventType.TEXT, safe)
         if hasattr(event, "usage") and event.usage:
+            prompt_tokens += event.usage.prompt_tokens or 0
+            completion_tokens += event.usage.completion_tokens or 0
             task.add_token_usage(
                 event.usage.prompt_tokens or 0,
                 event.usage.completion_tokens or 0,
             )
+
+    _record_generation(
+        task,
+        "rag_answer",
+        input_text=user_prompt,
+        output_text="".join(text_buffer2),
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )

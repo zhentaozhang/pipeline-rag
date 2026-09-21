@@ -1,0 +1,32 @@
+# 开发用叠加（自动被裸 `docker compose up` 加载；显式 `-f docker-compose.yml` 时忽略）。
+#
+# 仅做一件事：把基础设施端口发布到宿主机，方便本地直连调试。
+# 生产/一键部署（bin/deploy.sh 显式 -f docker-compose.yml）不加载本文件，
+# 基础设施端口不对外发布，降低暴露面。
+
+services:
+  mysql:
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  elasticsearch:
+    ports:
+      - "${ES_PORT:-9200}:9200"
+
+  neo4j:
+    ports:
+      - "7474:7474"   # Browser UI
+      - "7687:7687"   # Bolt
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  minio:
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console UI

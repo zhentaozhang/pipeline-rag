@@ -83,6 +83,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ── 启动阶段 ──────────────────────────────────────────────────────────
     logger.info("pipeline-rag starting", env=settings.app.env)
 
+    # OpenTelemetry（OTLP HTTP → Langfuse/独立后端），先于业务初始化
+    from app.observability.otel_setup import init_otel
+
+    init_otel(app)
+
     # 事件总线默认监听者（指标 + 结构化日志），先于业务启动注册
     from app.eventbus.listeners.metrics_listener import register_listeners
 
@@ -157,6 +162,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await close_redis()
     await close_pg()
     await close_db()
+
+    # 可观测性退出：flush 待上报的 trace/span，避免丢失
+    from app.observability.langfuse_client import shutdown_langfuse
+    from app.observability.otel_setup import shutdown_otel
+
+    shutdown_otel()
+    shutdown_langfuse()
     logger.info("pipeline-rag stopped")
 
 
@@ -202,6 +214,11 @@ def create_app() -> FastAPI:
         from app.api.admin_auth import chat_auth_middleware
 
         app.middleware("http")(chat_auth_middleware)
+
+    # 读取 OTel server span 的 trace_id 挂到 request.state（业务层复用 → OTel/应用同 trace）
+    from app.observability.otel_setup import otel_trace_context_middleware
+
+    app.middleware("http")(otel_trace_context_middleware)
 
     # ── 路由注册 ──────────────────────────────────────────────────────────
     from app.api.health import router as health_router

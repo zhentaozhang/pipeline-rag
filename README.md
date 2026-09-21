@@ -219,6 +219,19 @@ Skills 可在运行时热插拔，通过 MCP 协议与 Agent 交互，支持外�
 | **工具审批** | 危险操作需显式用户授权 |
 | **沙箱执行** | Code Executor 在隔离沙箱中运行 Python 代码 |
 
+### 可观测性
+
+| 层 | 能力 |
+|----|------|
+| **自研 Trace** | 一次对话 = 一条 trace，阶段/检索通道/LLM 调用以 span 树组织；落 MySQL 三表（`trace_observability*`），管理后台可视化 |
+| **Langfuse** | 应用层 LLM/RAG 可观测 + 评估：trace/generation/score、Prompt、Dataset/Experiment；与自研 trace 并行上报（`LANGFUSE_ENABLED`） |
+| **OpenTelemetry** | 基础设施级分布式追踪（FastAPI/SQLAlchemy/Redis/HTTPX），OTLP HTTP 导出（Langfuse 不支持 gRPC；`OTEL_ENABLED`） |
+| **RAG 评估** | faithfulness / answer_relevancy / context_precision / context_recall / answer_correctness，分数写入 Langfuse Score 与 MySQL；golden dataset 可跑 Langfuse Experiment |
+| **Prometheus** | `/metrics` 端点暴露阶段耗时、token、成本、缓存命中率等聚合指标 |
+| **结构化日志** | structlog JSON 输出，按 trace_id 关联 |
+
+> **默认关闭**：未设置 `LANGFUSE_ENABLED=true` / `OTEL_ENABLED=true` 时，所有 Langfuse/OTel 路径静默短路，仅保留自研 trace + Prometheus。
+
 ---
 
 ## 系统架构
@@ -337,7 +350,8 @@ flowchart TB
 | **Prompt 模板** | Jinja2 | — |
 | **MCP** | FastMCP | — |
 | **PII 检测** | Microsoft Presidio | — |
-| **追踪** | 自研 Trace（span 树 + MySQL 落库） | — |
+| **追踪** | 自研 Trace（span 树 + MySQL 落库） + Langfuse + OpenTelemetry | — |
+| **评估** | 自实现 RAGAS 指标（faithfulness/relevancy/precision/recall/correctness） | — |
 | **指标** | Prometheus | — |
 | **日志** | structlog | — |
 | **文档解析** | Unstructured + MarkItDown + MinerU（可选增强） | — |
@@ -484,6 +498,9 @@ uv sync --extra full-parsing
 
 # 数据库迁移
 alembic upgrade head
+# 说明：迁移链已 squash 为单一 baseline（revision=0001_baseline），可从空库直接重建完整 schema。
+#   若旧库仍记为历史版本号（如 e2f3a4b5c6d7），其 schema 与 baseline 等价，执行一次：
+#   alembic stamp 0001_baseline
 
 # 启动 API 服务
 # ⚠️ 必须单 worker 运行：SSE 会话状态为进程内实现（ChatRuntimeRegistry），
@@ -525,6 +542,8 @@ npm run dev
 | `CONNECTOR_WEB_*` | 网页爬虫连接器（sitemap/种子递归抓取） |
 | `FEISHU_*` | 飞书机器人渠道（长连接事件订阅 + 卡片流式回复） |
 | `MINERU_*` | MinerU 复杂版式解析增强通道（失败自动降级） |
+| `LANGFUSE_*` | Langfuse 可观测平台（`ENABLED`/`PUBLIC_KEY`/`SECRET_KEY`/`HOST`/`PUBLIC_URL`/`SAMPLE_RATE`，默认关） |
+| `OTEL_*` | OpenTelemetry OTLP 导出（`ENABLED`/`EXPORTER_OTLP_ENDPOINT`/`EXPORTER_OTLP_HEADERS`/`SERVICE_NAME`，默认关） |
 
 完整变量清单见 `.env.example`。
 
@@ -545,4 +564,98 @@ pytest --cov=app --cov-report=term-missing
 
 # 集成测试（需先 docker compose up -d 起基础设施，不可达自动 skip）
 pytest tests/integration -v
+```
+
+---
+
+## Docker 部署
+
+### 一键部署（幂等，可重复执行）
+
+```bash
+cp .env.example .env    # 首次：填写密钥（外部 LLM key、JWT、Langfuse 等）
+
+# 基础栈：基础设施（MySQL/PG/ES/Neo4j/Redis/MinIO）+ 业务（app/celery-worker/beat）
+./bin/deploy.sh
+
+# 额外启动可观测性栈（Langfuse 自托管：web/worker/clickhouse + 自带 PG/Redis/MinIO）
+./bin/deploy.sh --with-observability
+```
+
+### 常用命令（Makefile）
+
+```bash
+make help         # 查看全部命令
+make init         # 首次：cp .env.example .env
+make up           # 启动后端栈（= ./bin/deploy.sh）
+make up-obs       # 后端 + Langfuse 可观测性
+make ps / logs / shell
+make migrate      # 手动补跑数据库迁移（alembic upgrade head）
+make verify       # 后端分层验证（L1-L5）
+make down / down-all / clean / reset
+
+make fe-up        # 启动前端（独立部署）
+make fe-logs / fe-down
+make up-all       # 后端 + 前端
+```
+
+数据库表结构由 compose 的一次性 `migrate` 服务在 app 启动前自动执行
+（`alembic upgrade head`），无需手工建表。
+
+### 分层验证（不要只看 `docker ps`）
+
+```bash
+./bin/verify-deploy.sh                     # L1 容器 → L2 应用健康 → L3 基础设施
+                                           # → L4 业务链路 → L5 监控
+./bin/verify-deploy.sh --with-observability # 额外验证 Langfuse 与 OTLP 端点
+```
+
+### 前端（独立部署）
+
+前后端完全解耦，各用一套 compose：
+
+```bash
+make up                    # 后端（含基础设施）
+make fe-up                 # 前端（nginx 托管静态产物 + 反代后端），默认 http://localhost:80
+BACKEND_URL=http://10.0.0.12:8080 make fe-up   # 前后端不在同一宿主机时
+```
+
+前端容器按 `BACKEND_URL` 反代 `/api` `/admin` `/manage` `/health`；默认指向宿主机
+（`host.docker.internal`）上发布的后端端口。构建期可用 `VITE_API_BASE_URL` 注入 API
+绝对地址（留空则走同源相对路径，由 nginx 反代）。
+
+### 服务与端口
+
+| 层 | 服务 | 宿主机端口（默认） |
+|---|---|---|
+| 基础设施 | mysql / postgres / elasticsearch / neo4j / redis / minio | 3306 / 5432 / 9200 / 7474·7687 / 6379 / 9000·9001 |
+| 业务 | app（FastAPI，含 `/metrics` `/health/*`） | `APP_PORT`（默认 8080） |
+| 业务 | celery-worker / celery-beat | —（无对外端口） |
+| 可观测性（profile） | langfuse-web | `LANGFUSE_WEB_PORT`（默认 3000） |
+| 可观测性（profile） | langfuse-worker / clickhouse / postgres / redis / minio | —（仅容器内可达） |
+| 前端（独立 compose） | frontend（nginx 静态托管 + 反代） | `FRONTEND_PORT`（默认 80） |
+
+> 基础设施端口（mysql/postgres/es/neo4j/redis/minio）**仅在开发模式发布**：裸
+> `docker compose up` 会自动加载 `docker-compose.override.yml`；`bin/deploy.sh` /
+> `make up` 显式指定 `-f docker-compose.yml`，不发布基础设施端口，降低暴露面。
+
+### 设计要点
+
+- **配置外部化**：所有基础设施地址经环境变量注入；容器内用服务名（`mysql`/`redis`/…），`docker-compose.yml` 覆盖 `.env` 的 `localhost` 值（含 `CELERY_BROKER_URL`、`NEO4J_URI`）。
+- **启动依赖**：`depends_on: service_healthy` + 健康检查，等基础设施真正就绪再起业务（非 `sleep`）；`migrate` 一次性成功后才启动 app/worker。
+- **持久化**：所有有状态服务挂载 Volume；数据库表结构由一次性 `migrate` 服务（`alembic upgrade head`）在 app 启动前自动迁移。
+- **非 root 运行**：后端镜像以 uid 10001 运行；日志统一 json-file 轮转（10m×3）。
+- **ES 中文分词（IK 插件）**：ES 容器启动时经 `curl` 按 `ES_IK_PLUGIN_URL`（默认国内 CDN）安装，并持久化到 `es_plugins` 卷；下载需经代理时设置 `ES_HTTP_PROXY`（如 `http://host.docker.internal:7897`）。安装失败不阻断 ES 启动（中文分词降级为默认分析器）。
+- **可观测性默认关**：`LANGFUSE_ENABLED`/`OTEL_ENABLED` 默认 `false`，未启观测 profile 时仅自研 trace + Prometheus，行为与之前一致。
+- **Langfuse 自包含**：观测栈自带 PG/ClickHouse/Redis/MinIO，与被观测应用隔离，可独立升降级。
+- **深链**：容器内 `LANGFUSE_HOST` 是服务名，浏览器深链用 `LANGFUSE_PUBLIC_URL`。
+
+### 观测数据流
+
+```text
+app / celery
+  ├── Langfuse SDK ──► langfuse-web:3000（trace/generation/score）
+  └── OTel OTLP HTTP ─► langfuse-web:3000/api/public/otel/v1/traces
+                          （Basic auth 自动派生自 LANGFUSE_PUBLIC_KEY/SECRET_KEY）
+  └── Prometheus /metrics ─► 外部抓取
 ```

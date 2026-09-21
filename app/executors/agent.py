@@ -88,7 +88,17 @@ class ReactAgentExecutor(ConversationExecutor):
             # 改用无 checkpointer 编译，终态从最后一次节点更新累积。
             graph = workflow.compile()
 
-            async for event in graph.astream({"messages": messages}, stream_mode="updates"):
+            agent_config: dict = {}
+            if tracer is not None and getattr(tracer, "langfuse_enabled", False):
+                from app.observability.langchain_callback import TracerCallbackHandler
+
+                agent_config["callbacks"] = [
+                    TracerCallbackHandler(tracer, name_prefix="react_agent")
+                ]
+
+            async for event in graph.astream(
+                {"messages": messages}, stream_mode="updates", config=agent_config or None
+            ):
                 for node_name, state_update in event.items():
                     if node_name == "agent":
                         msgs = state_update.get("messages", [])

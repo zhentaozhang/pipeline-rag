@@ -23,15 +23,26 @@ tmp/
 .coverage
 htmlcov/
 .tox/
-frontend/node_modules/
-frontend/dist/
 .docker/
+
+# ── 前后端分开部署：后端镜像不含前端源码/产物 ───────────────────────────────
+frontend/
+
+# ── 非运行时资产（缩小构建上下文与镜像）──────────────────────────────────────
+tests/
+interview/
+demo_docs/
+scripts/
+bin/
+docs/
+sql/
 docker-compose.yml
+docker-compose.*.yml
 Dockerfile
+Makefile
 README.md
 AGENTS.md
 CLAUDE.md
 REASONIX.md
 ALEMBIC.md
 .gitkeep
-sql/

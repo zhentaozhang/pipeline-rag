@@ -211,6 +211,7 @@ PREVIEW_BLOCKED_PATHS = frozenset(
         "/manage/knowledge/topic/document/save",
         "/manage/knowledge/topic/document/remove",
         "/manage/evaluation/dataset/run",
+        "/manage/evaluation/dataset/experiment",
         "/manage/evaluation/dataset/delete",
     }
 )

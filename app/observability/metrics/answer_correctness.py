@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from app.observability.metrics.base import Metric, MetricResult
 
 _PROMPT = """You are evaluating the correctness of an answer compared to the ground truth.
@@ -26,6 +28,7 @@ class AnswerCorrectnessMetric(Metric):
         answer: str,
         contexts: list[str],
         ground_truth: str | None = None,
+        tracer: Any = None,
     ) -> MetricResult:
         if not ground_truth:
             return MetricResult(
@@ -42,18 +45,21 @@ class AnswerCorrectnessMetric(Metric):
                 metadata={},
             )
 
-        resp = await self.eval_llm.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": _PROMPT},
-                {
-                    "role": "user",
-                    "content": f"Question: {question}\n\nAnswer: {answer}\n\nGround Truth: {ground_truth}",
-                },
-            ],
-            temperature=0.0,
+        content = (
+            await self._call_llm(
+                tracer=tracer,
+                name="answer_correctness",
+                messages=[
+                    {"role": "system", "content": _PROMPT},
+                    {
+                        "role": "user",
+                        "content": f"Question: {question}\n\nAnswer: {answer}\n\nGround Truth: {ground_truth}",
+                    },
+                ],
+                temperature=0.0,
+            )
+            or "0"
         )
-        content = resp.choices[0].message.content or "0"
         import re
 
         match = re.search(r"\d+", content)

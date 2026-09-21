@@ -138,6 +138,13 @@ class _DummyTracer:
     def attach_score(self, **kwargs):
         pass
 
+    def record_generation(self, *args, **kwargs):
+        pass
+
+    @property
+    def langfuse_enabled(self):
+        return False
+
     @property
     def current_span_id(self):
         return None
@@ -204,6 +211,11 @@ def next_id_str() -> str:
     return uuid.uuid4().hex[:16]
 
 
+def new_trace_id() -> str:
+    """32-hex trace id（Langfuse 要求 32 位小写 hex；与 OTel trace_id 同格式）。"""
+    return uuid.uuid4().hex
+
+
 class Tracer:
     def __init__(
         self,
@@ -222,6 +234,21 @@ class Tracer:
         self._completed_spans: list[SpanContext] = []
         self._trace: Trace | None = None
         self._root_span: SpanContext | None = None
+
+        # Langfuse 并行上报（enabled 且采样命中时）
+        self._lf_exporter: Any = None
+        self._lf_obs: dict[str, Any] = {}
+        self._lf_root_obs: Any = None
+        if self._active:
+            from app.observability.langfuse_client import get_langfuse
+
+            _lf_client = get_langfuse()
+            if _lf_client is not None:
+                from app.observability.langfuse_backend import LangfuseTraceExporter
+
+                self._lf_exporter = LangfuseTraceExporter(
+                    _lf_client, trace_id, conversation_id, exchange_id
+                )
 
     async def __aenter__(self) -> Tracer:
         if not self._active:
@@ -271,6 +298,12 @@ class Tracer:
         self._root_span = span
         if self._trace:
             self._trace.root_span_id = span.span_id
+        if self._lf_exporter is not None:
+            if self._trace is not None:
+                self._lf_exporter.session_id = self._trace.session_id
+            self._lf_root_obs = self._lf_exporter.start_root(
+                name, input=input, kind=kind.value
+            )
         return _SpanManager(self, span)
 
     async def flush(self) -> None:
@@ -303,6 +336,8 @@ class Tracer:
                     await store.save_scores(all_scores)
         except Exception:
             logger.exception("trace flush failed", trace_id=self._trace_id)
+
+        self._lf_finish()
 
     def _populate_trace_from_spans(self, spans: list[SpanContext]) -> None:
         if not self._trace:
@@ -356,11 +391,45 @@ class Tracer:
             target_span.scores.append(score)
             EVALUATION_SCORE.labels(metric_name=metric_name).set(value)
             EVALUATION_SCORE_HISTOGRAM.labels(metric_name=metric_name).observe(value)
+            self._lf_score(target_span, metric_name, value, reason)
+
+    def record_generation(
+        self,
+        name: str,
+        *,
+        model: str,
+        input: Any = None,
+        output: Any = None,
+        usage: dict[str, int] | None = None,
+        cost: dict[str, float] | None = None,
+        level: str | None = None,
+    ) -> None:
+        """记录一次 LLM generation（挂在当前活跃 span 或根 span 下）。Langfuse 未启用时短路。"""
+        if self._lf_exporter is None:
+            return
+        parent_obs = None
+        if self._stack:
+            parent_obs = self._lf_obs.get(self._stack[-1].span_id)
+        if parent_obs is None:
+            parent_obs = self._lf_root_obs
+        if parent_obs is None:
+            return
+        self._lf_exporter.record_generation(
+            parent_obs,
+            name,
+            model=model,
+            input=input,
+            output=output,
+            usage_details=usage,
+            cost_details=cost,
+            level=level,
+        )
 
     def append_span(self, span: SpanContext) -> None:
         if self._active:
             self._record_span_prometheus(span)
             self._completed_spans.append(span)
+            self._lf_append(span)
 
     @property
     def current_span_id(self) -> str | None:
@@ -374,14 +443,20 @@ class Tracer:
     def trace_id(self) -> str:
         return self._trace_id
 
+    @property
+    def langfuse_enabled(self) -> bool:
+        return self._lf_exporter is not None
+
     # ── internal ─────────────────────────────────────────────
     def _push(self, span: SpanContext) -> None:
         self._stack.append(span)
+        self._lf_start(span)
 
     def _pop(self) -> SpanContext | None:
         if not self._stack:
             return None
         span = self._stack.pop()
+        self._lf_end(span)
         self._record_span_prometheus(span)
         self._completed_spans.append(span)
         return span
@@ -395,3 +470,63 @@ class Tracer:
             (span.duration_ms or 0) / 1000
         )
         STAGE_CALL_TOTAL.labels(kind=kind, name=name, status=status).inc()
+
+    # ── Langfuse 并行上报（enabled 时；未启用则 _lf_exporter 为 None，全部短路）──
+    def _lf_parent_obs(self, span: SpanContext) -> Any:
+        parent_obs = (
+            self._lf_obs.get(span.parent_span_id or "") if span.parent_span_id else None
+        )
+        if parent_obs is None:
+            parent_obs = self._lf_root_obs
+        return parent_obs
+
+    def _lf_start(self, span: SpanContext) -> None:
+        if self._lf_exporter is None:
+            return
+        parent_obs = self._lf_parent_obs(span)
+        if parent_obs is None:
+            return
+        obs = self._lf_exporter.start_span(
+            parent_obs, span.name, input=span.input, kind=span.kind.value
+        )
+        self._lf_obs[span.span_id] = obs
+
+    def _lf_append(self, span: SpanContext) -> None:
+        """上报已完成的 span（如检索通道 span）：创建 observation 并立即结束。"""
+        if self._lf_exporter is None:
+            return
+        parent_obs = self._lf_parent_obs(span)
+        if parent_obs is None:
+            return
+        obs = self._lf_exporter.start_span(
+            parent_obs, span.name, input=span.input, kind=span.kind.value
+        )
+        level = "ERROR" if span.status == SpanStatus.ERROR else None
+        self._lf_exporter.end_span(obs, output=span.output, level=level)
+
+    def _lf_end(self, span: SpanContext) -> None:
+        if self._lf_exporter is None:
+            return
+        obs = self._lf_obs.pop(span.span_id, None)
+        if obs is None:
+            return
+        level = "ERROR" if span.status == SpanStatus.ERROR else None
+        self._lf_exporter.end_span(obs, output=span.output, level=level)
+
+    def _lf_score(self, span: SpanContext, name: str, value: float, reason: str | None) -> None:
+        if self._lf_exporter is None:
+            return
+        obs = self._lf_obs.get(span.span_id)
+        if obs is None and self._root_span is not None and span.span_id == self._root_span.span_id:
+            obs = self._lf_root_obs
+        if obs is not None:
+            self._lf_exporter.add_score(obs, name, value, reason=reason)
+
+    def _lf_finish(self) -> None:
+        if self._lf_exporter is None:
+            return
+        if self._lf_root_obs is not None:
+            self._lf_exporter.end_span(
+                self._lf_root_obs, output=self._trace.output if self._trace else None
+            )
+        self._lf_exporter.flush()

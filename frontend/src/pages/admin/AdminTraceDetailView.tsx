@@ -107,6 +107,16 @@ export const AdminTraceDetailView: React.FC = () => {
           ← Trace 列表
         </Link>
         <h2 className="text-lg font-semibold text-gray-900">Trace 详情</h2>
+        {detail.langfuseUrl && (
+          <a
+            href={detail.langfuseUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="ml-auto text-sm text-blue-600 hover:underline"
+          >
+            在 Langfuse 打开 ↗
+          </a>
+        )}
       </div>
 
       <Card>

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from app.observability.metrics.base import Metric, MetricResult, parse_json_safe
 
 _PROMPT = """You are evaluating the relevance of retrieved context chunks for a question.
@@ -27,6 +29,7 @@ class ContextPrecisionMetric(Metric):
         answer: str,
         contexts: list[str],
         ground_truth: str | None = None,
+        tracer: Any = None,
     ) -> MetricResult:
         if not contexts:
             return MetricResult(
@@ -37,18 +40,21 @@ class ContextPrecisionMetric(Metric):
             )
 
         chunks_text = "\n\n---\n\n".join(f"Chunk {i + 1}: {c}" for i, c in enumerate(contexts))
-        resp = await self.eval_llm.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": _PROMPT},
-                {
-                    "role": "user",
-                    "content": f"Question: {question}\n\nContext chunks:\n{chunks_text}",
-                },
-            ],
-            temperature=0.0,
+        raw = (
+            await self._call_llm(
+                tracer=tracer,
+                name="context_precision",
+                messages=[
+                    {"role": "system", "content": _PROMPT},
+                    {
+                        "role": "user",
+                        "content": f"Question: {question}\n\nContext chunks:\n{chunks_text}",
+                    },
+                ],
+                temperature=0.0,
+            )
+            or "{}"
         )
-        raw = resp.choices[0].message.content or "{}"
         data = parse_json_safe(raw, default={"relevance": []})
         relevance = data.get("relevance", [])  # type: ignore[union-attr]
 

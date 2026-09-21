@@ -63,12 +63,18 @@ class RAGSettings(BaseSettings):
     answer_system_prompt: str = ""
     answer_max_chars: int = 0  # 回答长度上限（0=不限；>0 时 prompt 注入简明约束，D 项 A/B）
     citation_verify_enabled: bool = True  # 017 生成侧：引用验证器（每轮 1 次轻量 LLM 自检引用-证据对应）
+    citation_verify_parallel_enabled: bool = True  # P1-c：引用校验与质量自审并发预跑（False 回退串行）
+    route_candidate_embed_cache_enabled: bool = True  # P2：路由候选 route_text 嵌入内容哈希缓存
     rewrite_enabled: bool = True
     rewrite_history_turns: int = 4
     rewrite_temperature: float = 0.1
     rewrite_top_p: float = 0.3
     rewrite_thinking: bool = False
-    evaluation_enabled: bool = True
+    # 在线评估：生成后对成功回答做 LLM 打分（Faithfulness/Relevancy/ContextPrecision…）。
+    # 默认关：每轮额外 3~5 次 LLM 调用，成本敏感场景不背锅。
+    # 启用必须同时满足 evaluation_enabled=true 且 evaluation_sample_rate>0；
+    # 离线评估走 Langfuse dataset/experiment，不依赖此开关。
+    evaluation_enabled: bool = False
     evaluation_model: str = ""
     evaluation_base_url: str = ""
     evaluation_api_key: str = ""
@@ -89,6 +95,7 @@ class RAGSettings(BaseSettings):
     quality_max_retries: int = 2
     quality_min_score: float = 7.0
     quality_model: str = ""
+    quality_check_timeout_seconds: float = 5.0
     corrective_retrieval_enabled: bool = True
     corrective_retrieval_max_rounds: int = 1
 

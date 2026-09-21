@@ -17,6 +17,9 @@ class ConversationExecutor(ABC):
     """所有执行器必须实现的标准接口"""
 
     mode: ExecutionMode
+    # execute_structured（Worker 结构化执行）会被置为 True，
+    # 供执行器区分「顶层流式输出」与「并行 Worker 内部执行」。
+    _worker_execution: bool = False
 
     def _emit(self, event_type: str, content: Any = None) -> str:
         task = getattr(self, "task", None)
@@ -34,6 +37,7 @@ class ConversationExecutor(ABC):
 
     async def execute_structured(self, plan: ExecutionPlan) -> WorkerResult:
         """执行任务并以结构化 WorkerResult 返回（默认实现：从 SSE 流提取 text）"""
+        self._worker_execution = True
         text_parts: list[str] = []
 
         async for chunk in self.execute(plan):

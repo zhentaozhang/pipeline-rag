@@ -162,9 +162,9 @@ async def finalize_stream(
     try:
         from app.config import get_settings as _gs
         from app.db.models.rag_observability import ChatModelUsageTrace
-        from app.observability.traced_llm import _estimate_cost
+        from app.observability.cost import estimate_cost
 
-        _cost = _estimate_cost(
+        _cost = estimate_cost(
             task.model_name,
             task.prompt_tokens,
             task.completion_tokens,

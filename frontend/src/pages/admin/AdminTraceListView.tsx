@@ -75,7 +75,7 @@ export const AdminTraceListView: React.FC = () => {
             <option value="error">异常</option>
           </select>
           <Button
-            variant="primary"
+            variant="default"
             onClick={() => {
               setLoading(true);
               void load();

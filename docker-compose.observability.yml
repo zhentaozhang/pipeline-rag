@@ -1,0 +1,217 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# 可观测性 overlay：Langfuse v3 自托管栈（ClickHouse + Web + Worker，自带 PG/Redis/MinIO）
+#
+# 用法（与主 compose 组合）：
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml \
+#     --profile observability up -d
+#
+# 版本：使用 Langfuse v3 稳定线（langfuse/langfuse:3）。v4 自托管在本环境
+#   所有 /api/public/* 返回 500（服务端故障），已弃用。
+# 切换/升级版本后需重建 langfuse 数据卷（schema 不兼容）：
+#   docker volume rm pipeline-rag_langfuse_{pg,ch,ch_logs,redis,minio}_data
+# - profile 门控：不加 --profile observability 时，主栈不含任何可观测性组件，
+#   与 LANGFUSE_ENABLED=false 的默认关一致。
+# - 独立基础设施：不与被观测应用的 PG/Redis/MinIO 混用，避免队列语义
+#   (Redis noeviction)、库/bucket 初始化顺序耦合；升级 Langfuse 互不影响。
+# - 服务名加 langfuse- 前缀：Compose 按服务名合并 overlay，重名会覆盖主栈服务。
+# - 仅 langfuse-web 暴露宿主机端口（浏览器访问 UI）；其余仅容器内可达。
+#   默认 3000；若与宿主机其它服务冲突，改 .env 的 LANGFUSE_WEB_PORT。
+# - Langfuse 镜像用 Docker Hub（langfuse/langfuse:3 / langfuse-worker:3）。
+#
+# 密钥（经 shell/.env 插值；overlay 会把 PUBLIC/SECRET 注入 app/celery，无需写 .env）：
+#   LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY   —— app 上报 + Langfuse 初始开通
+#   LANGFUSE_NEXTAUTH_SECRET / LANGFUSE_SALT / LANGFUSE_ENCRYPTION_KEY
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  # ── Langfuse Web（UI + API + OTLP 端点）──────────────────────────────────
+  langfuse-web:
+    image: docker.io/langfuse/langfuse:3
+    container_name: pipeline-rag-langfuse-web
+    restart: unless-stopped
+    profiles: ["observability"]
+    depends_on: &langfuse-depends-on
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+    ports:
+      - "${LANGFUSE_WEB_PORT:-3000}:3000"
+    environment:
+      <<: &langfuse-env
+        NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3000}
+        DATABASE_URL: postgresql://postgres:${LANGFUSE_PG_PASSWORD:-langfusepg}@langfuse-postgres:5432/postgres
+        SALT: ${LANGFUSE_SALT:-change-me-salt}
+        ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+        TELEMETRY_ENABLED: "false"
+        CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+        CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+        CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
+        CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
+        CLICKHOUSE_CLUSTER_ENABLED: "false"
+        REDIS_HOST: langfuse-redis
+        REDIS_PORT: "6379"
+        REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+        LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+        LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+        LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_USER:-langfuseminio}
+        LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_PASSWORD:-langfuseminio}
+        LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+        LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+        LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+        LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+        LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+        LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_USER:-langfuseminio}
+        LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_PASSWORD:-langfuseminio}
+        LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+        LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+        LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+        # 自动开通组织/项目与确定性 API key，免手动 UI 配置
+        LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-pipeline-rag}
+        LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-pipeline-rag}
+        LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-pipeline-rag}
+        LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-pipeline-rag}
+        LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+        LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+        LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-admin@pipeline-rag.local}
+        LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-admin}
+        LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-changeme123}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me-nextauth}
+      # Next.js 默认会用 Docker 注入的 HOSTNAME（容器 ID）作绑定地址 →
+      # 容器内 localhost 不可达（healthcheck 误报 unhealthy）。固定为 0.0.0.0。
+      HOSTNAME: 0.0.0.0
+    healthcheck:
+      # 用 127.0.0.1 而非 localhost：容器 /etc/hosts 使 localhost 优先解析到 ::1，
+      # 而 next-server 只监 IPv4 → 用 localhost 会误报 unhealthy。
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/public/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ── Langfuse Worker（异步 ingestion：写入 ClickHouse / S3）───────────────
+  langfuse-worker:
+    image: docker.io/langfuse/langfuse-worker:3
+    container_name: pipeline-rag-langfuse-worker
+    restart: unless-stopped
+    profiles: ["observability"]
+    depends_on: *langfuse-depends-on
+    environment: *langfuse-env
+
+  # ── ClickHouse（trace 时序存储）─────────────────────────────────────────
+  langfuse-clickhouse:
+    image: docker.io/clickhouse/clickhouse-server
+    container_name: pipeline-rag-langfuse-clickhouse
+    restart: unless-stopped
+    profiles: ["observability"]
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
+    volumes:
+      - langfuse_ch_data:/var/lib/clickhouse
+      - langfuse_ch_logs:/var/log/clickhouse-server
+    healthcheck:
+      # 同上：127.0.0.1 避免 localhost→::1 的 IPv6 解析（ClickHouse 只监 IPv4）
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ── Langfuse Postgres（元数据）──────────────────────────────────────────
+  langfuse-postgres:
+    image: postgres:17
+    container_name: pipeline-rag-langfuse-postgres
+    restart: unless-stopped
+    profiles: ["observability"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${LANGFUSE_PG_PASSWORD:-langfusepg}
+      POSTGRES_DB: postgres
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - langfuse_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # ── Langfuse Redis（BullMQ ingestion 队列；noeviction）──────────────────
+  langfuse-redis:
+    image: redis:7
+    container_name: pipeline-rag-langfuse-redis
+    restart: unless-stopped
+    profiles: ["observability"]
+    command: >
+      redis-server
+      --requirepass ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+      --maxmemory-policy noeviction
+    volumes:
+      - langfuse_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${LANGFUSE_REDIS_PASSWORD:-langfuseredis} ping | grep PONG"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+
+  # ── Langfuse MinIO（事件/媒体 blob；自动建 langfuse bucket）─────────────
+  langfuse-minio:
+    image: minio/minio:latest
+    container_name: pipeline-rag-langfuse-minio
+    restart: unless-stopped
+    profiles: ["observability"]
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: ${LANGFUSE_MINIO_USER:-langfuseminio}
+      MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_PASSWORD:-langfuseminio}
+    volumes:
+      - langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # ── 被观测应用：注入 Langfuse/OTel 连接（复用主栈 app/celery 服务名合并）──
+  app:
+    environment:
+      LANGFUSE_ENABLED: "true"
+      LANGFUSE_HOST: http://langfuse-web:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PUBLIC_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3000}
+      OTEL_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://langfuse-web:3000/api/public/otel/v1/traces
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-pipeline-rag}
+
+  celery-worker:
+    environment:
+      LANGFUSE_ENABLED: "true"
+      LANGFUSE_HOST: http://langfuse-web:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PUBLIC_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3000}
+      OTEL_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://langfuse-web:3000/api/public/otel/v1/traces
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-pipeline-rag}-worker
+
+  celery-beat:
+    # 注：beat 是独立进程，不触发 worker_process_init 信号，因此不会初始化
+    # OTel/Langfuse（这里注入观测 env 也不会生效），故不注入。
+    environment: {}
+
+volumes:
+  langfuse_pg_data:
+  langfuse_ch_data:
+  langfuse_ch_logs:
+  langfuse_redis_data:
+  langfuse_minio_data:
