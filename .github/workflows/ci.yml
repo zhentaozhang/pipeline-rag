@@ -23,20 +23,20 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
-      - name: Prepare .env (for settings)
-        run: cp .env.example .env
-
       - name: Lint (ruff)
         run: uv run ruff check .
 
       - name: Type check (mypy)
         run: uv run mypy app
 
+      # 注意：不要在执行测试前生成 .env——否则会覆盖代码默认值，
+      # 使断言默认值的用例（如 evaluation_sample_rate=0.0）失败。
       - name: Unit tests
         run: uv run pytest tests/unit -q
 
       - name: Validate docker compose files
         run: |
+          cp .env.example .env
           docker compose -f docker-compose.yml config >/dev/null
           docker compose -f docker-compose.frontend.yml config >/dev/null
 
