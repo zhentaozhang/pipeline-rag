@@ -17,6 +17,24 @@ from app.db.session import Base
 
 target_metadata = Base.metadata
 
+# 非 ORM 管理表：app 用原生 SQL 读写（app/observability/storage.py），由 baseline 显式创建。
+# autogenerate 忽略它们，避免被误判为“多余表”而生成 drop_table。
+_EXTERNAL_TABLES = {
+    "trace_observability",
+    "trace_observability_span",
+    "trace_observability_score",
+}
+
+
+def _include_object(obj, name, type_, reflected, compare_to):
+    is_external_table = type_ == "table" and name in _EXTERNAL_TABLES
+    is_external_index = (
+        type_ == "index"
+        and getattr(obj, "table", None) is not None
+        and obj.table.name in _EXTERNAL_TABLES
+    )
+    return not (is_external_table or is_external_index)
+
 
 # ── 从 Pydantic Settings 动态读取 DSN（不依赖 alembic.ini 硬编码）────────────
 def get_url() -> str:
@@ -34,6 +52,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_object=_include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -51,6 +70,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            include_object=_include_object,
         )
         with context.begin_transaction():
             context.run_migrations()
