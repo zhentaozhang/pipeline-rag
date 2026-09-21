@@ -29,9 +29,11 @@ jobs:
       - name: Type check (mypy)
         run: uv run mypy app
 
-      # 注意：不要在执行测试前生成 .env——否则会覆盖代码默认值，
-      # 使断言默认值的用例（如 evaluation_sample_rate=0.0）失败。
+      # 提供占位 LLM_API_KEY：部分模块在导入/实例化时即构造 OpenAI 客户端，
+      # 空 key 会抛 OpenAIError 导致收集失败；不影响断言代码默认值的用例。
       - name: Unit tests
+        env:
+          LLM_API_KEY: ci-dummy-key
         run: uv run pytest tests/unit -q
 
       - name: Validate docker compose files
