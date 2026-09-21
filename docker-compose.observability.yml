@@ -1,11 +1,14 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# 可观测性 overlay：Langfuse 自托管栈（ClickHouse + Web + Worker，自带 PG/Redis/MinIO）
+# 可观测性 overlay：Langfuse v3 自托管栈（ClickHouse + Web + Worker，自带 PG/Redis/MinIO）
 #
 # 用法（与主 compose 组合）：
 #   docker compose -f docker-compose.yml -f docker-compose.observability.yml \
 #     --profile observability up -d
 #
-# 设计要点：
+# 版本：使用 Langfuse v3 稳定线（langfuse/langfuse:3）。v4 自托管在本环境
+#   所有 /api/public/* 返回 500（服务端故障），已弃用。
+# 切换/升级版本后需重建 langfuse 数据卷（schema 不兼容）：
+#   docker volume rm pipeline-rag_langfuse_{pg,ch,ch_logs,redis,minio}_data
 # - profile 门控：不加 --profile observability 时，主栈不含任何可观测性组件，
 #   与 LANGFUSE_ENABLED=false 的默认关一致。
 # - 独立基础设施：不与被观测应用的 PG/Redis/MinIO 混用，避免队列语义
@@ -13,17 +16,16 @@
 # - 服务名加 langfuse- 前缀：Compose 按服务名合并 overlay，重名会覆盖主栈服务。
 # - 仅 langfuse-web 暴露宿主机端口（浏览器访问 UI）；其余仅容器内可达。
 #   默认 3000；若与宿主机其它服务冲突，改 .env 的 LANGFUSE_WEB_PORT。
-# - Langfuse 镜像用 Docker Hub（langfuse/langfuse:4）；官方自托管 compose 用
-#   docker.langfuse.com/langfuse/langfuse:4（同一镜像，需认证），两者可互换。
+# - Langfuse 镜像用 Docker Hub（langfuse/langfuse:3 / langfuse-worker:3）。
 #
-# 密钥（写在 .env，供插值与 app 的 env_file 复用）：
+# 密钥（经 shell/.env 插值；overlay 会把 PUBLIC/SECRET 注入 app/celery，无需写 .env）：
 #   LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY   —— app 上报 + Langfuse 初始开通
 #   LANGFUSE_NEXTAUTH_SECRET / LANGFUSE_SALT / LANGFUSE_ENCRYPTION_KEY
 # ─────────────────────────────────────────────────────────────────────────────
 services:
   # ── Langfuse Web（UI + API + OTLP 端点）──────────────────────────────────
   langfuse-web:
-    image: langfuse/langfuse:4
+    image: docker.io/langfuse/langfuse:3
     container_name: pipeline-rag-langfuse-web
     restart: unless-stopped
     profiles: ["observability"]
@@ -92,7 +94,7 @@ services:
 
   # ── Langfuse Worker（异步 ingestion：写入 ClickHouse / S3）───────────────
   langfuse-worker:
-    image: langfuse/langfuse-worker:4
+    image: docker.io/langfuse/langfuse-worker:3
     container_name: pipeline-rag-langfuse-worker
     restart: unless-stopped
     profiles: ["observability"]
@@ -101,7 +103,7 @@ services:
 
   # ── ClickHouse（trace 时序存储）─────────────────────────────────────────
   langfuse-clickhouse:
-    image: clickhouse/clickhouse-server:25.12
+    image: docker.io/clickhouse/clickhouse-server
     container_name: pipeline-rag-langfuse-clickhouse
     restart: unless-stopped
     profiles: ["observability"]
@@ -184,6 +186,8 @@ services:
     environment:
       LANGFUSE_ENABLED: "true"
       LANGFUSE_HOST: http://langfuse-web:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_PUBLIC_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3000}
       OTEL_ENABLED: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://langfuse-web:3000/api/public/otel/v1/traces
@@ -193,6 +197,8 @@ services:
     environment:
       LANGFUSE_ENABLED: "true"
       LANGFUSE_HOST: http://langfuse-web:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_PUBLIC_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3000}
       OTEL_ENABLED: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://langfuse-web:3000/api/public/otel/v1/traces
