@@ -108,7 +108,7 @@ class VectorRetrievalChannel:
             args.extend(sub_q.document_tag_hints)
             param_idx += len(sub_q.document_tag_hints)
 
-        sql += f" ORDER BY similarity DESC LIMIT ${param_idx}"
+        sql += f" ORDER BY embedding <=> $1::vector ASC LIMIT ${param_idx}"
         args.append(limit)
 
         return sql, args

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sidebar } from './Sidebar';
 import { Menu } from 'lucide-react';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -24,7 +25,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, sidebarOpen, tog
       <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
       
       <main className="flex-1 flex flex-col h-full relative overflow-hidden transition-all duration-300">
-        {children}
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
       </main>
     </div>
   );

@@ -60,9 +60,7 @@ class KeywordRetrievalChannel:
         if sub_q.structure_node_id is not None:
             filter_clauses.append({"term": {"structureNodeId": sub_q.structure_node_id}})
         if sub_q.section_path:
-            filter_clauses.append(
-                {"wildcard": {"sectionPath": {"value": f"*{sub_q.section_path.lower()}*"}}}
-            )
+            filter_clauses.append({"match_phrase": {"sectionPath": sub_q.section_path}})
         if sub_q.canonical_path:
             filter_clauses.append({"prefix": {"canonicalPath": sub_q.canonical_path}})
         if sub_q.item_index is not None:
@@ -70,7 +68,7 @@ class KeywordRetrievalChannel:
         if sub_q.document_name_hints:
             name_should = []
             for hint in sub_q.document_name_hints:
-                name_should.append({"wildcard": {"documentName": {"value": f"*{hint}*"}}})
+                name_should.append({"match_phrase": {"documentName": hint}})
             filter_clauses.append({"bool": {"should": name_should, "minimum_should_match": 1}})
         if sub_q.business_category_hints:
             filter_clauses.append({"terms": {"businessCategory": sub_q.business_category_hints}})

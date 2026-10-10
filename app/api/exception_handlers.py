@@ -52,7 +52,7 @@ async def validation_exception_handler(request: Request, exc: Exception) -> JSON
 
 
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("unhandled exception", url=str(request.url), error=str(exc))
+    logger.error("unhandled exception", url=str(request.url), error=str(exc), exc_info=True)
     return JSONResponse(
         status_code=500, content={"code": -100, "message": "系统错误，请稍后重试!", "data": None}
     )

@@ -217,18 +217,28 @@ async def delete_document(db: AsyncSession, doc_id: str) -> None:
         logger.warning("failed to delete route index", doc_id=doc_id, error=str(e))
 
     # 7. Delete DB records in cascade order
-    await DocumentRepository.delete_profile_by_doc_id(db, doc_internal_id)
-    await KnowledgeRepository.delete_topic_relations_by_doc_id(db, doc_internal_id)
-    await DocumentRepository.delete_parent_blocks_by_doc_id(db, doc_internal_id)
-    await DocumentRepository.delete_chunks_by_doc_id(db, doc_internal_id)
-    await DocumentRepository.delete_structure_nodes_by_doc_id(db, doc_internal_id)
-    await DocumentRepository.delete_task_logs_by_doc_id(db, doc_internal_id)
-    await DocumentRepository.delete_strategy_steps_by_doc_id(db, doc_internal_id)
-    await DocumentRepository.delete_tasks_by_doc_id(db, doc_id)
-    await DocumentRepository.delete_super_tasks_by_doc_id(db, doc_internal_id)
-    await DocumentRepository.delete_strategy_plans_by_doc_id(db, doc_internal_id)
-    await DocumentRepository.delete_by_doc_id(db, doc_id)
-    await db.commit()
+    try:
+        await DocumentRepository.delete_profile_by_doc_id(db, doc_internal_id)
+        await KnowledgeRepository.delete_topic_relations_by_doc_id(db, doc_internal_id)
+        await DocumentRepository.delete_parent_blocks_by_doc_id(db, doc_internal_id)
+        await DocumentRepository.delete_chunks_by_doc_id(db, doc_internal_id)
+        await DocumentRepository.delete_structure_nodes_by_doc_id(db, doc_internal_id)
+        await DocumentRepository.delete_task_logs_by_doc_id(db, doc_internal_id)
+        await DocumentRepository.delete_strategy_steps_by_doc_id(db, doc_internal_id)
+        await DocumentRepository.delete_tasks_by_doc_id(db, doc_id)
+        await DocumentRepository.delete_super_tasks_by_doc_id(db, doc_internal_id)
+        await DocumentRepository.delete_strategy_plans_by_doc_id(db, doc_internal_id)
+        await DocumentRepository.delete_by_doc_id(db, doc_id)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        logger.error(
+            "failed to cascade delete document db records, transaction rolled back",
+            doc_id=doc_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise
 
 
 async def get_chunks_page(

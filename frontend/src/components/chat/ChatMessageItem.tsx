@@ -19,19 +19,29 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({ mes
   const [expandedRefs, setExpandedRefs] = useState<Record<string, boolean>>({});
   const sendMessage = useChatStore((state) => state.sendMessage);
   const isStreaming = useChatStore((state) => state.isStreaming);
-
   const currentConversationId = useChatStore((state) => state.currentConversationId);
+
+  const resolveExchangeId = (): number | null => {
+    if (message.exchangeId) {
+      return message.exchangeId;
+    }
+    const match = message.id.match(/^exchange-(\d+)-/);
+    if (match) {
+      return Number(match[1]);
+    }
+    return null;
+  };
 
   const handleFeedbackSubmit = async () => {
     if (!groundTruth.trim() || !currentConversationId) return;
+    const exchangeId = resolveExchangeId();
+    if (!exchangeId) {
+      console.warn('Cannot submit feedback: missing valid exchangeId', message.id);
+      return;
+    }
     try {
       setIsSubmitting(true);
-      // We extract exchangeId from the message id, or just assume message.id is the exchangeId for assistant messages
-      // Wait, in useChatStore, the message.id for assistant is the exchangeId, unless it's a temp id.
-      // Usually it's just message.id
-      const exchangeIdStr = message.id; 
-      
-      await chatApi.submitFeedback(currentConversationId, exchangeIdStr, groundTruth);
+      await chatApi.submitFeedback(currentConversationId, exchangeId, groundTruth);
       setFeedbackSuccess(true);
       setFeedbackOpen(false);
     } catch (e) {
@@ -230,10 +240,11 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = React.memo(({ mes
                 onClick={async () => {
                   if (feedbackSuccess) return;
                   // Auto-submit thumbs up with current answer as ground truth
-                  if (!currentConversationId) return;
+                  const exchangeId = resolveExchangeId();
+                  if (!currentConversationId || !exchangeId) return;
                   try {
                     setIsSubmitting(true);
-                    await chatApi.submitFeedback(currentConversationId, message.id, message.content);
+                    await chatApi.submitFeedback(currentConversationId, exchangeId, message.content);
                     setFeedbackSuccess(true);
                     setFeedbackOpen(false);
                   } catch (e) {

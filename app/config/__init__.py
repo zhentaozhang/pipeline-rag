@@ -101,12 +101,19 @@ class Settings:
             "JWT secret key": self.jwt.secret_key,
             "Admin password": self.jwt.admin_password,
         }
+        weak_keys = []
         for name, value in checks.items():
             if value in self._KNOWN_DEFAULT_CREDENTIALS:
                 logger.warning(
                     "⚠️ %s using default value, production deployment must override via environment variable",
                     name,
                 )
+                weak_keys.append(name)
+        if self.app.env == "production" and weak_keys:
+            raise ValueError(
+                f"Production deployment cannot use default credentials for: {', '.join(weak_keys)}. "
+                "Please configure strong credentials via environment variables."
+            )
 
 
 @lru_cache(maxsize=1)

@@ -216,24 +216,42 @@ def cleanup_traces() -> dict:
             raise RuntimeError("Session factory not initialized")
         from sqlalchemy import CursorResult
 
-        # 各表日期列不同（span 表为 started_at，score/trace 表为 created_at）——
-        # 验证发现 span 无 created_at（1054 错），按表使用正确列
-        table_date_cols = (
-            ("trace_observability_score", "created_at"),
-            ("trace_observability_span", "started_at"),
-            ("trace_observability", "created_at"),
-        )
         async with sf() as db:
             removed = 0
-            for table, date_col in table_date_cols:
-                result = await db.execute(
-                    text(
-                        f"DELETE FROM {table} WHERE {date_col} < DATE_SUB(NOW(), INTERVAL :days DAY)"
-                    ),
-                    {"days": retention_days},
-                )
-                if isinstance(result, CursorResult):
-                    removed += result.rowcount or 0
+            # 1. 删除关联到过期 trace 的 score 子表
+            res_score = await db.execute(
+                text(
+                    "DELETE FROM trace_observability_score WHERE trace_id IN ("
+                    "  SELECT trace_id FROM trace_observability WHERE created_at < DATE_SUB(NOW(), INTERVAL :days DAY)"
+                    ")"
+                ),
+                {"days": retention_days},
+            )
+            if isinstance(res_score, CursorResult):
+                removed += res_score.rowcount or 0
+
+            # 2. 删除关联到过期 trace 的 span 子表
+            res_span = await db.execute(
+                text(
+                    "DELETE FROM trace_observability_span WHERE trace_id IN ("
+                    "  SELECT trace_id FROM trace_observability WHERE created_at < DATE_SUB(NOW(), INTERVAL :days DAY)"
+                    ")"
+                ),
+                {"days": retention_days},
+            )
+            if isinstance(res_span, CursorResult):
+                removed += res_span.rowcount or 0
+
+            # 3. 删除过期的 trace 主表
+            res_trace = await db.execute(
+                text(
+                    "DELETE FROM trace_observability WHERE created_at < DATE_SUB(NOW(), INTERVAL :days DAY)"
+                ),
+                {"days": retention_days},
+            )
+            if isinstance(res_trace, CursorResult):
+                removed += res_trace.rowcount or 0
+
             await db.commit()
             return {"status": "ok", "removed": removed}
 

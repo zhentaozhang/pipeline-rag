@@ -115,9 +115,24 @@ class WebConnector(DocumentConnector):
 
         return list(seen)[: self._max_pages]
 
-    async def _fetch_sitemap(self, sitemap_url: str) -> list[str]:
-        """抓取 sitemap（支持 sitemap index 递归）"""
-        from xml.etree import ElementTree as ET
+    async def _fetch_sitemap(
+        self,
+        sitemap_url: str,
+        depth: int = 0,
+        max_depth: int = 3,
+        visited: set[str] | None = None,
+    ) -> list[str]:
+        """抓取 sitemap（支持 sitemap index 递归，含防环与最大深度限制）"""
+        if visited is None:
+            visited = set()
+        if sitemap_url in visited or depth > max_depth:
+            return []
+        visited.add(sitemap_url)
+
+        try:
+            from defusedxml import ElementTree as ET
+        except ImportError:
+            from xml.etree import ElementTree as ET  # type: ignore[no-redef]
 
         sem = asyncio.Semaphore(self._concurrency)
         html = await self._fetch(sitemap_url, sem)
@@ -131,12 +146,16 @@ class WebConnector(DocumentConnector):
                 text = (loc.text or "").strip()
                 if text:
                     if text.endswith(".xml"):
-                        urls.extend(await self._fetch_sitemap(text))
+                        urls.extend(
+                            await self._fetch_sitemap(
+                                text, depth=depth + 1, max_depth=max_depth, visited=visited
+                            )
+                        )
                     else:
                         norm = normalize_url(text)
                         if norm:
                             urls.append(norm)
-        except ET.ParseError:
+        except Exception:
             logger.warning("sitemap parse failed", url=sitemap_url)
         # 去重保序
         seen: set[str] = set()

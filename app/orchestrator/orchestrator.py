@@ -100,6 +100,7 @@ async def _prepare_impl(req: PrepareRequest) -> ExecutionPlan:
     # ── 构建统一上下文 ──────────────────────────────────────────────
     ctx = PrepareContext(
         question=req.question,
+        original_question=req.question,
         conversation_id=req.conversation_id,
         memory_ctx=req.memory_ctx,
         chat_mode=chat_mode,

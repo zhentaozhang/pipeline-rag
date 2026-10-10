@@ -69,7 +69,6 @@ _SAFE_BUILTINS: dict[str, object] = {
     "str": str,
     "sum": sum,
     "tuple": tuple,
-    "vars": vars,
     "zip": zip,
     "True": True,
     "False": False,
@@ -97,6 +96,10 @@ def _check_code_safety(code: str) -> str | None:
                 "compile",
                 "__import__",
                 "open",
+                "vars",
+                "getattr",
+                "setattr",
+                "delattr",
             ):
                 return f"危险函数被禁止: {node.func.id}"
             elif isinstance(node.func, ast.Attribute) and node.func.attr in ("open",):
@@ -125,6 +128,9 @@ _FORBIDDEN_ATTRS = frozenset(
         "__dict__",
         "__module__",
         "__qualname__",
+        "__reduce__",
+        "__reduce_ex__",
+        "__init_subclass__",
     }
 )
 
@@ -180,6 +186,12 @@ async def code_executor(code: str, timeout: int = 10) -> str:
     if not code or not code.strip():
         return "代码内容不能为空。"
 
+    safe_env = {
+        "PYTHONPATH": _PROJECT_ROOT,
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "PYTHONUNBUFFERED": "1",
+    }
+
     proc = await asyncio.create_subprocess_exec(
         sys.executable,
         "-c",
@@ -188,6 +200,7 @@ async def code_executor(code: str, timeout: int = 10) -> str:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=_PROJECT_ROOT,
+        env=safe_env,
         start_new_session=os.name == "posix",
     )
     try:
@@ -232,6 +245,14 @@ def _kill_process_group(proc: asyncio.subprocess.Process) -> None:
 
 _RUNNER_CODE = (
     "import sys\n"
+    "try:\n"
+    "    import resource\n"
+    "    # Limit virtual memory to 256MB on POSIX\n"
+    "    resource.setrlimit(resource.RLIMIT_AS, (256 * 1024 * 1024, 256 * 1024 * 1024))\n"
+    "    # Limit CPU time to 5s\n"
+    "    resource.setrlimit(resource.RLIMIT_CPU, (5, 5))\n"
+    "except Exception:\n"
+    "    pass\n"
     "from app.agent.tools.code_executor import _execute_sync\n"
     "sys.stdout.write(_execute_sync(sys.stdin.read()))\n"
 )

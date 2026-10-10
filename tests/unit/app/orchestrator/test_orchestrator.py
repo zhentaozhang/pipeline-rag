@@ -43,7 +43,7 @@ class FakeGuardrailService:
         self.reason = reason
 
     async def evaluate(self, question):
-        return (self.is_safe, self.reason)
+        return (self.is_safe, self.reason, question)
 
 
 class FakeRewriteService:

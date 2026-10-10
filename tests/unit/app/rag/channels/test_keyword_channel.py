@@ -41,11 +41,11 @@ class TestBuildEsQuery:
         )
         assert {"term": {"structureNodeId": 42}} in q["query"]["bool"]["filter"]
 
-    def test_section_path_wildcard_lowercased(self):
+    def test_section_path_match_phrase(self):
         q = KeywordRetrievalChannel._build_es_query(
             "q", make_sub_question(section_path="第一章 概述"), 10
         )
-        assert {"wildcard": {"sectionPath": {"value": "*第一章 概述*"}}} in q["query"]["bool"]["filter"]
+        assert {"match_phrase": {"sectionPath": "第一章 概述"}} in q["query"]["bool"]["filter"]
 
     def test_canonical_path_prefix(self):
         q = KeywordRetrievalChannel._build_es_query(
@@ -64,8 +64,8 @@ class TestBuildEsQuery:
         expected = {
             "bool": {
                 "should": [
-                    {"wildcard": {"documentName": {"value": "*部署*"}}},
-                    {"wildcard": {"documentName": {"value": "*配置*"}}},
+                    {"match_phrase": {"documentName": "部署"}},
+                    {"match_phrase": {"documentName": "配置"}},
                 ],
                 "minimum_should_match": 1,
             }

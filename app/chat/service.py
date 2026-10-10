@@ -64,7 +64,9 @@ class BusinessChatService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def stream(self, request: "ChatRequest") -> AsyncIterator[str]:
+    async def stream(
+        self, request: "ChatRequest", trace_id: str | None = None
+    ) -> AsyncIterator[str]:
         """
         完整对话流程，生成 SSE 事件字符串序列。
 
@@ -204,6 +206,7 @@ class BusinessChatService:
                         session=session,
                         lease_mgr=lease_mgr,
                         state=state,
+                        trace_id=trace_id,
                     ),
                     timeout=timeout,
                 ):

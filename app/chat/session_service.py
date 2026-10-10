@@ -55,6 +55,17 @@ def _parse_turn_status(raw: str | None) -> int | None:
 async def stop_session(cid: str) -> dict[str, Any]:
     task = ChatRuntimeRegistry.get(cid)
     if not task:
+        # 本地无任务时，通过 Redis 广播取消指令，支持跨实例/多 worker 停止会话
+        try:
+            from app.infra.redis_lease import get_redis
+
+            r = get_redis()
+            if r:
+                await r.publish("pipeline_rag:session:cancel", json.dumps({"cid": cid}))
+        except Exception:
+            logger.warning(
+                "failed to broadcast session cancel to redis", conversation_id=cid, exc_info=True
+            )
         return {"conversationId": cid, "stopped": False, "message": "没有找到正在执行的会话"}
 
     if not task.finalize():

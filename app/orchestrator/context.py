@@ -24,6 +24,7 @@ class PrepareContext:
     conversation_id: str
     memory_ctx: MemoryContext
     chat_mode: ChatQueryMode
+    original_question: str = ""
     tenant_id: str = "default"
     exchange_id: int = 0
 

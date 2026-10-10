@@ -44,7 +44,7 @@ class IntentGuardrailService:
         # LLM 深度检测
         self._client = get_chat_client()
 
-    async def evaluate(self, question: str) -> tuple[bool, str]:
+    async def evaluate(self, question: str) -> tuple[bool, str, str]:
         """
         评估用户问题是否安全。
 
@@ -52,10 +52,10 @@ class IntentGuardrailService:
         1. L1 SafetyInputFilter（PII 脱敏 + 注入检测）
         2. LLM 深度意图分析
 
-        返回 (is_safe, block_reason)
+        返回 (is_safe, block_reason, sanitized_text)
         """
         if not question or not question.strip():
-            return True, ""
+            return True, "", question
 
         # L1 输入安全检测
         input_result = await self._input_filter.filter(question)
@@ -65,14 +65,14 @@ class IntentGuardrailService:
                 reason=input_result.reason,
                 question=question[:80],
             )
-            return False, input_result.reason
+            return False, input_result.reason, question
 
-        # 使用脱敏后的文本进行后续检测
-        sanitized = input_result.sanitized_text
+        # 使用脱敏后的文本进行后续检测与流转
+        sanitized = input_result.sanitized_text or question
 
         # P0-1a: LLM 深度意图分析仅作为兜底通道（默认关闭；规则层已含注入检测 + PII + fail-close）
         if not settings.safety.input_llm_guardrail_enabled:
-            return True, ""
+            return True, "", sanitized
 
         # LLM 深度意图分析
         try:
@@ -88,24 +88,24 @@ class IntentGuardrailService:
                 )
             content = response.choices[0].message.content
             if not content:
-                return True, ""
+                return True, "", sanitized
 
             data = json.loads(content)
             if data.get("action") == "block":
                 reason = data.get("reason", "触犯企业合规安全策略。")
                 logger.warning("guardrail blocked by LLM", reason=reason, question=question[:80])
-                return False, reason
+                return False, reason, sanitized
 
-            return True, ""
+            return True, "", sanitized
         except Exception as e:
             logger.error("guardrail_llm_eval_failed", error=str(e), exc_info=True)
             # LLM 深度检测失败时，已有 L1 防线兜底，安全模式下拒绝
             if settings.safety.mode == SafetyMode.FAIL_CLOSE:
-                return False, "安全检测服务异常，已拒绝该请求。"
+                return False, "安全检测服务异常，已拒绝该请求。", sanitized
             if settings.safety.mode == SafetyMode.MONITOR:
                 logger.warning("guardrail_llm_fallback_monitor")
-                return True, ""
-            return True, ""
+                return True, "", sanitized
+            return True, "", sanitized
 
 
 async def set_safety_mode(mode: SafetyMode) -> None:

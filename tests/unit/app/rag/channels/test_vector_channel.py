@@ -55,7 +55,7 @@ class TestBuildSql:
         sql, args = VectorRetrievalChannel._build_sql(make_sub_question(), "[1,2]", 10)
         assert args[0] == "[1,2]"
         assert "1 - (embedding <=> $1::vector) AS similarity" in sql
-        assert "ORDER BY similarity DESC LIMIT $2" in sql
+        assert "ORDER BY embedding <=> $1::vector ASC LIMIT $2" in sql
 
     def test_tenant_and_scope(self):
         sub = make_sub_question(tenant_id="t1", scope_code="s1")

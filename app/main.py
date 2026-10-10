@@ -108,6 +108,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await init_redis()
     logger.info("redis connected")
 
+    # 单实例守卫检测（多实例告警）
+    from app.infra.redis_lease import get_redis
+    from app.infra.singleton_guard import register_and_detect_conflicts
+
+    await register_and_detect_conflicts(get_redis())
+
     # Elasticsearch
     await init_es()
     logger.info("elasticsearch connected")
@@ -195,13 +201,11 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.middleware("http")(request_id_middleware)
+    # 自动认证中间件：APP_API_KEY 非空时拦截 /api/chat/** 请求
+    if settings.app.api_key:
+        from app.api.admin_auth import chat_auth_middleware
 
-    # Redis 滑动窗口限流（/api/chat/, /admin/auth/, /manage/）
-    if settings.rate_limit.enabled:
-        from app.infra.rate_limiter import rate_limit_middleware
-
-        app.middleware("http")(rate_limit_middleware)
+        app.middleware("http")(chat_auth_middleware)
 
     # 自动认证中间件：拦截 /manage/** 所有请求
     from app.api.admin_auth import auth_middleware_for_manage, preview_mode_middleware
@@ -209,16 +213,19 @@ def create_app() -> FastAPI:
     app.middleware("http")(auth_middleware_for_manage)
     app.middleware("http")(preview_mode_middleware)
 
-    # 自动认证中间件：APP_API_KEY 非空时拦截 /api/chat/** 请求
-    if settings.app.api_key:
-        from app.api.admin_auth import chat_auth_middleware
+    # Redis 滑动窗口限流（/api/chat/, /admin/auth/, /manage/）
+    if settings.rate_limit.enabled:
+        from app.infra.rate_limiter import rate_limit_middleware
 
-        app.middleware("http")(chat_auth_middleware)
+        app.middleware("http")(rate_limit_middleware)
 
     # 读取 OTel server span 的 trace_id 挂到 request.state（业务层复用 → OTel/应用同 trace）
     from app.observability.otel_setup import otel_trace_context_middleware
 
     app.middleware("http")(otel_trace_context_middleware)
+
+    # Request ID 中间件：置于最外层，保证所有请求和错误响应均注入 X-Request-ID
+    app.middleware("http")(request_id_middleware)
 
     # ── 路由注册 ──────────────────────────────────────────────────────────
     from app.api.health import router as health_router

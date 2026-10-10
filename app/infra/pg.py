@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -13,6 +14,7 @@ settings = get_settings()
 _pool: asyncpg.Pool | None = None
 _engine = None
 async_session_maker: async_sessionmaker[AsyncSession] | None = None
+_pool_lock: asyncio.Lock | None = None
 _pg_breaker = CircuitBreakerRegistry.get_or_register(
     "pg",
     CircuitBreakerConfig(
@@ -24,32 +26,42 @@ _pg_breaker = CircuitBreakerRegistry.get_or_register(
 )
 
 
+def _get_pool_lock() -> asyncio.Lock:
+    global _pool_lock
+    if _pool_lock is None:
+        _pool_lock = asyncio.Lock()
+    return _pool_lock
+
+
 async def init_pg() -> None:
     global _pool, _engine, async_session_maker
     if _pool is not None:
         return  # 已初始化，避免泄漏旧连接池
-    _pool = await asyncpg.create_pool(
-        user=settings.postgres.user,
-        password=settings.postgres.password,
-        database=settings.postgres.db,
-        host=settings.postgres.host,
-        port=settings.postgres.port,
-        min_size=settings.postgres.asyncpg_min_size,
-        max_size=settings.postgres.asyncpg_max_size,
-    )
-    _engine = create_async_engine(
-        settings.postgres.url,
-        pool_size=settings.postgres.sqlalchemy_pool_size,
-        max_overflow=settings.postgres.sqlalchemy_max_overflow,
-        pool_pre_ping=True,
-    )
-    async_session_maker = async_sessionmaker(
-        bind=_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-    # 确保 PGVector 所需的表存在
-    await _ensure_pg_tables()
+    async with _get_pool_lock():
+        if _pool is not None:
+            return
+        _pool = await asyncpg.create_pool(
+            user=settings.postgres.user,
+            password=settings.postgres.password,
+            database=settings.postgres.db,
+            host=settings.postgres.host,
+            port=settings.postgres.port,
+            min_size=settings.postgres.asyncpg_min_size,
+            max_size=settings.postgres.asyncpg_max_size,
+        )
+        _engine = create_async_engine(
+            settings.postgres.url,
+            pool_size=settings.postgres.sqlalchemy_pool_size,
+            max_overflow=settings.postgres.sqlalchemy_max_overflow,
+            pool_pre_ping=True,
+        )
+        async_session_maker = async_sessionmaker(
+            bind=_engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+        # 确保 PGVector 所需的表存在
+        await _ensure_pg_tables()
 
 
 async def _ensure_pg_tables() -> None:
@@ -165,12 +177,13 @@ async def _ensure_pg_tables() -> None:
 
 async def close_pg() -> None:
     global _pool, _engine
-    if _pool:
-        await _pool.close()
-        _pool = None
-    if _engine:
-        await _engine.dispose()
-        _engine = None
+    async with _get_pool_lock():
+        if _pool:
+            await _pool.close()
+            _pool = None
+        if _engine:
+            await _engine.dispose()
+            _engine = None
 
 
 def get_pg_pool() -> asyncpg.Pool:

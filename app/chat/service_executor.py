@@ -29,6 +29,7 @@ async def execute_stream(
     session,
     lease_mgr,
     state,
+    trace_id: str | None = None,
 ) -> AsyncIterator[str]:
     plan: ExecutionPlan | None = None
 
@@ -47,9 +48,9 @@ async def execute_stream(
 
     tracer = Tracer(
         db=db,
-        # 中间件已在 OTel server span 内把其 trace_id 挂到 request.state；命中则复用
-        # （OTel 基础设施 span 与业务 trace 同 trace_id），否则回退 32-hex 自研 id。
-        trace_id=getattr(getattr(request, "state", None), "app_trace_id", None)
+        # 优先使用 OTel server span 透传的 trace_id（基础设施 span 与业务 trace 同 ID），否则回退
+        trace_id=trace_id
+        or getattr(getattr(request, "state", None), "app_trace_id", None)
         or new_trace_id(),
         conversation_id=conversation_id,
         exchange_id=temp_exchange_id,

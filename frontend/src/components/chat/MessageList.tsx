@@ -13,6 +13,7 @@ export interface Message {
   statusText?: string;
   errorMessage?: string;
   routeExplain?: Record<string, unknown> | null;
+  exchangeId?: number;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -58,7 +58,7 @@ class TestEvaluate:
     @pytest.mark.asyncio
     async def test_blank_question_safe(self, monkeypatch):
         svc = IntentGuardrailService()
-        assert await svc.evaluate("   ") == (True, "")
+        assert await svc.evaluate("   ") == (True, "", "   ")
 
     @pytest.mark.asyncio
     async def test_l1_block(self, monkeypatch):
@@ -68,7 +68,7 @@ class TestEvaluate:
             lambda settings: FakeInputFilter(is_safe=False, reason="注入风险"),
         )
         svc = IntentGuardrailService()
-        assert await svc.evaluate("恶意输入") == (False, "注入风险")
+        assert await svc.evaluate("恶意输入") == (False, "注入风险", "恶意输入")
 
     @pytest.mark.asyncio
     async def test_l1_pass_llm_block(self, monkeypatch):
@@ -77,7 +77,7 @@ class TestEvaluate:
         monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(guardrails_module, "settings", make_settings())
         svc = IntentGuardrailService()
-        assert await svc.evaluate("询问薪资") == (False, "越权")
+        assert await svc.evaluate("询问薪资") == (False, "越权", "sanitized")
 
     @pytest.mark.asyncio
     async def test_llm_pass(self, monkeypatch):
@@ -86,7 +86,7 @@ class TestEvaluate:
         monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(guardrails_module, "settings", make_settings())
         svc = IntentGuardrailService()
-        assert await svc.evaluate("如何配置") == (True, "")
+        assert await svc.evaluate("如何配置") == (True, "", "sanitized")
 
     @pytest.mark.asyncio
     async def test_llm_empty_content_safe(self, monkeypatch):
@@ -95,7 +95,7 @@ class TestEvaluate:
         monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(guardrails_module, "settings", make_settings())
         svc = IntentGuardrailService()
-        assert await svc.evaluate("如何配置") == (True, "")
+        assert await svc.evaluate("如何配置") == (True, "", "sanitized")
 
     @pytest.mark.asyncio
     async def test_llm_error_fail_close(self, monkeypatch):
@@ -104,7 +104,7 @@ class TestEvaluate:
         monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(guardrails_module, "settings", make_settings(mode=SafetyMode.FAIL_CLOSE))
         svc = IntentGuardrailService()
-        assert await svc.evaluate("如何配置") == (False, "安全检测服务异常，已拒绝该请求。")
+        assert await svc.evaluate("如何配置") == (False, "安全检测服务异常，已拒绝该请求。", "sanitized")
 
     @pytest.mark.asyncio
     async def test_llm_error_monitor_allows(self, monkeypatch):
@@ -113,7 +113,7 @@ class TestEvaluate:
         monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(guardrails_module, "settings", make_settings(mode=SafetyMode.MONITOR))
         svc = IntentGuardrailService()
-        assert await svc.evaluate("如何配置") == (True, "")
+        assert await svc.evaluate("如何配置") == (True, "", "sanitized")
 
 
 class TestEvaluateRuleOnly:
@@ -127,7 +127,7 @@ class TestEvaluateRuleOnly:
         monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(guardrails_module, "settings", make_settings_rule_only())
         svc = IntentGuardrailService()
-        assert await svc.evaluate("如何配置") == (True, "")
+        assert await svc.evaluate("如何配置") == (True, "", "sanitized")
 
     @pytest.mark.asyncio
     async def test_rule_block_without_llm(self, monkeypatch):
@@ -138,4 +138,4 @@ class TestEvaluateRuleOnly:
         )
         monkeypatch.setattr(guardrails_module, "settings", make_settings_rule_only())
         svc = IntentGuardrailService()
-        assert await svc.evaluate("恶意输入") == (False, "注入风险")
+        assert await svc.evaluate("恶意输入") == (False, "注入风险", "恶意输入")

@@ -101,6 +101,7 @@ function mapExchangesToMessages(
     const assistantMessage: Message = {
       id: `exchange-${exchange.exchangeId}-assistant`,
       role: 'assistant',
+      exchangeId: exchange.exchangeId ? Number(exchange.exchangeId) : undefined,
       content: exchange.answer || '',
       thinkingSteps: exchange.thinkingSteps || [],
       references: exchange.references || [],
@@ -292,7 +293,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const updatedMessage = { ...newMessages[idx] };
       mutator(updatedMessage);
       newMessages[idx] = updatedMessage;
-      return { messages: newMessages };
+      return {
+        messages: newMessages,
+        currentAssistantMessageId: updatedMessage.id
+      };
     });
   },
 
@@ -386,6 +390,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
               msg.errorMessage =
                 typeof event.content === 'string' ? event.content : '对话执行失败';
               msg.status = 'FAILED';
+            }
+            if (event.type === 'done') {
+              if (event.exchangeId) {
+                msg.exchangeId = Number(event.exchangeId);
+                msg.id = `exchange-${event.exchangeId}-assistant`;
+              }
+              if (msg.status !== 'FAILED') {
+                msg.status = 'COMPLETED';
+              }
+              msg.statusText = '';
             }
             msg.updatedAt = event.timestamp || new Date().toISOString();
           });

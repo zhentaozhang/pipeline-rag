@@ -145,8 +145,9 @@ async def chat_stream(
                 return
 
         # 正常流式执行（事件同步写缓冲）
+        trace_id = getattr(getattr(fastapi_req, "state", None), "app_trace_id", None)
         service = BusinessChatService(db)
-        async for raw in service.stream(request):
+        async for raw in service.stream(request, trace_id=trace_id):
             await _append_event(conversation_id, raw)
             yield raw
 
