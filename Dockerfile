@@ -69,7 +69,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health/liveness', timeout=5)"]
 
 # 默认启动 API 服务（可通过 docker run --entrypoint 覆盖）
+# --workers 4：支持多 Worker 并行，结合 Redis 会话锁与 Pub/Sub 取消广播
 # --timeout-graceful-shutdown 60：SSE 长连接流式回答在发布/重启时可优雅跑完，
 #   避免进行中的对话被硬断（第二轮架构评审·可以优化 5）。
 # Celery Worker: docker run --entrypoint celery -A app.celery_app worker -l info -c 4
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-graceful-shutdown", "60"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "4", "--timeout-graceful-shutdown", "60"]

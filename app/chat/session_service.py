@@ -56,16 +56,21 @@ async def stop_session(cid: str) -> dict[str, Any]:
     task = ChatRuntimeRegistry.get(cid)
     if not task:
         # 本地无任务时，通过 Redis 广播取消指令，支持跨实例/多 worker 停止会话
+        broadcast_sent = False
         try:
             from app.infra.redis_lease import get_redis
 
             r = get_redis()
             if r:
+                await r.set(f"pipeline_rag:cancel:{cid}", "1", ex=60)
                 await r.publish("pipeline_rag:session:cancel", json.dumps({"cid": cid}))
+                broadcast_sent = True
         except Exception:
             logger.warning(
                 "failed to broadcast session cancel to redis", conversation_id=cid, exc_info=True
             )
+        if broadcast_sent:
+            return {"conversationId": cid, "stopped": True, "message": "已向集群广播停止指令"}
         return {"conversationId": cid, "stopped": False, "message": "没有找到正在执行的会话"}
 
     if not task.finalize():
@@ -76,6 +81,15 @@ async def stop_session(cid: str) -> dict[str, Any]:
         return {"conversationId": cid, "stopped": False, "message": "会话已由新的执行接管"}
 
     task.cancel()
+    try:
+        from app.infra.redis_lease import get_redis
+
+        r = get_redis()
+        if r:
+            await r.set(f"pipeline_rag:cancel:{cid}", "1", ex=60)
+            await r.publish("pipeline_rag:session:cancel", json.dumps({"cid": cid}))
+    except Exception:
+        pass
     return {"conversationId": cid, "stopped": True, "message": "已停止会话生成"}
 
 

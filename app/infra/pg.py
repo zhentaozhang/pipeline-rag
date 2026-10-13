@@ -37,6 +37,12 @@ async def init_pg() -> None:
     global _pool, _engine, async_session_maker
     if _pool is not None:
         return  # 已初始化，避免泄漏旧连接池
+    async def _init_pg_connection(conn: asyncpg.Connection) -> None:
+        with contextlib.suppress(Exception):
+            await conn.execute("SET hnsw.iterative_scan = 'relaxed'")
+        with contextlib.suppress(Exception):
+            await conn.execute("SET hnsw.ef_search = 100")
+
     async with _get_pool_lock():
         if _pool is not None:
             return
@@ -48,6 +54,7 @@ async def init_pg() -> None:
             port=settings.postgres.port,
             min_size=settings.postgres.asyncpg_min_size,
             max_size=settings.postgres.asyncpg_max_size,
+            init=_init_pg_connection,
         )
         _engine = create_async_engine(
             settings.postgres.url,
@@ -154,6 +161,11 @@ async def _ensure_pg_tables() -> None:
             await conn.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS uk_embedding_document_chunk "
                 "ON public.pipeline_rag_document_embedding (document_id, chunk_no)"
+            )
+        with contextlib.suppress(Exception):
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_embedding_tenant_doc "
+                "ON public.pipeline_rag_document_embedding (tenant_id, document_id)"
             )
 
         # 第三轮优化 #1：HNSW 向量索引——embedding <=> $1 检索此前为全表扫描，

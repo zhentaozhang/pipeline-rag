@@ -11,7 +11,7 @@ class RedisSettings(BaseSettings):
     port: int = 6379
     db: int = 0
     password: str = ""
-    max_connections: int = 50
+    max_connections: int = 100
     lease_ttl_seconds: int = 30
     renew_interval_seconds: int = 10
     lease_check_interval: int = 30
