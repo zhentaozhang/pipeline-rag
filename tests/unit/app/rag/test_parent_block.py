@@ -12,7 +12,7 @@ def make_rag_settings(parent_evidence_max_chars=0):
 
 
 class FakeSession:
-    """按 SQL 文本分派：第一查 parent_block_id，第二查 chunk_text"""
+    """按 SQL 文本分派：第一查 parent_block_id，第二查 parent_text / chunk_text"""
 
     def __init__(self, child_rows, parent_rows):
         self.child_rows = child_rows
@@ -24,7 +24,7 @@ class FakeSession:
         self.queries.append(sql)
         if "parent_block_id" in sql:
             return types.SimpleNamespace(all=lambda: list(self.child_rows))
-        if "chunk_text" in sql:
+        if "parent_text" in sql or "chunk_text" in sql:
             return types.SimpleNamespace(all=lambda: list(self.parent_rows))
         return types.SimpleNamespace(all=lambda: [])
 
@@ -45,7 +45,14 @@ def child_row(chunk_id, parent_id):
 
 
 def parent_row(parent_id, text, path=None):
-    return types.SimpleNamespace(id=parent_id, chunk_text=text, section_path=path)
+    return types.SimpleNamespace(id=parent_id, parent_text=text, chunk_text=text, section_path=path)
+
+
+@pytest.fixture(autouse=True)
+def _reset_parent_cache():
+    parent_block_module.clear_parent_block_cache()
+    yield
+    parent_block_module.clear_parent_block_cache()
 
 
 @pytest.fixture

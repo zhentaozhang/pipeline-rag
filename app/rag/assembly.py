@@ -32,6 +32,17 @@ class PromptBudget:
     def reset_sub_question_budget(self) -> None:
         self.remaining_sub_question = self.per_sub_question_budget
 
+    def reset(self, new_total_budget: int | None = None) -> None:
+        """重置预算及统计状态，用于上下文超标重新组装"""
+        if new_total_budget is not None:
+            self.total_budget = max(0, new_total_budget)
+        self.remaining_total = self.total_budget
+        self.remaining_sub_question = self.per_sub_question_budget
+        self.rendered_reference_count = 0
+        self.omitted_reference_count = 0
+        self.rendered_reference_details.clear()
+        self.omitted_reference_details.clear()
+
     def try_consume(self, size: int) -> bool:
         if self.total_budget <= 0 or self.per_sub_question_budget <= 0:
             return False
@@ -91,8 +102,10 @@ class PromptAssemblyService:
         while estimated_tokens > actual_limit and budget.total_budget > 500:
             truncation_count += 1
             old_total = budget.total_budget
-            budget.total_budget = max(500, int(budget.total_budget * 0.7))
-            reduction = old_total - budget.total_budget
+            new_total = max(500, int(budget.total_budget * 0.7))
+            reduction = old_total - new_total
+            budget.reset(new_total)
+            rendered_reference_keys.clear()
             CONTEXT_TRUNCATION_TOTAL.labels(reason="exceeds_context_window").inc()
             logger.warning(
                 "context window truncation",
@@ -128,8 +141,9 @@ class PromptAssemblyService:
             omitted_reference_details=list(budget.omitted_reference_details),
         )
 
-    @staticmethod
+    @classmethod
     def _dedup_evidences(
+        cls,
         sub_evidences: list[SubQuestionEvidence],
     ) -> tuple[list[SubQuestionEvidence], dict[str, int]]:
         """跨子问题引用去重 + reference_id 映射。"""
@@ -141,10 +155,12 @@ class PromptAssemblyService:
             allocated_evidences: list[Evidence] = []
 
             for ev in sub_ev.evidences:
-                if ev.chunk_id in rendered_reference_keys:
+                unique_key = cls._unique_key(ev)
+                ref_key = ev.chunk_id if ev.chunk_id else unique_key
+                if unique_key in rendered_reference_keys:
                     ev = ev.model_copy()
                     if ev.reference_id is not None:
-                        reference_map[ev.chunk_id] = ev.reference_id
+                        reference_map[ref_key] = ev.reference_id
                         ev.content = f"请参考引用 [{ev.reference_id}]"
                     else:
                         ev.content = "（内容同上条引用）"
@@ -153,8 +169,8 @@ class PromptAssemblyService:
 
                 ev = ev.model_copy()
                 if ev.reference_id is not None:
-                    reference_map[ev.chunk_id] = ev.reference_id
-                rendered_reference_keys.add(ev.chunk_id)
+                    reference_map[ref_key] = ev.reference_id
+                rendered_reference_keys.add(unique_key)
                 allocated_evidences.append(ev)
 
             result.append(
@@ -335,6 +351,8 @@ class PromptAssemblyService:
         """构建去重键：
         优先级: parentBlockId > chunkId > url > sourceType+title+snippet
         """
+        if getattr(ev, "parent_block_id", None) is not None:
+            return f"PARENT:{ev.parent_block_id}"
         if ev.chunk_id:
             return f"DOCUMENT:{ev.chunk_id}"
         if ev.url:

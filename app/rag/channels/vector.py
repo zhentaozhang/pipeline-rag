@@ -60,9 +60,11 @@ class VectorRetrievalChannel:
             param_idx += 1
 
         if sub_q.doc_ids:
-            sql += f" AND document_id = ANY(${param_idx}::bigint[])"
-            args.append([d for d in (safe_int(x) for x in sub_q.doc_ids) if d != 0])
-            param_idx += 1
+            doc_id_ints = [d for d in (safe_int(x) for x in sub_q.doc_ids) if d != 0]
+            if doc_id_ints:
+                sql += f" AND document_id = ANY(${param_idx}::bigint[])"
+                args.append(doc_id_ints)
+                param_idx += 1
 
         if sub_q.structure_node_id is not None:
             sql += f" AND structure_node_id = ${param_idx}"

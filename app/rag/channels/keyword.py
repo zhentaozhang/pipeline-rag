@@ -163,9 +163,11 @@ class KeywordRetrievalChannel:
             args.append(sub_q.scope_code)
             idx += 1
         if sub_q.doc_ids:
-            sql += f" AND document_id = ANY(${idx}::bigint[])"
-            args.append([d for d in (safe_int(x) for x in sub_q.doc_ids) if d != 0])
-            idx += 1
+            doc_id_ints = [d for d in (safe_int(x) for x in sub_q.doc_ids) if d != 0]
+            if doc_id_ints:
+                sql += f" AND document_id = ANY(${idx}::bigint[])"
+                args.append(doc_id_ints)
+                idx += 1
         if sub_q.structure_node_id is not None:
             sql += f" AND structure_node_id = ${idx}"
             args.append(sub_q.structure_node_id)
