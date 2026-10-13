@@ -30,6 +30,22 @@ class OutputFilterResult:
     reason: str = ""
 
 
+def _luhn_check(card_number: str) -> bool:
+    """Luhn 算法校验银行卡号有效性"""
+    digits = [int(c) for c in card_number if c.isdigit()]
+    if len(digits) < 13 or len(digits) > 19:
+        return False
+    checksum = 0
+    reverse_digits = digits[::-1]
+    for i, d in enumerate(reverse_digits):
+        if i % 2 == 1:
+            d = d * 2
+            if d > 9:
+                d -= 9
+        checksum += d
+    return checksum % 10 == 0
+
+
 class OutputFilter:
     """
     输出内容安全检测。
@@ -43,7 +59,7 @@ class OutputFilter:
     _PII_PATTERNS: ClassVar[list[tuple[str, str]]] = [
         ("phone", r"1[3-9]\d{9}"),
         ("id_card", r"[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]"),
-        ("bank_card", r"\d{16,19}"),
+        ("bank_card", r"(?<!\d)\d{16,19}(?!\d)"),
         ("email", r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
         ("api_key", r"(?:sk-[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}|pk-[a-zA-Z0-9]{20,})"),
     ]
@@ -82,7 +98,7 @@ class OutputFilter:
             return OutputFilterResult(safe=True)
 
         try:
-            pii = self._check_pii_leak(text)
+            pii = await self._check_pii_leak(text)
             if pii:
                 logger.warning("output_pii_leak_detected", type=pii)
                 OUTPUT_BLOCKED.labels(reason=f"pii_leak:{pii}").inc()
@@ -117,22 +133,36 @@ class OutputFilter:
             logger.error("output_filter_error", error=str(e))
             return self._handle_error(e)
 
-    def _check_pii_leak(self, text: str) -> str | None:
+    async def _check_pii_leak(self, text: str) -> str | None:
         """检查输出是否包含未授权的 PII"""
-        # Primary: Presidio NLP-enhanced detection
+        # Primary: Presidio NLP-enhanced detection (线程池异步调度)
         if OutputFilter._PRESIDIO_CHECK is None:
-            from app.safety.presidio_pii import check_output_pii
+            from app.safety.presidio_pii import check_output_pii_async
 
-            OutputFilter._PRESIDIO_CHECK = check_output_pii
+            OutputFilter._PRESIDIO_CHECK = check_output_pii_async
 
-        presidio_result = OutputFilter._PRESIDIO_CHECK(text)
+        presidio_result = await OutputFilter._PRESIDIO_CHECK(text)
         if presidio_result:
-            return presidio_result
+            if str(presidio_result).upper() in ("BANK_CARD", "CREDIT_CARD"):
+                has_valid_card = False
+                for m in re.finditer(r"\b\d{16,19}\b", text):
+                    if _luhn_check(m.group(0)):
+                        has_valid_card = True
+                        break
+                if has_valid_card:
+                    return presidio_result
+            else:
+                return presidio_result
 
         # Fallback: regex patterns
         for pii_type, pattern in self._PII_PATTERNS:
-            if re.search(pattern, text):
-                return pii_type
+            if pii_type == "bank_card":
+                for m in re.finditer(pattern, text):
+                    if _luhn_check(m.group(0)):
+                        return pii_type
+            else:
+                if re.search(pattern, text):
+                    return pii_type
         return None
 
     def _check_system_prompt_leak(self, text: str) -> bool:

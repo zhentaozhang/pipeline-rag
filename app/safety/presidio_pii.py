@@ -295,7 +295,7 @@ class PresidioPiiDetector(RegexPiiDetector):
                 )
             )
 
-        entities.sort(key=lambda e: e.start)
+        entities.sort(key=lambda e: (e.start, -(e.end - e.start)))
         entities = self._deduplicate(entities)
 
         if entities:
@@ -364,7 +364,7 @@ class PresidioPiiDetector(RegexPiiDetector):
         result: list[PiiEntity] = [entities[0]]
         for e in entities[1:]:
             last = result[-1]
-            if e.start >= last.end or e.end > last.end:
+            if e.start >= last.end:
                 result.append(e)
         return result
 
@@ -399,6 +399,23 @@ def check_output_pii(text: str) -> str | None:
         return "API_KEY"
     if re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text):
         return "EMAIL"
-    if re.search(r"\d{16,19}", text):
-        return "BANK_CARD"
+    for m in re.finditer(r"\b\d{16,19}\b", text):
+        digits = m.group(0)
+        total = 0
+        for idx, char in enumerate(reversed(digits)):
+            d = int(char)
+            if idx % 2 == 1:
+                d *= 2
+                if d > 9:
+                    d -= 9
+            total += d
+        if total % 10 == 0:
+            return "BANK_CARD"
     return None
+
+
+async def check_output_pii_async(text: str) -> str | None:
+    """异步检测输出文本是否包含 PII，将 CPU 密集的 spaCy 分析调度至工作线程池，释放主事件循环。"""
+    import asyncio
+
+    return await asyncio.to_thread(check_output_pii, text)
