@@ -3,6 +3,7 @@ LangGraph ReAct Agent 构建
 """
 
 import asyncio
+import inspect
 import json as _json
 import logging
 import random as _random
@@ -60,7 +61,17 @@ async def _call_with_retry(tool_fn: Any, args: dict, max_retries: int = 2) -> st
     last_error = ""
     for attempt in range(1 + max_retries):
         try:
-            result = await tool_fn.ainvoke(args)
+            if hasattr(tool_fn, "ainvoke"):
+                result = await tool_fn.ainvoke(args)
+            elif asyncio.iscoroutinefunction(tool_fn):
+                result = await tool_fn(**args)
+            elif callable(tool_fn):
+                res = tool_fn(**args)
+                result = await res if inspect.isawaitable(res) else res
+            elif hasattr(tool_fn, "invoke"):
+                result = tool_fn.invoke(args)
+            else:
+                raise TypeError(f"Tool {tool_fn} is not callable or runnable")
             return str(result)
         except Exception as e:
             last_error = str(e)
