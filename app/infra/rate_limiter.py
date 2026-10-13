@@ -14,7 +14,7 @@ from collections.abc import Callable
 
 import structlog
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 from app.common.exceptions import RateLimitException
 from app.config import get_settings
@@ -37,8 +37,11 @@ local count = redis.call('ZCARD', key)
 if count >= limit then
     return {0, 0}
 end
-redis.call('ZADD', key, now, now)
+local seq = redis.call('INCR', key .. ':seq')
+local member = tostring(now) .. ':' .. tostring(seq)
+redis.call('ZADD', key, now, member)
 redis.call('PEXPIRE', key, window * 1000 + 1000)
+redis.call('PEXPIRE', key .. ':seq', window * 1000 + 1000)
 return {1, limit - count - 1}
 """
 
@@ -69,15 +72,32 @@ def _client_identity(request: Request) -> str:
         return f"apikey:{hashlib.md5(api_key.encode()).hexdigest()}"
 
     forwarded = request.headers.get("X-Forwarded-For")
+    ip = "unknown"
     if forwarded and get_settings().rate_limit.trust_proxy_count > 0:
         # 仅信任配置层数的反代：从右侧数第 trust_proxy_count+1 个地址为真实客户端
         ips = [p.strip() for p in forwarded.split(",")]
         idx = len(ips) - get_settings().rate_limit.trust_proxy_count - 1
         if idx >= 0 and ips[idx]:
-            return ips[idx]
-        return forwarded.split(",")[0].strip()
-    client = request.client
-    return client.host if client else "unknown"
+            ip = ips[idx]
+        else:
+            ip = forwarded.split(",")[0].strip()
+    elif request.client:
+        ip = request.client.host
+
+    device_id = (
+        request.headers.get("X-Device-Id")
+        or request.headers.get("X-Visitor-Id")
+        or request.headers.get("X-Client-Fingerprint")
+        or ""
+    ).strip()
+    if device_id:
+        import re
+
+        clean_device = re.sub(r"[^a-zA-Z0-9_\-]", "", device_id)[:64]
+        if clean_device:
+            return f"{ip}:dev:{clean_device}"
+
+    return ip
 
 
 async def check_rate_limit(key: str, limit: int, window_seconds: int) -> tuple[bool, int, int]:
@@ -125,9 +145,11 @@ async def rate_limit_middleware(
     if not allowed:
         RATE_LIMIT_HITS_TOTAL.labels(group=group).inc()
         logger.warning("rate_limit_exceeded", group=group, identity=identity, limit=limit)
-        raise RateLimitException(
-            f"请求过于频繁，{group} 接口每分钟最多 {limit} 次",
-            retry_after=reset_at - int(time.time()),
+        retry_after = max(1, reset_at - int(time.time()))
+        return JSONResponse(
+            status_code=429,
+            content={"code": 429, "message": "请求过于频繁，请稍后再试", "data": None},
+            headers={"Retry-After": str(retry_after)},
         )
 
     response = await call_next(request)

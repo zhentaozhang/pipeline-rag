@@ -26,10 +26,24 @@ _llm_breaker = CircuitBreakerRegistry.get_or_register(
 )
 
 
+import asyncio
+
+_llm_semaphore: asyncio.Semaphore | None = None
+
+
+def get_llm_semaphore() -> asyncio.Semaphore:
+    global _llm_semaphore
+    if _llm_semaphore is None:
+        max_concurrent = max(1, getattr(settings.llm, "max_concurrent_calls", 20))
+        _llm_semaphore = asyncio.Semaphore(max_concurrent)
+    return _llm_semaphore
+
+
 @asynccontextmanager
 async def llm_breaker() -> AsyncIterator[None]:
-    async with _llm_breaker:
-        yield
+    async with get_llm_semaphore():
+        async with _llm_breaker:
+            yield
 
 
 # ── 共享客户端单例 ──────────────────────────────────────────────────────────
