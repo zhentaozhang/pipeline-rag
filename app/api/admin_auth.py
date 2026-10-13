@@ -11,6 +11,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import uuid
+
 from app.api.schemas.response import ApiResponse
 from app.common.exceptions import AuthException, PipelineRAGFrameException
 from app.config import get_settings
@@ -20,6 +22,8 @@ router: APIRouter = APIRouter()
 settings = get_settings()
 
 bearer_scheme = HTTPBearer()
+
+JWT_DENYLIST_PREFIX = "pipeline_rag:jwt_denylist:"
 
 
 class LoginRequest(BaseModel):
@@ -35,27 +39,104 @@ class TokenResponse(BaseModel):
 
 
 def create_access_token(username: str) -> str:
-    expire = datetime.now(UTC) + timedelta(minutes=settings.jwt.expire_minutes)
-    payload = {"sub": username, "exp": expire, "iat": datetime.now(UTC)}
+    now = datetime.now(UTC)
+    expire = now + timedelta(minutes=settings.jwt.expire_minutes)
+    payload = {
+        "sub": username,
+        "exp": expire,
+        "iat": now,
+        "jti": uuid.uuid4().hex,
+    }
     return jwt.encode(payload, settings.jwt.secret_key, algorithm=settings.jwt.algorithm)
+
+
+async def _get_safe_redis():
+    try:
+        from app.infra.redis_lease import get_redis
+
+        return get_redis()
+    except Exception:
+        return None
+
+
+async def is_token_revoked(jti: str | None) -> bool:
+    """检查 Token 是否已在分布式黑名单中"""
+    if not jti:
+        return False
+    try:
+        r = await _get_safe_redis()
+        if r is None:
+            if getattr(settings.jwt, "deny_on_redis_error", False):
+                import structlog as _slog
+
+                _slog.get_logger(__name__).error("redis unavailable, fail-closed token revocation check", jti=jti)
+                return True
+            return False
+        exists = await r.exists(f"{JWT_DENYLIST_PREFIX}{jti}")
+        return bool(exists)
+    except Exception as e:
+        import structlog as _slog
+
+        _slog.get_logger(__name__).error("failed to check token revocation in redis", error=str(e), jti=jti)
+        if getattr(settings.jwt, "deny_on_redis_error", False):
+            return True
+        return False
+
+
+async def revoke_token(token: str) -> None:
+    """将 Token 加入 Redis 黑名单，自动设置与 Token 剩余生存期相同的 TTL"""
+    try:
+        r = await _get_safe_redis()
+        if r is None:
+            return
+
+        payload = jwt.decode(
+            token,
+            settings.jwt.secret_key,
+            algorithms=[settings.jwt.algorithm],
+            options={"verify_exp": False},
+        )
+        jti = payload.get("jti")
+        if not jti:
+            import hashlib
+
+            jti = hashlib.md5(token.encode()).hexdigest()
+
+        exp = payload.get("exp")
+        now = datetime.now(UTC).timestamp()
+        ttl = max(1, int(exp - now)) if exp else settings.jwt.expire_minutes * 60
+        await r.setex(f"{JWT_DENYLIST_PREFIX}{jti}", ttl, "1")
+    except Exception as e:
+        import structlog as _slog
+
+        _slog.get_logger(__name__).warning("failed to revoke token in redis", error=str(e))
 
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     request: Request = None,  # type: ignore[assignment]  # FastAPI 注入；None 仅为满足测试直调
 ) -> str:
-
     """JWT 认证依赖，返回当前用户名（第三轮 #8：通过即记录管理操作审计）"""
-
+    token = credentials.credentials
     try:
         payload = jwt.decode(
-            credentials.credentials,
+            token,
             settings.jwt.secret_key,
             algorithms=[settings.jwt.algorithm],
         )
         username: str = payload.get("sub", "")
         if not username:
             raise AuthException("后台登录无效，请重新登录")
+
+        jti = payload.get("jti")
+        if not jti:
+            import hashlib
+
+            jti = hashlib.md5(token.encode()).hexdigest()
+
+        if await is_token_revoked(jti):
+            raise AuthException("用户已登出，请重新登录")
+
         _record_audit(username, request)
         return username
     except jwt.ExpiredSignatureError as e:
@@ -89,7 +170,21 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> di
 
     user = await get_admin_user(db, request.username)
 
-    if not user or not bcrypt.checkpw(request.password.encode(), user.password.encode()):
+    pw_valid = False
+    try:
+        if user and getattr(user, "password", None):
+            pw_valid = bcrypt.checkpw(request.password.encode("utf-8"), user.password.encode("utf-8"))
+    except (ValueError, TypeError) as ex:
+        import structlog as _slog
+
+        _slog.get_logger(__name__).warning(
+            "password hash verification failed due to invalid hash format",
+            error=str(ex),
+            username=request.username,
+        )
+        pw_valid = False
+
+    if not user or not pw_valid:
         # 返回 HTTP 200 + ApiResponse body
         raise PipelineRAGFrameException(401, "账号或密码不正确")
 
@@ -109,11 +204,27 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> di
 @router.post(
     "/logout",
     summary="管理员登出",
-    description="JWT 无状态登出，客户端丢弃 Token 即可。此端点用于兼容前端流程。",
+    description="注销当前 JWT Token，并加入分布式黑名单，防止多实例或并发重用。",
 )
-async def logout() -> dict:
-    """POST /admin/auth/logout（JWT 无状态，客户端丢弃 token 即可）"""
-    return ApiResponse.ok()
+async def logout(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        HTTPBearer(auto_error=False)
+    ),
+) -> dict:
+    """POST /admin/auth/logout（加入 Redis 黑名单）"""
+    token = None
+    if credentials:
+        token = credentials.credentials
+    elif request:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.removeprefix("Bearer ")
+
+    if token:
+        await revoke_token(token)
+
+    return ApiResponse.ok(message="登出成功")
 
 
 @router.get(
@@ -151,6 +262,18 @@ async def auth_middleware_for_manage(
                 return JSONResponse(
                     status_code=401, content=ApiResponse.fail("后台登录无效，请重新登录", 401)
                 )
+
+            jti = payload.get("jti")
+            if not jti:
+                import hashlib
+
+                jti = hashlib.md5(token.encode()).hexdigest()
+
+            if await is_token_revoked(jti):
+                return JSONResponse(
+                    status_code=401, content=ApiResponse.fail("用户已登出，请重新登录", 401)
+                )
+
             request.state.current_user = username
         except jwt.ExpiredSignatureError:
             return JSONResponse(
@@ -198,6 +321,7 @@ PREVIEW_BLOCKED_PATHS = frozenset(
         "/manage/document/upload",
         "/manage/document/delete",
         "/manage/document/retry",
+        "/manage/document/cache/purge",
         "/manage/document/strategy/confirm",
         "/manage/document/index/build",
         "/manage/graph/blacklist",

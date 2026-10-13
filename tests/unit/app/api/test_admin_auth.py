@@ -68,3 +68,63 @@ async def test_manage_middleware_passes_through_non_manage_paths():
 
     resp = await auth_middleware_for_manage(_make_request("/api/chat/stream"), call_next)
     assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_manage_middleware_rejects_revoked_token(monkeypatch):
+    from app.api.admin_auth import is_token_revoked
+
+    token = create_access_token("admin")
+
+    # Mock is_token_revoked to return True
+    async def _mock_is_revoked(jti):
+        return True
+
+    monkeypatch.setattr("app.api.admin_auth.is_token_revoked", _mock_is_revoked)
+
+    resp = await auth_middleware_for_manage(
+        _make_request("/manage/document/list", auth_header=f"Bearer {token}"), None
+    )
+    assert resp.status_code == 401
+    assert "登出" in resp.body.decode("utf-8")
+
+
+@pytest.mark.asyncio
+async def test_is_token_revoked_fail_closed(monkeypatch):
+    import app.api.admin_auth as auth_mod
+    from app.api.admin_auth import is_token_revoked
+
+    # When Redis raises an exception and deny_on_redis_error is True -> returns True
+    monkeypatch.setattr(auth_mod.settings.jwt, "deny_on_redis_error", True)
+
+    async def _failing_redis():
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(auth_mod, "_get_safe_redis", _failing_redis)
+    assert await is_token_revoked("some-jti") is True
+
+    # When deny_on_redis_error is False -> returns False
+    monkeypatch.setattr(auth_mod.settings.jwt, "deny_on_redis_error", False)
+    assert await is_token_revoked("some-jti") is False
+
+
+@pytest.mark.asyncio
+async def test_login_with_malformed_password_hash(monkeypatch):
+    import types
+    from app.api.admin_auth import LoginRequest, login
+    from app.common.exceptions import PipelineRAGFrameException
+
+    fake_user = types.SimpleNamespace(username="admin", password="plain_or_corrupted_hash", is_active=True)
+
+    async def _get_admin_user(db, username):
+        return fake_user
+
+    monkeypatch.setattr("app.manage.service.admin_auth_service.get_admin_user", _get_admin_user)
+
+    with pytest.raises(PipelineRAGFrameException) as exc_info:
+        await login(LoginRequest(username="admin", password="password123"), db=None)
+
+    assert exc_info.value.code == 401
+    assert "账号或密码不正确" in str(exc_info.value.message)
+
+
