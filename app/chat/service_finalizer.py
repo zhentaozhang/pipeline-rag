@@ -106,6 +106,7 @@ async def finalize_stream(
                     exchange_id=temp_exchange_id,
                 )
             )
+        await db.commit()
     except Exception:
         logger.exception("persist exchange failed")
     _mark("end")

@@ -13,8 +13,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
-
 logger = structlog.get_logger(__name__)
 
 _BUFFER_KEY_PREFIX = "pipeline_rag:sse:buf"
@@ -115,6 +113,11 @@ def _contains_done(events: list[str]) -> bool:
     return False
 
 
+def get_optional_db() -> AsyncSession | None:
+    """流式会话显式可选依赖：流式场景默认走短事务管理，不持有长连接。"""
+    return None
+
+
 @router.post(
     "/stream",
     summary="流式对话",
@@ -123,7 +126,8 @@ def _contains_done(events: list[str]) -> bool:
 async def chat_stream(
     request: ChatRequest,
     fastapi_req: Request,
-    db: AsyncSession = Depends(get_db),
+    # 并发优化：移除请求级全程占用 DB 连接的 Depends(get_db)，由 BusinessChatService 内部走短事务生命周期管理
+    db: AsyncSession | None = Depends(get_optional_db),
     resume: int = Query(default=0, ge=0, le=_BUFFER_MAX_EVENTS, description="已消费事件数（断线续传）"),
 ) -> StreamingResponse:
     """
@@ -144,7 +148,7 @@ async def chat_stream(
                 logger.info("sse resumed from buffer", conversation_id=conversation_id, count=len(replayed))
                 return
 
-        # 正常流式执行（事件同步写缓冲）
+        # 正常流式执行（事件同步写缓冲，内部短事务解耦连接池）
         trace_id = getattr(getattr(fastapi_req, "state", None), "app_trace_id", None)
         service = BusinessChatService(db)
         async for raw in service.stream(request, trace_id=trace_id):

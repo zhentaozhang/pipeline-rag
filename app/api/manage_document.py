@@ -274,10 +274,28 @@ async def delete_document(
     _: str = Depends(get_current_user),
 ) -> dict[str, Any]:
     """POST /manage/document/delete"""
+    from app.chat.response_cache import invalidate_cache
     from app.manage.service.document_service import delete_document
 
     await delete_document(db, document_id)
+    await invalidate_cache(str(document_id))
     return ApiResponse.ok(message="文档及所有关联数据已完全删除")
+
+
+@router.post(
+    "/document/cache/purge",
+    summary="清空问答响应缓存",
+    description="支持按文档ID淘汰相关问答缓存，或清空全局问答缓存",
+)
+async def purge_response_cache(
+    document_id: str | None = Body(None, alias="documentId", embed=True),
+    _: str = Depends(get_current_user),
+) -> dict[str, Any]:
+    """POST /manage/document/cache/purge"""
+    from app.chat.response_cache import invalidate_cache
+
+    deleted = await invalidate_cache(str(document_id) if document_id else None)
+    return ApiResponse.ok(data={"deleted_count": deleted})
 
 
 @router.post(

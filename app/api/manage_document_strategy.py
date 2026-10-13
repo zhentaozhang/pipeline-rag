@@ -140,6 +140,7 @@ async def reindex_document(
 ) -> dict[str, Any]:
     """POST /manage/document/index/build"""
 
+    from app.chat.response_cache import invalidate_cache
     from app.manage.service.document_service import create_index_task, get_document_by_doc_id
 
     doc = await get_document_by_doc_id(db, document_id)
@@ -151,6 +152,9 @@ async def reindex_document(
     doc.index_status = DocumentIndexStatusEnum.BUILDING.value
 
     task_id = await create_index_task(db, doc)
+    await invalidate_cache(str(document_id))
+    if doc.id:
+        await invalidate_cache(str(doc.id))
     logger.info("build index submitted", doc_id=document_id, task_id=task_id)
 
     return ApiResponse.ok(message="重新索引任务已提交", data={"taskId": str(task_id)})
