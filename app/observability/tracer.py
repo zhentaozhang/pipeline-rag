@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextvars
 import random
 import uuid
 from collections import deque
@@ -154,13 +155,20 @@ class _DummyTracer:
         return ""
 
 
+_current_span_var: contextvars.ContextVar[SpanContext | None] = contextvars.ContextVar(
+    "_current_span", default=None
+)
+
+
 class _SpanManager:
     def __init__(self, tracer: Tracer, span: SpanContext):
         self._tracer = tracer
         self._span = span
+        self._token = None
 
     async def __aenter__(self) -> SpanContext:
         self._span.started_at = datetime.now(UTC)
+        self._token = _current_span_var.set(self._span)
         self._tracer._push(self._span)
         return self._span
 
@@ -170,7 +178,10 @@ class _SpanManager:
         self._span.duration_ms = (now - self._span.started_at).total_seconds() * 1000
         if exc_type:
             self._span.status = SpanStatus.ERROR
-        self._tracer._pop()
+        if self._token is not None:
+            _current_span_var.reset(self._token)
+            self._token = None
+        self._tracer._pop(self._span)
 
     def span(
         self, name: str, kind: SpanKind = SpanKind.PIPELINE, *, input: Any = None
@@ -272,7 +283,8 @@ class Tracer:
     ) -> _SpanManager:
         if not self._active:
             return cast(_SpanManager, _DUMMY_SPAN)
-        parent = self._stack[-1] if self._stack else self._root_span
+        current_ctx = _current_span_var.get()
+        parent = current_ctx or (self._stack[-1] if self._stack else self._root_span)
         span = SpanContext(
             span_id=next_id_str(),
             trace_id=self._trace_id,
@@ -320,20 +332,34 @@ class Tracer:
             all_spans.append(root_span)
 
         self._populate_trace_from_spans(all_spans)
-        store = MySQLTraceStore(self._db)
-        try:
-            # 流式链路中事务可能已被穿插的 commit/close 打乱（InvalidRequestError:
-            # transaction already begun）——先结束隐式事务再 begin，保证 flush 干净
-            from contextlib import suppress
+        from contextlib import suppress
+        from app.db.session import get_session_factory
 
-            with suppress(Exception):
-                await self._db.commit()
-            async with self._db.begin():
+        sf = get_session_factory()
+
+        async def _do_save(target_db):
+            store = MySQLTraceStore(target_db)
+            async with target_db.begin():
                 await store.save_trace(self._trace)
                 await store.save_spans(all_spans)
                 all_scores = [s for sp in all_spans for s in sp.scores]
                 if all_scores:
                     await store.save_scores(all_scores)
+
+        try:
+            # 优先使用 session_factory 借用干净的短会话落盘，避免流式链路中 session closed 异常
+            if sf is not None:
+                async with sf() as flush_db:
+                    await _do_save(flush_db)
+            elif (
+                self._db is not None
+                and getattr(self._db, "is_active", False)
+            ):
+                with suppress(Exception):
+                    await self._db.commit()
+                await _do_save(self._db)
+            else:
+                logger.warning("no_usable_db_session_for_trace_flush", trace_id=self._trace_id)
         except Exception:
             logger.exception("trace flush failed", trace_id=self._trace_id)
 
@@ -452,10 +478,22 @@ class Tracer:
         self._stack.append(span)
         self._lf_start(span)
 
-    def _pop(self) -> SpanContext | None:
+    def _pop(self, target_span: SpanContext | None = None) -> SpanContext | None:
         if not self._stack:
             return None
-        span = self._stack.pop()
+        if target_span is not None:
+            # 优先使用对象身份或 span_id 匹配，避免 Pydantic 深度 == 比较带来的开销与潜在脆弱性
+            span = None
+            target_id = getattr(target_span, "span_id", None)
+            for idx in range(len(self._stack) - 1, -1, -1):
+                item = self._stack[idx]
+                if item is target_span or (target_id and getattr(item, "span_id", None) == target_id):
+                    span = self._stack.pop(idx)
+                    break
+            if span is None:
+                span = self._stack.pop()
+        else:
+            span = self._stack.pop()
         self._lf_end(span)
         self._record_span_prometheus(span)
         self._completed_spans.append(span)

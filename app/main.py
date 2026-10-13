@@ -7,6 +7,8 @@ Pipeline RAG Python — FastAPI 应用入口
 # uvicorn 新版默认 log_config 不配置 root logger -> stdlib LoggerFactory 的
 # structlog 事件 propagate 到 root 无 handler，INFO 被静默丢弃（观测盲区，
 # 018 实证：API 进程 structlog 0 输出，排查全靠 trace 落库）。
+import asyncio
+import contextlib
 import logging as _logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -71,6 +73,57 @@ async def _seed_admin_user() -> None:
             logger.info("admin user created", username=username)
         else:
             logger.debug("admin user already exists", username=username)
+
+
+async def _cancel_subscriber() -> None:
+    """监听 Redis 中的跨 Worker / 跨实例会话取消广播"""
+    import json
+
+    from app.chat.task_info import ChatRuntimeRegistry
+    from app.infra.redis_lease import get_redis
+
+    backoff = 1.0
+    while True:
+        pubsub = None
+        try:
+            redis = get_redis()
+            pubsub = redis.pubsub()
+            await pubsub.subscribe("pipeline_rag:session:cancel")
+            backoff = 1.0
+            async for message in pubsub.listen():
+                if message and message.get("type") == "message":
+                    try:
+                        raw_data = message.get("data", "{}")
+                        payload = (
+                            json.loads(raw_data)
+                            if isinstance(raw_data, str)
+                            else json.loads(raw_data.decode("utf-8"))
+                        )
+                        cid = payload.get("cid")
+                        if cid:
+                            task = ChatRuntimeRegistry.get(cid)
+                            if task and not task.cancelled:
+                                task.cancel()
+                                logger.info(
+                                    "session cancel received via redis pubsub", conversation_id=cid
+                                )
+                    except Exception:
+                        logger.warning("failed to process cancel broadcast message", exc_info=True)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.warning(
+                "cancel subscriber connection error, reconnecting in %.1fs",
+                backoff,
+                exc_info=True,
+            )
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2.0, 30.0)
+        finally:
+            if pubsub is not None:
+                with contextlib.suppress(Exception):
+                    await pubsub.unsubscribe("pipeline_rag:session:cancel")
+                    await pubsub.close()
 
 
 @asynccontextmanager
@@ -150,6 +203,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         feishu_gateway.set_handler(handle_message_event)
         feishu_gateway.start()
 
+    # 跨实例/跨 Worker 会话取消监听器
+    cancel_subscriber_task = asyncio.create_task(_cancel_subscriber())
+
     logger.info("pipeline-rag started", host=settings.app.host, port=settings.app.port)
     mark_startup_complete()
 
@@ -157,6 +213,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # ── 关闭阶段 ──────────────────────────────────────────────────────────
     logger.info("pipeline-rag shutting down")
+    cancel_subscriber_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await cancel_subscriber_task
     if feishu_gateway is not None:
         feishu_gateway.stop()
     close_minio()

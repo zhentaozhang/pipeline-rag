@@ -186,12 +186,12 @@ services:
 
   # ── FastAPI App（Python）─────────────────────────────────────────────────
   app:
-    # ⚠️ 单实例部署约束：SSE 会话状态为进程内实现（ChatRuntimeRegistry），
-    #    禁止多副本 / 多 worker 扩缩容；需水平扩展时先迁移会话状态至 Redis。
+    # 已完成多 Worker 并发改造：DB 短事务解耦 + Redis 租约锁 + Redis Pub/Sub 广播取消，安全支持 4 Worker 并行
     build: *app-build
     image: pipeline-rag-app:latest
     container_name: pipeline-rag
     restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --workers 4 --timeout-graceful-shutdown 60
     depends_on:
       migrate:
         condition: service_completed_successfully

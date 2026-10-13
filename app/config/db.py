@@ -12,8 +12,8 @@ class MySQLSettings(BaseSettings):
     db: str = "pipeline_rag"
     user: str = "root"
     password: str = "5656"
-    pool_size: int = 10
-    max_overflow: int = 20
+    pool_size: int = 20
+    max_overflow: int = 40
     slow_query_ms: int = 500  # 第三轮 #6：慢查询告警阈值（db 事件监听）
 
     @computed_field  # type: ignore[misc]
@@ -40,10 +40,10 @@ class PostgresSettings(BaseSettings):
     db: str = "pipeline_rag_vector"
     user: str = "postgres"
     password: str = "5656"
-    asyncpg_min_size: int = 2
-    asyncpg_max_size: int = 10
-    sqlalchemy_pool_size: int = 5
-    sqlalchemy_max_overflow: int = 10
+    asyncpg_min_size: int = 5
+    asyncpg_max_size: int = 25
+    sqlalchemy_pool_size: int = 10
+    sqlalchemy_max_overflow: int = 20
 
     @computed_field  # type: ignore[misc]
     @property

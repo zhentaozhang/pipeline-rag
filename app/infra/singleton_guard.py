@@ -50,11 +50,9 @@ async def register_and_detect_conflicts(redis: Any) -> tuple[str, bool]:
             if k != key:
                 other_keys.append(k)
         if other_keys:
-            logger.warning(
-                "pipeline-rag 检测到多个应用实例同时运行："
-                "SSE 会话状态为进程内实现（ChatRuntimeRegistry），多 worker / 多副本部署"
-                "将导致「停止会话 / 状态查询 / 会话取消」功能失效。"
-                "必须保持单 worker / 单副本运行；若需水平扩展，请先将会话状态迁移至 Redis。",
+            logger.info(
+                "pipeline-rag 检测到多实例/多 Worker 运行环境："
+                "会话级隔离由 Redis 租约锁保障，跨实例/跨 Worker 会话取消已由 Redis Pub/Sub 广播闭环接管。",
                 instance=instance_id,
                 other_instances=[str(k) for k in other_keys],
             )
