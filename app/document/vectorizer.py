@@ -28,7 +28,13 @@ class VectorizerService:
         self._batch_size = settings.rag.vectorize_batch_size
 
     async def vectorize(
-        self, chunks: list[Chunk], task_id: str = "0", document_name: str = ""
+        self,
+        chunks: list[Chunk],
+        task_id: str = "0",
+        document_name: str = "",
+        scope_code: str = "",
+        business_category: str = "",
+        document_tags: str = "",
     ) -> int:
         """
         批量向量化并写入 PGVector。
@@ -216,6 +222,9 @@ class VectorizerService:
                         "charCount": len(chunk.content),
                         "tokenCount": chunk.token_count or 0,
                         "embeddingModel": embedding_model_name,
+                        "scope_code": getattr(chunk, "scope_code", None) or scope_code,
+                        "businessCategory": getattr(chunk, "business_category", None) or business_category,
+                        "documentTags": getattr(chunk, "document_tags", None) or document_tags,
                     },
                     ensure_ascii=False,
                 )

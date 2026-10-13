@@ -24,7 +24,7 @@ def task_generate_profile(self, index_result: dict, doc_id: str) -> dict:
     _record_task(doc_id, "profile", self.request.id, DocumentTaskStatusEnum.RUNNING.value)
 
     async def _do_generate():
-        from app.infra.pg import close_pg, init_pg
+        from app.infra.pg import init_pg
         from app.manage.service.document_profile_service import generate_profile
         from app.manage.service.storage_service import download_object
 
@@ -43,8 +43,6 @@ def task_generate_profile(self, index_result: dict, doc_id: str) -> dict:
         except Exception as e:
             logger.error("profile generation failed", doc_id=doc_id, error=str(e), exc_info=True)
             return {"doc_id": doc_id, "profile_status": "failed", "error": str(e)}
-        finally:
-            await close_pg()
 
     try:
         result = run_async(_do_generate())
