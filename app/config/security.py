@@ -13,6 +13,7 @@ class JWTSettings(BaseSettings):
     expire_minutes: int = 480
     admin_username: str = "admin"
     admin_password: str = "admin123456"
+    deny_on_redis_error: bool = False
 
     def model_post_init(self, __context) -> None:
         if self.secret_key == "pipeline-rag-admin-token-secret-change-me":
