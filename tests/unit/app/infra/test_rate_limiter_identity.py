@@ -69,3 +69,28 @@ def test_client_identity_uses_bearer_jwt_first(monkeypatch):
         "client": ("9.9.9.9", 12345),
     }
     assert _client_identity(Request(scope)) == "user:tester"
+
+
+def test_client_identity_with_device_fingerprint(monkeypatch):
+    """未登录用户带设备/访客指纹时，按 IP + 设备复合键限流，避免局域网 NAT 误杀"""
+    settings = get_settings()
+    monkeypatch.setattr(settings.rate_limit, "trust_proxy_count", 0)
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/chat/stream",
+        "headers": [(b"x-visitor-id", b"visitor-abc-123")],
+        "client": ("192.168.1.100", 12345),
+    }
+    assert _client_identity(Request(scope)) == "192.168.1.100:dev:visitor-abc-123"
+
+    # 特殊字符过滤测试
+    scope_dirty = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/chat/stream",
+        "headers": [(b"x-device-id", b"dev$bad*id!")],
+        "client": ("192.168.1.100", 12345),
+    }
+    assert _client_identity(Request(scope_dirty)) == "192.168.1.100:dev:devbadid"

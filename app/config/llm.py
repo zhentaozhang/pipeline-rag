@@ -25,6 +25,9 @@ class LLMSettings(BaseSettings):
     # DeepSeek context caching 命中约 1/10 单价；OpenAI 自动缓存同理。
     cache_hit_price_factor: float = 0.1
 
+    # 并发控制：进程级最大并发 LLM 调用数（信号量保护，防 429 与雪崩）
+    max_concurrent_calls: int = 20
+
     model_config = SettingsConfigDict(env_prefix="LLM_", env_file=_ENV_FILE, extra="ignore")
 
 

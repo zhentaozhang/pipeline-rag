@@ -99,21 +99,64 @@ class CircuitBreaker:
         allowed = await self._should_allow()
         if not allowed:
             CIRCUIT_CALL_TOTAL.labels(service=self.name, result="rejected").inc()
-            if self._config.graceful_degradation and self._config.fallback:
-                start = time.monotonic()
-                await self._config.fallback()
-                self._start_time = start
-                CIRCUIT_DURATION.labels(service=self.name, result="fallback").observe(
-                    time.monotonic() - start
-                )
-                CIRCUIT_CALL_TOTAL.labels(service=self.name, result="fallback").inc()
-                return self
             msg = f"{self.name} service is unavailable (circuit open)"
             from app.safety.exceptions import CircuitBreakerException
 
             raise CircuitBreakerException(50301, msg)
         self._start_time = time.monotonic()
         return self
+
+    async def call(
+        self,
+        func: Any,
+        *args: Any,
+        fallback: Any | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """执行受保护的异步调用。熔断开启时优先执行 fallback 替代主体。"""
+        effective_fallback = fallback or self._config.fallback
+        allowed = await self._should_allow()
+        if not allowed:
+            CIRCUIT_CALL_TOTAL.labels(service=self.name, result="rejected").inc()
+            if self._config.graceful_degradation and effective_fallback:
+                start = time.monotonic()
+                CIRCUIT_CALL_TOTAL.labels(service=self.name, result="fallback").inc()
+                res = await effective_fallback(*args, **kwargs)
+                CIRCUIT_DURATION.labels(service=self.name, result="fallback").observe(
+                    time.monotonic() - start
+                )
+                return res
+            msg = f"{self.name} service is unavailable (circuit open)"
+            from app.safety.exceptions import CircuitBreakerException
+
+            raise CircuitBreakerException(50301, msg)
+
+        start = time.monotonic()
+        try:
+            res = await func(*args, **kwargs)
+            elapsed = time.monotonic() - start
+            CIRCUIT_CALL_TOTAL.labels(service=self.name, result="success").inc()
+            CIRCUIT_DURATION.labels(service=self.name, result="success").observe(elapsed)
+            await self.record_success()
+            return res
+        except Exception as exc:
+            elapsed = time.monotonic() - start
+            if isinstance(exc, asyncio.TimeoutError):
+                CIRCUIT_CALL_TOTAL.labels(service=self.name, result="timeout").inc()
+                CIRCUIT_DURATION.labels(service=self.name, result="timeout").observe(elapsed)
+            else:
+                CIRCUIT_CALL_TOTAL.labels(service=self.name, result="failure").inc()
+                CIRCUIT_DURATION.labels(service=self.name, result="failure").observe(elapsed)
+            await self.record_failure()
+            if self._config.graceful_degradation and effective_fallback:
+                f_start = time.monotonic()
+                CIRCUIT_CALL_TOTAL.labels(service=self.name, result="fallback").inc()
+                res = await effective_fallback(*args, **kwargs)
+                CIRCUIT_DURATION.labels(service=self.name, result="fallback").observe(
+                    time.monotonic() - f_start
+                )
+                return res
+            raise
 
     async def __aexit__(
         self,
