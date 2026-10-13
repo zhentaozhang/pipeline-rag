@@ -53,14 +53,33 @@ interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
   body?: ApiRequestBody;
 }
 
+function getVisitorId(): string {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return '';
+  }
+  let vid = localStorage.getItem('pipeline_visitor_id');
+  if (!vid) {
+    vid = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : 'v_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+    localStorage.setItem('pipeline_visitor_id', vid);
+  }
+  return vid;
+}
+
 function buildAuthHeaders(headers: Record<string, string> = {}): Record<string, string> {
+  const visitorId = getVisitorId();
+  const baseHeaders: Record<string, string> = { ...headers };
+  if (visitorId && !baseHeaders['X-Visitor-Id']) {
+    baseHeaders['X-Visitor-Id'] = visitorId;
+  }
   const token = getAdminToken();
   if (!token) {
-    return headers;
+    return baseHeaders;
   }
   return {
     Authorization: `Bearer ${token}`,
-    ...headers
+    ...baseHeaders
   };
 }
 
@@ -318,6 +337,7 @@ function normalizePageString(value: unknown, fallbackValue: string): string {
 
 export interface StreamHandlers {
   onEvent?: (event: StreamEvent) => void;
+  onReconnect?: (attempt: number, maxRetries: number) => void;
 }
 
 export const chatApi = {
@@ -518,34 +538,42 @@ export const chatApi = {
             body: JSON.stringify(payload),
             signal: controller.signal
           });
-        } catch (error) {
-          // 网络层失败（连接未建立）：尝试重连
-          if (attempt >= MAX_RETRIES || controller.signal.aborted) {
-            throw new APIError('网络连接中断，请稍后重试', 0, error);
+
+          if (!response.ok) {
+            throw new APIError(await readResponseMessage(response), response.status);
           }
+          if (!response.body) {
+            throw new APIError('当前浏览器不支持流式响应', 500);
+          }
+
+          await consumeEventStream(response.body, wrappedHandlers);
+
+          // 正常收尾条件：收到 done / error，或用户主动中断
+          if (sawDone || sawError || controller.signal.aborted) {
+            return;
+          }
+        } catch (error) {
+          if (controller.signal.aborted) {
+            return;
+          }
+          // 客户端错误（4xx，如 400 参数校验失败、401 未认证、403 禁止访问、404、422、429 等）非网络/服务端抖动，不应重试，立即向上抛出
+          if (error instanceof APIError && error.status >= 400 && error.status < 500) {
+            throw error;
+          }
+          if (attempt >= MAX_RETRIES) {
+            throw error instanceof APIError ? error : new APIError('网络连接中断，请稍后重试', 0, error);
+          }
+          handlers.onReconnect?.(attempt + 1, MAX_RETRIES);
           await sleep(RETRY_DELAYS_MS[attempt]);
           attempt += 1;
           continue;
         }
 
-        if (!response.ok) {
-          throw new APIError(await readResponseMessage(response), response.status);
-        }
-        if (!response.body) {
-          throw new APIError('当前浏览器不支持流式响应', 500);
-        }
-
-        await consumeEventStream(response.body, wrappedHandlers);
-
-        // 正常收尾条件：收到 done / error，或用户主动中断
-        if (sawDone || sawError || controller.signal.aborted) {
-          return;
-        }
-
-        // 流被截断（服务端断开但未完成）：退避重连续传
+        // 流被截断（服务端断开但未完成且未抛出错误）：退避重连续传
         if (attempt >= MAX_RETRIES) {
           throw new APIError('连接中断，未能恢复完整回答', 0);
         }
+        handlers.onReconnect?.(attempt + 1, MAX_RETRIES);
         await sleep(RETRY_DELAYS_MS[attempt]);
         attempt += 1;
       }
