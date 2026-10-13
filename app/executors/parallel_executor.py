@@ -96,15 +96,12 @@ class ParallelExecutor(ConversationExecutor):
                 SSEEventType.THINKING, f"第 {layer_idx + 1} 层：{len(layer)} 个 Worker"
             )
 
-            # 层内并行执行
-            refs_before = len(self.task.references)
+            # 层内并行执行（各 Worker 上下文相互隔离，杜绝引用污染）
             layer_results = await asyncio.gather(*[self._run_single(sp) for sp in layer])
-            layer_refs = self.task.references[refs_before:]
 
             for sp, result in zip(layer, layer_results, strict=True):
                 label = mode_label(sp.mode)
                 result.sub_plan_id = sp.id
-                result.references = layer_refs
 
                 question_preview = sp.question[:80]
                 if result.error:
@@ -138,7 +135,21 @@ class ParallelExecutor(ConversationExecutor):
             )  # service.py will emit the reference SSE event
 
     async def _run_single(self, sp: SubPlan) -> WorkerResult:
-        executor = self.registry.get(sp.mode)
+        # 创建独立的 worker_task 副本，隔离 references 与缓冲，避免层内并行竞争与引用交叉污染
+        worker_task = self.task.model_copy(
+            update={
+                "references": [],
+                "answer_buffer": [],
+                "thinking_steps": [],
+                "used_tools": [],
+                "question": sp.question,
+            }
+        )
+        if hasattr(self.task, "_cancel_event"):
+            worker_task._cancel_event = self.task._cancel_event
+
+        worker_registry = ExecutorRegistry(self.db, worker_task)
+        executor = worker_registry.get(sp.mode)
         worker_plan = ExecutionPlan(
             mode=sp.mode,
             original_question=sp.question,
@@ -147,7 +158,20 @@ class ParallelExecutor(ConversationExecutor):
             retrieval_document_ids=sp.doc_ids,
         )
         try:
-            return await executor.execute_structured(worker_plan)
+            result = await executor.execute_structured(worker_plan)
+            # 若 result.references 未携带但 worker_task.references 中有内容，补齐之
+            if not result.references and worker_task.references:
+                result.references = list(worker_task.references)
+
+            # 原子合并 token 用量至主 task
+            if hasattr(self.task, "_lock") and self.task._lock:
+                with self.task._lock:
+                    self.task.tokens_used += worker_task.tokens_used
+                    self.task.prompt_tokens += worker_task.prompt_tokens
+                    self.task.completion_tokens += worker_task.completion_tokens
+                    self.task.total_tokens += worker_task.total_tokens
+                    self.task.model_call_count += worker_task.model_call_count
+            return result
         except Exception as e:
             logger.exception("worker_failed", sub_plan_id=sp.id, mode=sp.mode)
             return WorkerResult(sub_plan_id=sp.id, mode=sp.mode, error=str(e))

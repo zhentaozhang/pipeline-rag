@@ -153,6 +153,8 @@ def _execute_sync(code: str) -> str:
     try:
         with redirect_stdout(stdout):
             exec(code, restricted_globals)
+    except MemoryError:
+        return "代码执行失败: 内存超出限制 (Memory Limit Exceeded)。"
     except Exception:
         traceback.print_exc(file=stderr)
     finally:
@@ -247,10 +249,23 @@ _RUNNER_CODE = (
     "import sys\n"
     "try:\n"
     "    import resource\n"
-    "    # Limit virtual memory to 256MB on POSIX\n"
-    "    resource.setrlimit(resource.RLIMIT_AS, (256 * 1024 * 1024, 256 * 1024 * 1024))\n"
-    "    # Limit CPU time to 5s\n"
-    "    resource.setrlimit(resource.RLIMIT_CPU, (5, 5))\n"
+    "    for _attr in ('RLIMIT_AS', 'RLIMIT_DATA'):\n"
+    "        if hasattr(resource, _attr):\n"
+    "            try:\n"
+    "                _lim = getattr(resource, _attr)\n"
+    "                resource.setrlimit(_lim, (256 * 1024 * 1024, 256 * 1024 * 1024))\n"
+    "            except Exception:\n"
+    "                pass\n"
+    "    if hasattr(resource, 'RLIMIT_CPU'):\n"
+    "        try:\n"
+    "            resource.setrlimit(resource.RLIMIT_CPU, (8, 8))\n"
+    "        except Exception:\n"
+    "            pass\n"
+    "    if hasattr(resource, 'RLIMIT_FSIZE'):\n"
+    "        try:\n"
+    "            resource.setrlimit(resource.RLIMIT_FSIZE, (10 * 1024 * 1024, 10 * 1024 * 1024))\n"
+    "        except Exception:\n"
+    "            pass\n"
     "except Exception:\n"
     "    pass\n"
     "from app.agent.tools.code_executor import _execute_sync\n"
