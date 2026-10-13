@@ -308,6 +308,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const result = await chatApi.stopSession(state.currentConversationId);
       get().updateCurrentAssistant((msg) => {
+        msg.status = 'STOPPED';
         msg.statusText = String(result?.message || '用户已停止生成');
       });
     } catch (error) {
@@ -403,6 +404,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
             }
             msg.updatedAt = event.timestamp || new Date().toISOString();
           });
+        },
+        onReconnect: (attempt, maxRetries) => {
+          get().updateCurrentAssistant((msg) => {
+            msg.statusText = `网络连接不稳定，正在自动重连 (${attempt}/${maxRetries})…`;
+          });
         }
       }
     );
@@ -412,7 +418,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await streamHandle.done;
     } catch (error) {
-      if (!(error instanceof Error) || error.name !== 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
+        get().updateCurrentAssistant((msg) => {
+          msg.status = 'STOPPED';
+          if (!msg.statusText) {
+            msg.statusText = '用户已停止生成';
+          }
+        });
+      } else {
         get().updateCurrentAssistant((msg) => {
           msg.errorMessage = errorMessage(error, '流式对话失败');
           msg.status = 'FAILED';
