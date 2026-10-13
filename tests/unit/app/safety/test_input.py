@@ -226,3 +226,18 @@ class TestSafetyInputFilter:
         await set_safety_mode(SafetyMode.MONITOR)
         result = await f.filter("文本")
         assert result.is_safe is True
+
+    def test_deduplicate_overlapping_entities(self):
+        from app.safety.input import PiiEntity
+        from app.safety.presidio_pii import PresidioPiiDetector
+
+        # Entity 1: [0, 5], Entity 2: [3, 8] (partially overlapping), Entity 3: [10, 15] (disjoint)
+        entities = [
+            PiiEntity(type="T1", text="abcde", start=0, end=5, score=0.9),
+            PiiEntity(type="T2", text="cdefg", start=3, end=8, score=0.8),
+            PiiEntity(type="T3", text="xyz", start=10, end=15, score=0.9),
+        ]
+        deduped = PresidioPiiDetector._deduplicate(entities)
+        assert len(deduped) == 2
+        assert deduped[0].type == "T1"
+        assert deduped[1].type == "T3"
