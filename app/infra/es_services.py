@@ -132,6 +132,23 @@ class ElasticsearchKnowledgeRouteIndexService:
         """
         from app.infra.route_indexer import ROUTE_INDEX as _RI
 
+        from app.common.utils import safe_int
+
+        doc_internal_id = safe_int(doc_id, default=0)
+        if not doc_internal_id:
+            from sqlalchemy import select
+
+            from app.db.models.document import Document
+            from app.db.session import get_session_factory
+
+            sf = get_session_factory()
+            if sf:
+                async with sf() as session:
+                    res = await session.execute(
+                        select(Document.id).where(Document.doc_id == doc_id)
+                    )
+                    doc_internal_id = res.scalar_one_or_none() or 0
+
         es = get_es()
         try:
             async with get_es_breaker():
@@ -142,7 +159,7 @@ class ElasticsearchKnowledgeRouteIndexService:
                             "bool": {
                                 "filter": [
                                     {"term": {"entityType": "DOCUMENT"}},
-                                    {"term": {"documentId": int(doc_id)}},
+                                    {"term": {"documentId": doc_internal_id}},
                                 ]
                             }
                         }

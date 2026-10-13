@@ -43,16 +43,22 @@ def _save_mysql_document_chunks(doc_id: str, chunks: list, task_id: str) -> None
 
             chunk_models = []
             for c in chunks:
+                cid = c.chunk_id
+                chunk_id_int = (
+                    int(cid)
+                    if cid is not None and (isinstance(cid, int) or (isinstance(cid, str) and str(cid).isdigit()))
+                    else next_id()
+                )
                 pid = c.parent_chunk_id
                 parent_block_id = (
                     int(pid)
                     if pid is not None
-                    and (isinstance(pid, int) or (isinstance(pid, str) and pid.isdigit()))
+                    and (isinstance(pid, int) or (isinstance(pid, str) and str(pid).isdigit()))
                     else None
                 )
                 chunk_models.append(
                     DocumentChunk(
-                        id=next_id(),
+                        id=chunk_id_int,
                         document_id=doc.id,
                         chunk_no=c.chunk_index,
                         source_type=0,
@@ -124,17 +130,31 @@ def task_vectorize_document(self, chunk_result: dict, doc_id: str) -> dict:
                 await db.execute(select(Document).where(Document.doc_id == doc_id))
             ).scalar_one_or_none()
             if doc:
-                return getattr(doc, "tenant_id", "default"), getattr(doc, "document_name", "")
-        return "default", ""
+                return (
+                    getattr(doc, "tenant_id", "default") or "default",
+                    getattr(doc, "document_name", "") or "",
+                    getattr(doc, "knowledge_scope_code", "") or "",
+                    getattr(doc, "business_category", "") or "",
+                    getattr(doc, "document_tags", "") or "",
+                )
+        return "default", "", "", "", ""
 
-    tenant_id, document_name = run_async(_get_doc_meta())
+    tenant_id, document_name, scope_code, business_category, document_tags = run_async(_get_doc_meta())
     for chunk in chunks:
         chunk.tenant_id = tenant_id  # type: ignore[attr-defined]
+        chunk.scope_code = scope_code  # type: ignore[attr-defined]
+        chunk.business_category = business_category  # type: ignore[attr-defined]
+        chunk.document_tags = document_tags  # type: ignore[attr-defined]
 
     async def _do_vectorize():
         vectorizer = VectorizerService()
         return await vectorizer.vectorize(
-            chunks, task_id=self.request.id, document_name=document_name
+            chunks,
+            task_id=self.request.id,
+            document_name=document_name,
+            scope_code=scope_code,
+            business_category=business_category,
+            document_tags=document_tags,
         )
 
     try:

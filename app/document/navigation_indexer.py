@@ -72,14 +72,33 @@ class NavigationIndexer:
             return len(target_nodes) - len(errors)
         return 0
 
+    async def _resolve_internal_id(self, doc_id: str) -> int:
+        val = safe_int(doc_id, default=0)
+        if val:
+            return val
+        from sqlalchemy import select
+
+        from app.db.models.document import Document
+        from app.db.session import get_session_factory
+
+        sf = get_session_factory()
+        if sf:
+            async with sf() as session:
+                res = await session.execute(select(Document.id).where(Document.doc_id == doc_id))
+                found = res.scalar_one_or_none()
+                if found:
+                    return found
+        return safe_int(doc_id, default=0) or 0
+
     async def delete_doc(self, doc_id: str) -> None:
         """删除该文档所有的 Navigation 索引"""
         es = get_es()
+        internal_id = await self._resolve_internal_id(doc_id)
         await es.delete_by_query(
             index=NAVIGATION_INDEX,
-            body={"query": {"term": {"documentId": int(doc_id)}}},
+            body={"query": {"term": {"documentId": internal_id}}},
         )
-        logger.info("es navigation doc deleted", doc_id=doc_id)
+        logger.info("es navigation doc deleted", doc_id=doc_id, internal_id=internal_id)
 
     async def search_sections(self, doc_id: str, query_text: str, top_k: int = 5) -> list[dict]:
         """
@@ -88,11 +107,12 @@ class NavigationIndexer:
         加权：title^20, sectionPath^15, canonicalPath^5, contentText
         """
         es = get_es()
+        internal_id = await self._resolve_internal_id(doc_id)
         body = {
             "query": {
                 "bool": {
                     "must": [
-                        {"term": {"documentId": int(doc_id)}},
+                        {"term": {"documentId": internal_id}},
                         {
                             "multi_match": {
                                 "query": query_text,

@@ -68,62 +68,36 @@ def task_parse_document(self, doc_id: str, file_path: str) -> dict:
             finally:
                 os.unlink(tmp_path)
 
-        result = run_async(_download_and_parse())
+        async def _execute_full_parse():
+            result = await _download_and_parse()
 
-        # 持久化解析文本到存储
-        async def _save_parsed_text():
+            from app.infra.minio import upload_file
+            import os
+            import tempfile
+
+            text_path = f"{doc_id}/parsed.txt"
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".txt", delete=False, encoding="utf-8"
+            ) as tmp:
+                tmp.write(result.text)
+                tmp_path = tmp.name
             try:
-                from app.infra.minio import upload_file
-
-                text_path = f"{doc_id}/parsed.txt"
-                import os
-                import tempfile
-
-                with tempfile.NamedTemporaryFile(
-                    mode="w", suffix=".txt", delete=False, encoding="utf-8"
-                ) as tmp:
-                    tmp.write(result.text)
-                    tmp_path = tmp.name
                 await upload_file(text_path, tmp_path, "text/plain")
-                os.unlink(tmp_path)
-                logger.info("parsed text saved to storage", doc_id=doc_id, path=text_path)
-            except Exception as e:
-                logger.error(
-                    "failed to save parsed text to storage",
-                    doc_id=doc_id,
-                    error=str(e),
-                    exc_info=True,
-                )
+            finally:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+            logger.info("parsed text saved to storage", doc_id=doc_id, path=text_path)
 
-        run_async(_save_parsed_text())
-
-        # 持久化结构节点
-        structure_node_count = 0
-        if result.nodes:
+            structure_node_count = 0
             from app.manage.service.document_structure_node_service import save_nodes
-
-            async def _save_nodes():
-                nonlocal structure_node_count
-                try:
-                    async with _get_mysql_session() as session, session.begin():
-                        await save_nodes(session, doc_id, self.request.id, result.nodes)
-                        structure_node_count = len(result.nodes)
-                except Exception as e:
-                    logger.error(
-                        "failed to save document structure nodes in parser",
-                        error=str(e),
-                        exc_info=True,
-                    )
-
-            run_async(_save_nodes())
-
-        # Update document with parse results (parseStatus, strategyStatus, charCount, tokenCount, etc.)
-        async def _update_doc_after_parse():
             from sqlalchemy import update
-
             from app.db.models.document import Document as DocModel
 
             async with _get_mysql_session() as session, session.begin():
+                if result.nodes:
+                    await save_nodes(session, doc_id, self.request.id, result.nodes)
+                    structure_node_count = len(result.nodes)
+
                 stmt = (
                     update(DocModel)
                     .where(DocModel.doc_id == doc_id)
@@ -134,7 +108,7 @@ def task_parse_document(self, doc_id: str, file_path: str) -> dict:
                         token_count=result.token_count,
                         structure_level=result.structure_level,
                         content_quality_level=result.content_quality_level,
-                        parse_text_path=f"{doc_id}/parsed.txt",
+                        parse_text_path=text_path,
                         parse_error_msg=None,
                         last_parse_task_id=self.request.id,
                         structure_node_count=structure_node_count,
@@ -142,7 +116,9 @@ def task_parse_document(self, doc_id: str, file_path: str) -> dict:
                 )
                 await session.execute(stmt)
 
-        run_async(_update_doc_after_parse())
+            return result, structure_node_count
+
+        result, structure_node_count = run_async(_execute_full_parse())
 
         _save_log(
             doc_id,

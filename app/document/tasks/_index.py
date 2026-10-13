@@ -70,7 +70,7 @@ def task_index_document(self, vectorize_result: dict, doc_id: str) -> dict:
         DocumentTaskEventTypeEnum,
         DocumentTaskStatusEnum,
     )
-    from app.infra.es import close_es, init_es
+    from app.infra.es import init_es
 
     logger.info("task index started", doc_id=doc_id, task_id=self.request.id)
     _record_task(doc_id, "index", self.request.id, DocumentTaskStatusEnum.RUNNING.value)
@@ -95,7 +95,7 @@ def task_index_document(self, vectorize_result: dict, doc_id: str) -> dict:
     async def _do_index():
         await init_es()
         from app.config import get_settings as _gs
-        from app.infra.neo4j import close_neo4j, init_neo4j
+        from app.infra.neo4j import init_neo4j
 
         if _gs().neo4j.enabled:
             await init_neo4j()
@@ -158,9 +158,6 @@ def task_index_document(self, vectorize_result: dict, doc_id: str) -> dict:
         except Exception as e:
             logger.error("index pipeline failed", error=str(e), exc_info=True)
             raise
-        finally:
-            await close_es()
-            await close_neo4j()
 
     try:
         count = run_async(_do_index())

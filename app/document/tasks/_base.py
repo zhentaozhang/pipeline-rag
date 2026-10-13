@@ -220,9 +220,9 @@ def _compensate(doc_id: str, failed_stage: int | None) -> None:
     async def _do():
         from sqlalchemy import delete, select
 
-        from app.db.models.document import Document, DocumentChunk
+        from app.db.models.document import Document, DocumentChunk, DocumentParentBlock
 
-        # vectorize 及之后 → 删 MySQL chunks + PG 向量
+        # vectorize 及之后 → 删 MySQL chunks + MySQL 父块 + PG 向量
         if failed_stage >= DocumentTaskStageEnum.VECTORIZE.value:
             async with _get_mysql_session() as db, db.begin():
                 doc = (
@@ -232,66 +232,57 @@ def _compensate(doc_id: str, failed_stage: int | None) -> None:
                     await db.execute(
                         delete(DocumentChunk).where(DocumentChunk.document_id == doc.id)
                     )
+                    await db.execute(
+                        delete(DocumentParentBlock).where(DocumentParentBlock.document_id == doc.id)
+                    )
 
-            from app.infra.pg import close_pg, init_pg
             from app.infra.pg import transaction as _pg_transaction
 
-            await init_pg()
-            try:
-                async with _pg_transaction() as conn, _get_mysql_session() as db:
-                    doc = (
-                        await db.execute(select(Document).where(Document.doc_id == doc_id))
-                    ).scalar_one_or_none()
-                    if doc:
-                        await conn.execute(
-                            "DELETE FROM pipeline_rag_document_embedding WHERE document_id = $1",
-                            doc.id,
-                        )
-                        await conn.execute(
-                            "DELETE FROM document_chunk WHERE doc_id = $1",
-                            doc_id,
-                        )
-            finally:
-                await close_pg()
+            async with _pg_transaction() as conn, _get_mysql_session() as db:
+                doc = (
+                    await db.execute(select(Document).where(Document.doc_id == doc_id))
+                ).scalar_one_or_none()
+                if doc:
+                    await conn.execute(
+                        "DELETE FROM pipeline_rag_document_embedding WHERE document_id = $1",
+                        doc.id,
+                    )
+                    await conn.execute(
+                        "DELETE FROM document_chunk WHERE doc_id = $1",
+                        doc_id,
+                    )
 
         # index 及之后 → 删 ES + Neo4j
         if failed_stage >= DocumentTaskStageEnum.STORE_COMPLETE.value:
             from app.common.utils import safe_int
-            from app.infra.es import close_es, get_es, init_es
+            from app.infra.es import CHUNK_INDEX, get_es
 
-            await init_es()
-            try:
+            async with _get_mysql_session() as db:
+                doc = (
+                    await db.execute(select(Document).where(Document.doc_id == doc_id))
+                ).scalar_one_or_none()
+
+            doc_id_int = doc.id if doc else safe_int(doc_id, default=0)
+            if doc_id_int:
                 es = get_es()
-                doc_id_int = safe_int(doc_id, default=0)
-                if doc_id_int:
-                    await es.delete_by_query(
-                        index="document_chunk",
-                        body={"query": {"term": {"documentId": doc_id_int}}},
-                        refresh=True,
-                    )
-            finally:
-                await close_es()
+                await es.delete_by_query(
+                    index=CHUNK_INDEX,
+                    body={"query": {"term": {"documentId": doc_id_int}}},
+                    refresh=True,
+                )
 
             from app.config import get_settings
 
-            if get_settings().neo4j.enabled:
-                from app.infra.neo4j import close_neo4j, get_neo4j, init_neo4j
+            if get_settings().neo4j.enabled and doc:
+                from app.infra.neo4j import get_neo4j
 
-                await init_neo4j()
-                try:
-                    async with _get_mysql_session() as db:
-                        doc = (
-                            await db.execute(select(Document).where(Document.doc_id == doc_id))
-                        ).scalar_one_or_none()
-                        if doc:
-                            driver = get_neo4j()
-                            async with driver.session() as session:
-                                await session.run(
-                                    "MATCH (n:DocumentNode {documentId: $doc_id}) DETACH DELETE n",
-                                    doc_id=doc.id,
-                                )
-                finally:
-                    await close_neo4j()
+                driver = get_neo4j()
+                if driver:
+                    async with driver.session() as session:
+                        await session.run(
+                            "MATCH (n) WHERE n.documentId = $doc_id DETACH DELETE n",
+                            doc_id=doc.id,
+                        )
 
         # 回退 pipeline_stage
         async with _get_mysql_session() as db, db.begin():

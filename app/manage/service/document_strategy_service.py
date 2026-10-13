@@ -86,10 +86,12 @@ async def recommend_strategy(db: AsyncSession, doc_id: str) -> None:
     if not doc_row:
         logger.error("document not found for strategy recommendation", doc_id=doc_id)
         raise ValueError(f"document not found: {doc_id}")
+    from app.common.utils import safe_int
+
     doc_internal_id = doc_row[0]
-    content_quality_level = doc_row[1] or 0
-    file_type = doc_row[2] or ""
-    char_count = doc_row[3] or 0
+    content_quality_level = safe_int(doc_row[1], default=0)
+    file_type = safe_int(doc_row[2], default=0)
+    char_count = safe_int(doc_row[3], default=0)
 
     stmt = select(
         func.count(DocumentStructureNode.id), func.max(DocumentStructureNode.depth)

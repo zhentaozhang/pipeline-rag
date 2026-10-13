@@ -34,7 +34,10 @@ class DocumentIndexer:
         from typing import Any
 
         # 清理该文档的旧 ES 索引，避免 pipeline 重跑后累积重复
-        doc_id = safe_int(chunks[0].doc_id, default=None) if chunks else None
+        doc_id = (
+            getattr(chunks[0], "document_id", None)
+            or safe_int(chunks[0].doc_id, default=None)
+        ) if chunks else None
         if doc_id:
             await es.delete_by_query(
                 index=CHUNK_INDEX,
@@ -51,7 +54,7 @@ class DocumentIndexer:
                 {
                     "chunkId": chunk.chunk_id,
                     "tenantId": tenant_id,
-                    "documentId": safe_int(chunk.doc_id),
+                    "documentId": getattr(chunk, "document_id", None) or safe_int(chunk.doc_id, default=0),
                     "taskId": safe_int(task_id),
                     "chunkNo": chunk.chunk_index,
                     "documentName": doc_title,
@@ -87,6 +90,7 @@ class DocumentIndexer:
             logger.info("Neo4j is disabled, skipping graph injection")
             return 0
 
+        import re
         from sqlalchemy import select
 
         from app.db.models.document import Document, DocumentStructureNode
@@ -99,12 +103,20 @@ class DocumentIndexer:
             return 0
 
         async with sf() as session:
-            doc_stmt = select(Document.id).where(Document.doc_id == doc_id)
+            doc_stmt = select(Document).where(Document.doc_id == doc_id)
             doc_res = await session.execute(doc_stmt)
-            doc_internal_id = doc_res.scalar_one_or_none()
-            if doc_internal_id is None:
+            doc_obj = doc_res.scalar_one_or_none()
+            if doc_obj is None:
+                int_id = safe_int(doc_id, default=0)
+                if int_id:
+                    doc_res = await session.execute(select(Document).where(Document.id == int_id))
+                    doc_obj = doc_res.scalar_one_or_none()
+            if doc_obj is None:
                 logger.warning("Document not found for neo4j index", doc_id=doc_id)
                 return 0
+            doc_internal_id = doc_obj.id
+            doc_uuid = doc_obj.doc_id
+            doc_title = doc_obj.document_name or doc_obj.original_file_name or ""
             stmt = (
                 select(DocumentStructureNode)
                 .where(DocumentStructureNode.document_id == doc_internal_id)
@@ -119,53 +131,108 @@ class DocumentIndexer:
 
         driver = get_neo4j()
 
-        # 1. 删除旧节点
+        def _normalize(text: str | None) -> str:
+            if not text:
+                return ""
+            return re.sub(r"[\s>`*#_\-]+", "", text).lower()
+
+        # 1. 准备节点数据
+        node_dicts = []
+        for n in nodes:
+            node_dicts.append(
+                {
+                    "nodeId": n.id,
+                    "documentId": n.document_id,
+                    "parseTaskId": safe_int(n.parse_task_id, default=0) if n.parse_task_id else 0,
+                    "nodeNo": n.node_no or 0,
+                    "nodeType": str(n.node_type) if n.node_type is not None else "",
+                    "parentNodeId": n.parent_node_id,
+                    "prevSiblingNodeId": n.prev_sibling_node_id,
+                    "nextSiblingNodeId": n.next_sibling_node_id,
+                    "depth": n.depth or 0,
+                    "nodeCode": n.node_code or "",
+                    "title": n.title or "",
+                    "anchorText": n.anchor_text or "",
+                    "sectionPath": n.section_path or "",
+                    "canonicalPath": n.canonical_path or "",
+                    "contentText": n.content_text or "",
+                    "normalizedTitle": _normalize(n.title),
+                    "normalizedPath": _normalize(n.section_path),
+                }
+            )
+
         async with driver.session() as n_session:
+            # 1. 删除旧节点
             await n_session.run(
-                "MATCH (n:DocumentNode {documentId: $doc_id}) DETACH DELETE n",
+                "MATCH (n) WHERE n.documentId = $doc_id DETACH DELETE n",
                 doc_id=doc_internal_id,
             )
 
-            # 2. 批量创建节点
-            node_dicts = []
-            for n in nodes:
-                node_dicts.append(
-                    {
-                        "nodeId": n.id,
-                        "documentId": n.document_id,
-                        "nodeNo": n.node_no,
-                        "nodeType": str(n.node_type) if n.node_type else "",
-                        "parentNodeId": n.parent_node_id,
-                        "title": n.title or "",
-                        "depth": n.depth,
-                        "content": n.content_text or "",
-                    }
-                )
+            # 2. 创建 Document 根节点
+            await n_session.run(
+                """
+                MERGE (d:Document {documentId: $doc_id})
+                SET d.docId = $doc_uuid, d.title = $doc_title
+                """,
+                doc_id=doc_internal_id,
+                doc_uuid=doc_uuid,
+                doc_title=doc_title,
+            )
 
+            # 3. 批量创建 Section 节点
             await n_session.run(
                 """
                 UNWIND $nodes AS n
-                CREATE (node:DocumentNode {
+                CREATE (node:Section {
                     nodeId: n.nodeId,
                     documentId: n.documentId,
+                    parseTaskId: n.parseTaskId,
                     nodeNo: n.nodeNo,
                     nodeType: n.nodeType,
                     parentNodeId: n.parentNodeId,
-                    title: n.title,
+                    prevSiblingNodeId: n.prevSiblingNodeId,
+                    nextSiblingNodeId: n.nextSiblingNodeId,
                     depth: n.depth,
-                    content: n.content
+                    nodeCode: n.nodeCode,
+                    title: n.title,
+                    anchorText: n.anchorText,
+                    sectionPath: n.sectionPath,
+                    canonicalPath: n.canonicalPath,
+                    contentText: n.contentText,
+                    normalizedTitle: n.normalizedTitle,
+                    normalizedPath: n.normalizedPath
                 })
                 """,
                 nodes=node_dicts,
             )
 
-            # 3. 建立树形层级关系
+            # 4. 建立 Document -> Section 的 HAS_SECTION 关系
             await n_session.run(
                 """
-                MATCH (child:DocumentNode {documentId: $doc_id})
+                MATCH (d:Document {documentId: $doc_id}), (s:Section {documentId: $doc_id})
+                MERGE (d)-[:HAS_SECTION]->(s)
+                """,
+                doc_id=doc_internal_id,
+            )
+
+            # 5. 建立 Section 之间的树形层级关系 HAS_CHILD
+            await n_session.run(
+                """
+                MATCH (child:Section {documentId: $doc_id})
                 WHERE child.parentNodeId IS NOT NULL
-                MATCH (parent:DocumentNode {nodeId: child.parentNodeId})
-                MERGE (parent)-[:CONTAINS]->(child)
+                MATCH (parent:Section {documentId: $doc_id, nodeId: child.parentNodeId})
+                MERGE (parent)-[:HAS_CHILD]->(child)
+                """,
+                doc_id=doc_internal_id,
+            )
+
+            # 6. 建立兄弟节之间的 NEXT_SIBLING 关系
+            await n_session.run(
+                """
+                MATCH (prev:Section {documentId: $doc_id})
+                WHERE prev.nextSiblingNodeId IS NOT NULL
+                MATCH (nxt:Section {documentId: $doc_id, nodeId: prev.nextSiblingNodeId})
+                MERGE (prev)-[:NEXT_SIBLING]->(nxt)
                 """,
                 doc_id=doc_internal_id,
             )
@@ -175,38 +242,43 @@ class DocumentIndexer:
 
     async def delete_doc(self, doc_id: str) -> None:
         """删除文档的所有 ES 索引和 Neo4j 图谱节点"""
-        es = get_es()
-        await es.delete_by_query(
-            index=CHUNK_INDEX,
-            body={"query": {"term": {"documentId": int(doc_id)}}},
-        )
-
-        from app.infra.neo4j import get_neo4j
-
-        driver = get_neo4j()
         from sqlalchemy import select
 
         from app.db.models.document import Document
         from app.db.session import get_session_factory
 
         sf = get_session_factory()
-        doc_internal_id = None
-        if sf:
+        doc_internal_id = safe_int(doc_id, default=None)
+        if not doc_internal_id and sf:
             async with sf() as session:
                 doc_res = await session.execute(
                     select(Document.id).where(Document.doc_id == doc_id)
                 )
                 doc_internal_id = doc_res.scalar_one_or_none()
 
+        es = get_es()
         if doc_internal_id:
-            async with driver.session() as session:
-                await session.run(
-                    """
-                    MATCH (n)
-                    WHERE n.documentId = $doc_id
-                    DETACH DELETE n
-                    """,
-                    doc_id=doc_internal_id,
-                )
+            await es.delete_by_query(
+                index=CHUNK_INDEX,
+                body={"query": {"term": {"documentId": doc_internal_id}}},
+                refresh=True,
+            )
 
-        logger.info("es and neo4j doc deleted", doc_id=doc_id)
+        from app.config import get_settings
+
+        if get_settings().neo4j.enabled and doc_internal_id:
+            from app.infra.neo4j import get_neo4j
+
+            driver = get_neo4j()
+            if driver:
+                async with driver.session() as session:
+                    await session.run(
+                        """
+                        MATCH (n)
+                        WHERE n.documentId = $doc_id
+                        DETACH DELETE n
+                        """,
+                        doc_id=doc_internal_id,
+                    )
+
+        logger.info("es and neo4j doc deleted", doc_id=doc_id, internal_id=doc_internal_id)
