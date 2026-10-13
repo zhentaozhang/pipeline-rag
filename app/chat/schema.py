@@ -238,6 +238,7 @@ class Evidence(BaseModel):
     rerank_score: float = 0.0
     channel: str = ""  # vector | keyword | hybrid
     chunk_no: int | None = None
+    parent_block_id: int | None = None
 
     # Rerank 元数据
     rerank_model: str | None = None

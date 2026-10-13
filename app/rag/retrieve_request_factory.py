@@ -55,6 +55,19 @@ class DocumentRetrieveRequestFactory:
         为每个子问题构建增强的检索查询 + 过滤条件。
         直接修改 plan.sub_questions 并返回。
         """
+        if not plan.sub_questions and plan.retrieval_sub_questions:
+            from app.chat.schema import SubQuestion
+            plan.sub_questions = [
+                SubQuestion(
+                    index=i,
+                    text=q,
+                    original=plan.original_question,
+                    tenant_id=plan.tenant_id,
+                    doc_ids=plan.retrieval_document_ids,
+                )
+                for i, q in enumerate(plan.retrieval_sub_questions)
+            ]
+
         for sub_q in plan.sub_questions:
             normalized_question = (sub_q.text or "").strip()
             if not normalized_question:
@@ -80,7 +93,7 @@ class DocumentRetrieveRequestFactory:
 
             # ── 3. 导航段文档ID注入 ────────────────────────────────────────
             if plan.selected_document_id and not sub_q.doc_ids:
-                sub_q.doc_ids = [plan.selected_document_id]
+                sub_q.doc_ids = [str(plan.selected_document_id)]
 
             logger.info(
                 "检索请求构造",
@@ -90,6 +103,9 @@ class DocumentRetrieveRequestFactory:
                 year_hints=filters.get("year_hints", []),
                 query_context_hints=query_context_hints,
             )
+
+        if plan.sub_questions:
+            plan.retrieval_sub_questions = [sq.text for sq in plan.sub_questions if sq.text]
 
         return plan
 

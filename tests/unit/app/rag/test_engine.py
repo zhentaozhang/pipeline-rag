@@ -497,3 +497,44 @@ class TestRetrieveWithCorrection:
         assert calls["rewrite"] == 1
         assert not ctx.is_empty
         assert any("已按改写查询重查" in n for n in ctx.retrieval_notes)
+
+    @pytest.mark.asyncio
+    async def test_retrieve_preserves_factory_augmented_sub_questions(self, monkeypatch):
+        captured_sub_qs = []
+
+        class FakeChannel:
+            async def retrieve(self, sub_q):
+                captured_sub_qs.append(sub_q)
+                return [make_evidence(chunk_id="c1")]
+
+        class FakeElevator:
+            async def elevate(self, docs, session=None):
+                return docs
+
+        monkeypatch.setattr(engine_module, "settings", make_settings())
+        monkeypatch.setattr(engine_module, "ParentBlockElevator", FakeElevator)
+        monkeypatch.setattr("app.rag.channels.vector.VectorRetrievalChannel", FakeChannel)
+        monkeypatch.setattr("app.rag.channels.keyword.KeywordRetrievalChannel", FakeChannel)
+
+        engine = RagRetrievalEngine()
+        plan = make_plan(
+            tenant_id="tenant_x",
+            selected_document_id="999",
+            sub_questions=[
+                SubQuestion(
+                    index=0,
+                    text="原始问题",
+                    original="原始问题",
+                    tenant_id="tenant_x",
+                    doc_ids=["999"],
+                )
+            ],
+            retrieval_sub_questions=["原始问题"],
+        )
+
+        ctx = await engine.retrieve(plan)
+        assert len(captured_sub_qs) > 0
+        # Check that the sub_question received by channel has tenant_id and doc_ids preserved
+        assert captured_sub_qs[0].tenant_id == "tenant_x"
+        assert "999" in captured_sub_qs[0].doc_ids
+

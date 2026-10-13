@@ -92,17 +92,30 @@ class RagRetrievalEngine:
 
         plan = await DocumentRetrieveRequestFactory().build(plan)
 
-        retrieval_sub_qs = plan.retrieval_sub_questions
-        if retrieval_sub_qs:
-            sub_questions = [
-                SubQuestion(index=i, text=q, original=plan.original_question)
-                for i, q in enumerate(retrieval_sub_qs)
-            ]
-        elif plan.sub_questions:
+        if plan.sub_questions:
             sub_questions = plan.sub_questions
+        elif plan.retrieval_sub_questions:
+            sub_questions = [
+                SubQuestion(
+                    index=i,
+                    text=q,
+                    original=plan.original_question,
+                    tenant_id=plan.tenant_id,
+                    doc_ids=plan.retrieval_document_ids,
+                )
+                for i, q in enumerate(plan.retrieval_sub_questions)
+            ]
         else:
             sub_q = plan.retrieval_question or plan.original_question
-            sub_questions = [SubQuestion(index=0, text=sub_q, original=plan.original_question)]
+            sub_questions = [
+                SubQuestion(
+                    index=0,
+                    text=sub_q,
+                    original=plan.original_question,
+                    tenant_id=plan.tenant_id,
+                    doc_ids=plan.retrieval_document_ids,
+                )
+            ]
 
         # ── 子问题并行，每个有超时保护 ─────────────────────────────
         per_sub_timeout = max(settings.rag.sub_question_timeout_ms / 1000.0, 0.001)
@@ -184,8 +197,20 @@ class RagRetrievalEngine:
             if not rewritten or rewritten == base_question:
                 break
             corrected = True
+            base_question = rewritten
             plan.retrieval_question = rewritten
             plan.retrieval_sub_questions = [rewritten]
+            from app.chat.schema import SubQuestion
+
+            plan.sub_questions = [
+                SubQuestion(
+                    index=0,
+                    text=rewritten,
+                    original=plan.original_question,
+                    tenant_id=plan.tenant_id,
+                    doc_ids=plan.retrieval_document_ids,
+                )
+            ]
             context = await self.retrieve(plan, tracer=tracer)
             context.retrieval_notes.append(
                 f"检索证据不足，已按改写查询重查：{rewritten[:80]}"
@@ -552,22 +577,20 @@ class RagRetrievalEngine:
         return None
 
     def _apply_evidence_gate(self, result: RetrievalChannelResult) -> RetrievalChannelResult:
-        """证据闸门过滤：排除 null 得分的低质量文档。"""
+        """证据闸门过滤：各通道独立门限判定，杜绝向量阈值污染关键词通道。"""
         if not result.documents:
             return result
 
         doc_scores = [(e, self._resolve_score(e)) for e in result.documents]
 
-        for e, score in doc_scores:
-            if score is None or score < settings.rag.min_vector_similarity:
-                e.gate_passed = False
-
         if result.channel_name == "vector":
-            filtered = [
-                e
-                for e, score in doc_scores
-                if score is not None and score >= settings.rag.min_vector_similarity
-            ]
+            filtered: list[Evidence] = []
+            for e, score in doc_scores:
+                if score is not None and score >= settings.rag.min_vector_similarity:
+                    e.gate_passed = True
+                    filtered.append(e)
+                else:
+                    e.gate_passed = False
             return RetrievalChannelResult(channel_name=result.channel_name, documents=filtered)
 
         if result.channel_name == "keyword":
@@ -576,8 +599,18 @@ class RagRetrievalEngine:
             if top_score is None or top_score <= 0:
                 return result
             floor = top_score * max(0.0, settings.rag.keyword_score_ratio)
-            filtered = [e for e, score in doc_scores if score is not None and score >= floor]
+            filtered = []
+            for e, score in doc_scores:
+                if score is not None and score >= floor:
+                    e.gate_passed = True
+                    filtered.append(e)
+                else:
+                    e.gate_passed = False
             return RetrievalChannelResult(channel_name=result.channel_name, documents=filtered)
+
+        for e, score in doc_scores:
+            if score is None:
+                e.gate_passed = False
 
         return result
 
