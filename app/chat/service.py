@@ -6,13 +6,14 @@ BusinessChatService — 对话主服务
 """
 
 import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import date as date_type
 from typing import TYPE_CHECKING
 
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.chat.schema import StreamLaunchPlan
 from app.chat.service_executor import execute_stream
@@ -59,10 +60,44 @@ class BusinessChatService:
     """
     对话主流程协调器。
     仅负责流程串联，具体业务下沉至各子服务。
+    支持短事务连接模式，长生成周期零持有数据库连接。
     """
 
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(
+        self,
+        db: AsyncSession | None = None,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
+    ) -> None:
         self.db = db
+        self._session_factory = session_factory
+
+    @contextlib.asynccontextmanager
+    async def _get_session(self) -> AsyncIterator[AsyncSession]:
+        """短事务模式获取 DB Session，执行完自动提交/关闭"""
+        if self.db is not None:
+            try:
+                yield self.db
+                if self.db.is_active:
+                    await self.db.commit()
+            except Exception:
+                if self.db.is_active:
+                    await self.db.rollback()
+                raise
+        else:
+            from app.db.session import get_session_factory
+
+            sf = self._session_factory or get_session_factory()
+            if sf is None:
+                raise RuntimeError("Session factory not initialized.")
+            async with sf() as session:
+                try:
+                    yield session
+                    if session.is_active:
+                        await session.commit()
+                except Exception:
+                    if session.is_active:
+                        await session.rollback()
+                    raise
 
     async def stream(
         self, request: "ChatRequest", trace_id: str | None = None
@@ -75,13 +110,8 @@ class BusinessChatService:
         → bindClientChannel → activateGeneration → buildConversationExecution
         → executor.execute
         """
-        from app.chat.memory_service import PersistentConversationMemoryService
         from app.chat.store import ConversationArchiveStore
         from app.infra.redis_lease import RedisLeaseManager
-
-        # ── 初始化存储层 ──────────────────────────────────────────────────
-        archive_store = ConversationArchiveStore(self.db)
-        memory_service = PersistentConversationMemoryService(self.db)
 
         # ── 0. 参数规范化 ─────────────────────────────────────────────────
         question = _normalize_question(request.question)
@@ -101,8 +131,10 @@ class BusinessChatService:
             current_date_text=current_date_text,
         )
 
-        # 2. 查找或创建 Session (为了获取 session_id)
-        session, _ = await archive_store.find_or_create_session(conversation_id, question)
+        # 2. 查找或创建 Session (短事务获取并释放)
+        async with self._get_session() as bootstrap_db:
+            bootstrap_archive_store = ConversationArchiveStore(bootstrap_db)
+            session, _ = await bootstrap_archive_store.find_or_create_session(conversation_id, question)
 
         # ── 3. 集群级 Redis 锁（先获取锁再注册任务）───────────────────────
         lease_mgr = RedisLeaseManager(conversation_id)
@@ -161,18 +193,33 @@ class BusinessChatService:
 
         state = _StreamState()
 
-        # ── 响应缓存（第二轮架构评审·可以优化 3）：命中跳过执行，未命中收集回写 ──
+        # ── 响应缓存：短事务查询（命中跳过执行，未命中收集回写）────────────
         cached_hit = None
         collected_events: list[str] = []
         if settings.chat_cache.enabled:
             from app.chat.response_cache import lookup as cache_lookup
 
-            cached_hit = await cache_lookup(
-                self.db, conversation_id, question, chat_mode, request.doc_ids
-            )
+            async with self._get_session() as cache_lookup_db:
+                cached_hit = await cache_lookup(
+                    cache_lookup_db, conversation_id, question, chat_mode, request.doc_ids
+                )
 
         try:
             if cached_hit is not None:
+                # 缓存命中：前置持久化 exchange，确保后续 finalize 能够 complete_exchange 成功落库
+                from app.chat.store import ConversationArchiveStore
+
+                task.exchange_id = temp_exchange_id
+                async with self._get_session() as cache_exchange_db:
+                    cache_archive_store = ConversationArchiveStore(cache_exchange_db)
+                    await cache_archive_store.start_exchange(
+                        exchange_id=temp_exchange_id,
+                        conversation_id=conversation_id,
+                        session_id=session.id,
+                        question=question,
+                        execution_mode="cache_hit",
+                    )
+
                 # 命中：回放缓存事件（替换 exchange_id 为本次真实值）
                 import json as _json
 
@@ -182,7 +229,7 @@ class BusinessChatService:
                         payload_str = line[len("data:"):].strip()
                         try:
                             payload = _json.loads(payload_str)
-                            if payload.get("type") == "done" and payload.get("exchangeId") is not None:
+                            if payload.get("exchangeId") is not None:
                                 payload["exchangeId"] = temp_exchange_id
                                 raw = "data: " + _json.dumps(payload, ensure_ascii=False)
                         except ValueError:
@@ -191,9 +238,12 @@ class BusinessChatService:
                 state.full_answer = [cached_hit.answer]
             else:
                 timeout = settings.rag.stream_timeout_seconds
+                # 零持有数据库连接保障：execute_stream 不再由长 session 上下文包裹。
+                # 记忆加载与 exchange 预持久化在 execute_stream 内部短事务内按需完成并立即归还连接池，
+                # SSE 跨越数十秒的大模型流式生成周期全程零持有数据库连接，避免在高并发下占满连接池。
                 async for event in _async_generator_with_timeout(
                     execute_stream(
-                        db=self.db,
+                        db=None,
                         task=task,
                         conversation_id=conversation_id,
                         temp_exchange_id=temp_exchange_id,
@@ -201,20 +251,26 @@ class BusinessChatService:
                         request=request,
                         chat_mode=chat_mode,
                         current_date_text=current_date_text,
-                        memory_service=memory_service,
-                        archive_store=archive_store,
+                        memory_service=None,
+                        archive_store=None,
                         session=session,
                         lease_mgr=lease_mgr,
                         state=state,
                         trace_id=trace_id,
+                        get_session=self._get_session,
                     ),
                     timeout=timeout,
                 ):
                     collected_events.append(event)
                     yield event
 
-            # 正常结束（非失败/停止）→ 写缓存（仅确定性问答 + 无历史，store 内部校验）
-            if settings.chat_cache.enabled and not state.turn_failed and not state.turn_stopped:
+            # 正常结束（非失败/停止且非命中缓存回放）→ 写缓存（短事务独立写入）
+            if (
+                cached_hit is None
+                and settings.chat_cache.enabled
+                and not state.turn_failed
+                and not state.turn_stopped
+            ):
                 from app.chat.response_cache import (
                     store as cache_store,
                 )
@@ -227,15 +283,16 @@ class BusinessChatService:
                     or '"type": "recommend"' in e
                     or '"type": "done"' in e
                 ]
-                await cache_store(
-                    self.db,
-                    conversation_id,
-                    question,
-                    chat_mode,
-                    request.doc_ids,
-                    cacheable_events,
-                    "".join(state.full_answer),
-                )
+                async with self._get_session() as cache_store_db:
+                    await cache_store(
+                        cache_store_db,
+                        conversation_id,
+                        question,
+                        chat_mode,
+                        request.doc_ids,
+                        cacheable_events,
+                        "".join(state.full_answer),
+                    )
 
         except asyncio.CancelledError:
             state.turn_stopped = True
@@ -271,17 +328,23 @@ class BusinessChatService:
                 yield event
 
         finally:
-            await finalize_stream(
-                db=self.db,
-                task=task,
-                plan=task.plan,
-                question=question,
-                conversation_id=conversation_id,
-                temp_exchange_id=temp_exchange_id,
-                state=state,
-                acquired=acquired,
-                lease_mgr=lease_mgr,
-                memory_service=memory_service,
-                archive_store=archive_store,
-                session=session,
-            )
+            from app.chat.memory_service import PersistentConversationMemoryService
+            from app.chat.store import ConversationArchiveStore
+
+            async with self._get_session() as finalize_db:
+                final_archive_store = ConversationArchiveStore(finalize_db)
+                final_memory_service = PersistentConversationMemoryService(finalize_db)
+                await finalize_stream(
+                    db=finalize_db,
+                    task=task,
+                    plan=task.plan,
+                    question=question,
+                    conversation_id=conversation_id,
+                    temp_exchange_id=temp_exchange_id,
+                    state=state,
+                    acquired=acquired,
+                    lease_mgr=lease_mgr,
+                    memory_service=final_memory_service,
+                    archive_store=final_archive_store,
+                    session=session,
+                )

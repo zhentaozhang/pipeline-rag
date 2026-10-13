@@ -1,6 +1,7 @@
 import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -16,20 +17,21 @@ logger = structlog.get_logger(__name__)
 
 
 async def execute_stream(
-    db,
-    task: ChatTaskInfo,
-    conversation_id: str,
-    temp_exchange_id: int,
-    question: str,
-    request,
-    chat_mode: str,
-    current_date_text: str,
-    memory_service,
-    archive_store,
-    session,
-    lease_mgr,
-    state,
+    db=None,
+    task: ChatTaskInfo = None,
+    conversation_id: str = "",
+    temp_exchange_id: int = 0,
+    question: str = "",
+    request=None,
+    chat_mode: str = "",
+    current_date_text: str = "",
+    memory_service=None,
+    archive_store=None,
+    session=None,
+    lease_mgr=None,
+    state=None,
     trace_id: str | None = None,
+    get_session: Any = None,
 ) -> AsyncIterator[str]:
     plan: ExecutionPlan | None = None
 
@@ -76,7 +78,18 @@ async def execute_stream(
     )
 
     async with tracer.span("memory_load", kind=SpanKind.PIPELINE):
-        memory_ctx = await memory_service.load(conversation_id)
+        if get_session is not None:
+            from app.chat.memory_service import PersistentConversationMemoryService
+
+            async with get_session() as prep_db:
+                prep_memory_service = PersistentConversationMemoryService(prep_db)
+                memory_ctx = await prep_memory_service.load(conversation_id)
+        elif memory_service is not None:
+            memory_ctx = await memory_service.load(conversation_id)
+        else:
+            from app.chat.memory import MemoryContext
+
+            memory_ctx = MemoryContext(conversation_id=conversation_id)
 
     logger.info(
         "memory loaded",
@@ -177,13 +190,26 @@ async def execute_stream(
     )
 
     task.exchange_id = temp_exchange_id
-    await archive_store.start_exchange(
-        exchange_id=temp_exchange_id,
-        conversation_id=conversation_id,
-        session_id=session.id,
-        question=question,
-        execution_mode=plan.mode.value if plan else "unknown",
-    )
+    if get_session is not None:
+        from app.chat.store import ConversationArchiveStore
+
+        async with get_session() as prep_db:
+            prep_archive_store = ConversationArchiveStore(prep_db)
+            await prep_archive_store.start_exchange(
+                exchange_id=temp_exchange_id,
+                conversation_id=conversation_id,
+                session_id=session.id,
+                question=question,
+                execution_mode=plan.mode.value if plan else "unknown",
+            )
+    elif archive_store is not None:
+        await archive_store.start_exchange(
+            exchange_id=temp_exchange_id,
+            conversation_id=conversation_id,
+            session_id=session.id,
+            question=question,
+            execution_mode=plan.mode.value if plan else "unknown",
+        )
     logger.info(
         "exchange pre-persisted",
         conversation_id=conversation_id,
@@ -200,12 +226,16 @@ async def execute_stream(
 
     registry = ExecutorRegistry(db=db, task=task)
     task.sm.transition(ConversationState.EXECUTING)
-    # 第三轮优化 #2：executor dispatch 前显式结束事务并归还数据库连接。
-    # SSE 流式生成可能持续几十秒，期间无 MySQL 操作；若连接被请求级 session
-    # 全程持有，30 个并发流式对话即耗尽连接池（pool 10 + overflow 20）。
-    # AsyncSession.close() 仅归还连接，后续 finalize 的 db 操作会自动重连。
-    await db.commit()
-    await db.close()
+    # 零持有数据库连接保障：进入执行器前，若存在显式传入的 db，显式 commit 并 close 释放连接；
+    # 走 get_session 模式时前置步骤已在短事务退出后自动归还连接池，流式生成周期全程零持有连接。
+    if db is not None:
+        try:
+            if hasattr(db, "commit"):
+                await db.commit()
+            if hasattr(db, "close"):
+                await db.close()
+        except Exception:
+            pass
 
     async for chunk in registry.dispatch(plan):
         if task.cancelled:
