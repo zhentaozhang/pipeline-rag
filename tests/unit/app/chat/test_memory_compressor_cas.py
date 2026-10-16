@@ -42,17 +42,22 @@ class _Result:
 class FakeSession:
     """最小 FakeSession：支持 compress_history 的 execute/add/commit。"""
 
-    def __init__(self, mem=None, exchanges=None, update_rowcount=1):
+    def __init__(self, mem=None, exchanges=None, update_rowcount=1, commit_error=None):
         self.mem = mem
         self.exchanges = exchanges or []
         self.update_rowcount = update_rowcount
+        self.commit_error = commit_error
         self.update_calls = 0
         self.committed = 0
+        self.rollbacks = 0
         self.added = []
+        self.executed_stmts = []
 
     async def execute(self, stmt):
+        self.executed_stmts.append(stmt)
         if isinstance(stmt, Update):
             self.update_calls += 1
+            self.last_update_stmt = stmt
             return _Result(rowcount=self.update_rowcount)
         table_name = ""
         get_final = getattr(stmt, "get_final_froms", None)
@@ -68,7 +73,14 @@ class FakeSession:
         self.added.append(obj)
 
     async def commit(self):
+        if self.commit_error:
+            err = self.commit_error
+            self.commit_error = None
+            raise err
         self.committed += 1
+
+    async def rollback(self):
+        self.rollbacks += 1
 
 
 @pytest.fixture
@@ -138,6 +150,15 @@ class TestCompressVersionCAS:
         assert db.update_calls == 1  # CAS 条件更新执行
         assert db.committed == 1
 
+        # 断言 CAS 更新包含版本递增和计数递增字段
+        updated_cols = [c.name for c in db.last_update_stmt._values]
+        assert "summary_version" in updated_cols
+        assert "covered_exchange_count" in updated_cols
+        assert "compression_count" in updated_cols
+        stmt_sql = str(db.last_update_stmt)
+        assert "covered_exchange_count" in stmt_sql
+        assert "compression_count" in stmt_sql
+
     async def test_cas_conflict_skips_write(
         self, compressor, fake_llm, fifty_five_rounds, monkeypatch
     ):
@@ -160,7 +181,85 @@ class TestCompressVersionCAS:
         await compressor.compress_history("conv-1", db)
         assert len(db.added) == 1
         assert db.added[0].summary_version == 1
+        assert db.added[0].covered_exchange_count == 5
+        assert db.added[0].compression_count == 1
         assert db.committed == 1
+
+    async def test_first_create_integrity_error_falls_back_to_cas(
+        self, compressor, fake_llm, fifty_five_rounds, monkeypatch
+    ):
+        from sqlalchemy.exc import IntegrityError
+
+        monkeypatch.setattr("app.chat.memory_compressor.settings.memory.window_size", 50)
+        fake_llm.queue_json({"summary": "冲突后摘要"})
+
+        # 模拟并发冷启动：初始查库为 None（走首建分支），commit 时被其他进程抢先插入抛 IntegrityError，
+        # 重试查库查出已插入的 existing_mem 并顺利执行 CAS 更新
+        existing_mem = _mem(summary_version=1)
+        err = IntegrityError("INSERT", {}, Exception("Duplicate entry"))
+
+        class TwoPhaseMemoryFakeSession(FakeSession):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.memory_queries = 0
+
+            async def execute(self, stmt):
+                self.executed_stmts.append(stmt)
+                if isinstance(stmt, Update):
+                    self.update_calls += 1
+                    self.last_update_stmt = stmt
+                    return _Result(rowcount=self.update_rowcount)
+                table_name = ""
+                get_final = getattr(stmt, "get_final_froms", None)
+                if get_final is not None:
+                    froms = get_final()
+                    if froms:
+                        table_name = getattr(froms[0], "name", "")
+                if "memory" in table_name:
+                    self.memory_queries += 1
+                    # 前两次查询返回 None（首次创建分支），冲突后第 3 次重读返回并发写入记录
+                    if self.memory_queries >= 3:
+                        return _Result(scalar=self.mem)
+                    return _Result(scalar=None)
+                return _Result(rows=self.exchanges)
+
+        db = TwoPhaseMemoryFakeSession(
+            mem=existing_mem, exchanges=fifty_five_rounds, commit_error=err
+        )
+        await compressor.compress_history("conv-1", db)
+        assert db.rollbacks >= 1
+        assert db.update_calls == 1  # 成功降级走 CAS
+        assert db.committed == 1
+
+    async def test_first_create_other_error_is_raised(
+        self, compressor, fake_llm, fifty_five_rounds, monkeypatch
+    ):
+        monkeypatch.setattr("app.chat.memory_compressor.settings.memory.window_size", 50)
+        fake_llm.queue_json({"summary": "首次摘要"})
+        db = FakeSession(
+            mem=None, exchanges=fifty_five_rounds, commit_error=RuntimeError("DB disconnect")
+        )
+        with pytest.raises(RuntimeError, match="DB disconnect"):
+            await compressor.compress_history("conv-1", db)
+        assert db.rollbacks == 0
+        assert db.update_calls == 0
+
+    async def test_known_exchange_id_generates_upper_bound_filter(
+        self, compressor, fake_llm, fifty_five_rounds, monkeypatch
+    ):
+        monkeypatch.setattr("app.chat.memory_compressor.settings.memory.window_size", 50)
+        fake_llm.queue_json({"summary": "截断摘要"})
+        db = FakeSession(mem=None, exchanges=fifty_five_rounds)
+        await compressor.compress_history("conv-1", db, known_exchange_id=45)
+        # 验证生成的 SQL 语句包含 <= 45 的上限过滤条件
+        exchange_queries = [
+            str(stmt)
+            for stmt in db.executed_stmts
+            if "conversation_exchange" in str(stmt) or "pipeline_rag_chat_exchange" in str(stmt)
+        ]
+        assert len(exchange_queries) >= 1
+        query_sql = exchange_queries[0]
+        assert "<=" in query_sql or "id <=" in query_sql.lower()
 
     async def test_55_rounds_compress_with_llm(
         self, compressor, fake_llm, fifty_five_rounds, monkeypatch

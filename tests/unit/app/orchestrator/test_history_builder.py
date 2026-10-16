@@ -37,6 +37,25 @@ class TestBuildPlanningContext:
         assert ctx.pending_questions == ["问题1"]
         assert ctx.retrieval_hints == ["提示1"]
 
+    def test_payload_mapping_with_preferences_and_summary(self):
+        payload = FakeSummaryPayload(
+            summary="这是历史摘要",
+            conversation_goal="开发项目",
+            stable_facts=["已部署"],
+            user_preferences=["偏好中文", "详细解释"],
+            resolved_points=["解决了连接池泄露"],
+            pending_questions=["如何加监控"],
+            retrieval_hints=["Prometheus"],
+        )
+        ctx = HistoryBuilder.build_planning_context(FakeMemory(summary_payload=payload))
+        assert ctx.summary == "这是历史摘要"
+        assert ctx.goals == ["开发项目"]
+        assert ctx.facts == ["已部署"]
+        assert ctx.user_preferences == ["偏好中文", "详细解释"]
+        assert ctx.resolved_points == ["解决了连接池泄露"]
+        assert ctx.pending_questions == ["如何加监控"]
+        assert ctx.retrieval_hints == ["Prometheus"]
+
 
 class TestBuildStructuredPlanningHistory:
     def test_empty_ctx(self):
@@ -55,6 +74,25 @@ class TestBuildStructuredPlanningHistory:
         assert out.count("- 事实") == 5
         assert "【待跟进问题】" in out
         assert "【检索提示】" in out
+
+    def test_with_preferences_and_summary(self):
+        ctx = HistoryPlanningContext(
+            summary="长期会话全貌",
+            goals=["构建系统"],
+            facts=["技术栈是 Python"],
+            user_preferences=["代码要简洁"],
+            resolved_points=["已通过单元测试"],
+            pending_questions=["性能压测"],
+            retrieval_hints=["JMeter"],
+        )
+        out = HistoryBuilder._build_structured_planning_history(ctx)
+        assert "【历史背景摘要】\n长期会话全貌" in out
+        assert "【会话目标】\n构建系统" in out
+        assert "【已确认事实】\n- 技术栈是 Python" in out
+        assert "【用户偏好与约束】\n- 代码要简洁" in out
+        assert "【已解决问题】\n- 已通过单元测试" in out
+        assert "【待跟进问题】\n- 性能压测" in out
+        assert "【检索提示】\n- JMeter" in out
 
     def test_goals_only(self):
         out = HistoryBuilder._build_structured_planning_history(HistoryPlanningContext(goals=["g"]))

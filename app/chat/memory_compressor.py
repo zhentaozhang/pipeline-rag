@@ -11,6 +11,7 @@ import copy
 
 import structlog
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.chat.memory import (
     MAX_GOAL_LENGTH,
@@ -47,6 +48,8 @@ class ConversationMemoryCompressor:
         )
         if covered_exchange_id > 0:
             base_query = base_query.where(ConversationExchange.id > covered_exchange_id)
+        if known_exchange_id is not None:
+            base_query = base_query.where(ConversationExchange.id <= known_exchange_id)
         result = await db.execute(base_query.order_by(ConversationExchange.id.asc()))
         incremental_exchanges = result.scalars().all()
 
@@ -84,9 +87,14 @@ class ConversationMemoryCompressor:
             covered_count += len(batch)
 
         latest_mem_result = await db.execute(
-            select(ConversationMemory).where(ConversationMemory.conversation_id == conversation_id)
+            select(ConversationMemory)
+            .where(ConversationMemory.conversation_id == conversation_id)
+            .order_by(ConversationMemory.id.desc())
         )
-        latest_mem = latest_mem_result.scalar_one_or_none()
+        try:
+            latest_mem = latest_mem_result.scalar_one_or_none()
+        except Exception:
+            latest_mem = latest_mem_result.scalars().first()
         latest_covered_id = (
             latest_mem.covered_exchange_id if latest_mem and latest_mem.covered_exchange_id else 0
         )
@@ -130,9 +138,55 @@ class ConversationMemoryCompressor:
                 summary_json=summary_json,
                 summary_text=long_term_summary_text,
                 covered_exchange_id=last_covered_id,
+                covered_exchange_count=covered_count,
+                compression_count=1,
                 summary_version=1,
             )
             db.add(latest_mem)
+            try:
+                await db.commit()
+            except IntegrityError as e:
+                logger.info(
+                    "memory compression initial create conflict — falling back to CAS update",
+                    conversation_id=conversation_id,
+                    error=str(e),
+                )
+                if hasattr(db, "rollback"):
+                    await db.rollback()
+                latest_mem_result = await db.execute(
+                    select(ConversationMemory)
+                    .where(ConversationMemory.conversation_id == conversation_id)
+                    .order_by(ConversationMemory.id.desc())
+                )
+                try:
+                    retry_mem = latest_mem_result.scalar_one_or_none()
+                except Exception:
+                    retry_mem = latest_mem_result.scalars().first()
+                if retry_mem and (retry_mem.covered_exchange_id or 0) < last_covered_id:
+                    expected_version = retry_mem.summary_version or 0
+                    cas_result = await db.execute(
+                        sa_update(ConversationMemory)
+                        .where(
+                            ConversationMemory.conversation_id == conversation_id,
+                            func.coalesce(ConversationMemory.summary_version, 0)
+                            == expected_version,
+                        )
+                        .values(
+                            summary_json=summary_json,
+                            summary_text=long_term_summary_text,
+                            covered_exchange_id=last_covered_id,
+                            covered_exchange_count=func.greatest(
+                                func.coalesce(ConversationMemory.covered_exchange_count, 0),
+                                covered_count,
+                            ),
+                            compression_count=func.coalesce(ConversationMemory.compression_count, 0)
+                            + 1,
+                            summary_version=expected_version + 1,
+                        )
+                    )
+                    if cas_result.rowcount > 0:
+                        await db.commit()
+                return
         else:
             # 版本 CAS 条件更新：仅当 summary_version 未变化时写入。
             # 并发下后提交者 rowcount=0 自动放弃，摘要不倒退（与上面的
@@ -147,6 +201,11 @@ class ConversationMemoryCompressor:
                     summary_json=summary_json,
                     summary_text=long_term_summary_text,
                     covered_exchange_id=last_covered_id,
+                    covered_exchange_count=func.coalesce(
+                        ConversationMemory.covered_exchange_count, 0
+                    )
+                    + covered_count,
+                    compression_count=func.coalesce(ConversationMemory.compression_count, 0) + 1,
                     summary_version=expected_version + 1,
                 )
             )
@@ -157,7 +216,7 @@ class ConversationMemoryCompressor:
                     expected_version=expected_version,
                 )
                 return
-        await db.commit()
+            await db.commit()
         logger.info(
             "memory compressed",
             conversation_id=conversation_id,

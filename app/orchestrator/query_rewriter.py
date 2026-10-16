@@ -46,11 +46,28 @@ def _looks_like_explicit_multi_question(question: str) -> bool:
     return "分别" in normalized
 
 
+_FOLLOW_UP_REFERENCE_PATTERN = re.compile(
+    r"(刚才|上面|前面|前文|上文|上一[条轮个项次]|上述|前者|后者|承接|同上|如上|"
+    r"第\s*[0-9一二三四五六七八九十百]+\s*(条|点|项)|"
+    r"继续展开|进一步说明|深入解释)"
+)
+
+
+def _has_follow_up_reference(question: str) -> bool:
+    if not question:
+        return False
+    return bool(_FOLLOW_UP_REFERENCE_PATTERN.search(question))
+
+
 def _needs_rewrite(question: str, history_summary: str) -> bool:
     history = (history_summary or "").strip()
     if not history:
         return len(question) < 8 or _looks_like_explicit_multi_question(question)
-    return len(question) < 18 or _looks_like_explicit_multi_question(question)
+    return (
+        len(question) < 18
+        or _looks_like_explicit_multi_question(question)
+        or _has_follow_up_reference(question)
+    )
 
 
 def _rule_based_split(question: str, max_count: int = 4) -> list[str]:

@@ -11,8 +11,11 @@ from sqlalchemy import asc, delete, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.chat.task_info import ChatRuntimeRegistry
+from app.config import get_settings
 from app.db.models.conversation import ConversationExchange, ConversationMemory, ConversationSession
 from app.infra.id_generator import next_id_int
+
+settings = get_settings()
 
 
 class ConversationArchiveStore:
@@ -24,7 +27,7 @@ class ConversationArchiveStore:
     # ── Session ──────────────────────────────────────────────────────────
 
     async def find_or_create_session(
-        self, conversation_id: str, title: str
+        self, conversation_id: str, title: str, memory_strategy: str | None = None
     ) -> tuple[ConversationSession, bool]:
         stmt = select(ConversationSession).where(
             ConversationSession.conversation_id == conversation_id
@@ -33,10 +36,14 @@ class ConversationArchiveStore:
         session = result.scalar_one_or_none()
         created = False
         if not session:
+            strategy = (
+                memory_strategy or settings.memory.strategy or "summary_compression"
+            ).strip()
             session = ConversationSession(
                 id=next_id_int(),
                 conversation_id=conversation_id,
                 title=title[:50],
+                memory_strategy=strategy,
                 created_at=datetime.now(),
             )
             self.db.add(session)

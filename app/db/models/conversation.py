@@ -82,7 +82,7 @@ class ConversationMemory(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     conversation_id: Mapped[str] = mapped_column(
-        "dialogue_code", String(64), nullable=False, index=True
+        "dialogue_code", String(64), nullable=False, unique=True, index=True
     )
     covered_exchange_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     covered_exchange_count: Mapped[int | None] = mapped_column(Integer, nullable=True)

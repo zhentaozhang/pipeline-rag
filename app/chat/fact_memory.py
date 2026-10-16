@@ -20,6 +20,7 @@ from app.config import get_settings
 from app.infra.id_generator import next_id
 
 logger = structlog.get_logger(__name__)
+settings = get_settings()
 
 _CATEGORIES = {"preference", "fact", "identity", "goal"}
 
@@ -85,48 +86,71 @@ class FactMemoryStore:
         query_embedding: list[float],
         top_k: int,
         user_key: str | None = None,
+        distance_threshold: float | None = None,
     ) -> list[str]:
-        """检索相关已记忆事实（余弦距离升序）。
+        """检索相关已记忆事实（余弦距离升序，保留各类别最新事实）。
 
         user_key 提供时检索「用户级 + 会话级」记忆并集（跨会话画像）；
         否则仅检索会话级（向后兼容）。
         """
         from app.infra.pg import fetch
 
+        threshold = (
+            distance_threshold
+            if distance_threshold is not None
+            else getattr(settings.fact_memory, "retrieval_distance_threshold", 0.70)
+        )
         embedding_str = f"[{','.join(str(f) for f in query_embedding)}]"
+        limit = max(top_k * 10, 50)
         if user_key:
             rows = await fetch(
                 """
-                SELECT content, category, edit_time FROM public.user_fact_memory
-                WHERE user_key = $1 OR conversation_id = $2
+                SELECT content, category, edit_time, (embedding <=> $3::vector) AS dist
+                FROM public.user_fact_memory
+                WHERE (user_key = $1 OR conversation_id = $2)
+                  AND (embedding <=> $3::vector) <= $5
                 ORDER BY embedding <=> $3::vector
                 LIMIT $4
                 """,
                 user_key,
                 conversation_id,
                 embedding_str,
-                top_k,
+                limit,
+                threshold,
             )
         else:
             rows = await fetch(
                 """
-                SELECT content, category, edit_time FROM public.user_fact_memory
+                SELECT content, category, edit_time, (embedding <=> $2::vector) AS dist
+                FROM public.user_fact_memory
                 WHERE conversation_id = $1
+                  AND (embedding <=> $2::vector) <= $4
                 ORDER BY embedding <=> $2::vector
                 LIMIT $3
                 """,
                 conversation_id,
                 embedding_str,
-                top_k,
+                limit,
+                threshold,
             )
-        # 按 category 去重：同类事实只保留 edit_time 最新（避免改口后矛盾事实共存，
-        # 如"喜欢简洁"与"偏好详细"同时注入导致行为不确定）
-        seen: dict[str, str] = {}
+        # 按 category 分组：同类事实只保留 edit_time 最新，若相同则取距离最小
+        category_best: dict[str, dict] = {}
         for r in rows:
             cat = r.get("category") or "_"
-            if cat not in seen:
-                seen[cat] = str(r["content"])
-        return list(seen.values())
+            if cat not in category_best:
+                category_best[cat] = r
+            else:
+                existing_time = category_best[cat].get("edit_time")
+                current_time = r.get("edit_time")
+                if (current_time and (not existing_time or current_time > existing_time)) or (
+                    current_time == existing_time
+                    and r.get("dist", 1.0) < category_best[cat].get("dist", 1.0)
+                ):
+                    category_best[cat] = r
+
+        # 按原本相关性（dist）升序排序输出，不超过 top_k
+        selected_rows = sorted(category_best.values(), key=lambda r: r.get("dist", 0.0))
+        return [str(r["content"]) for r in selected_rows[:top_k]]
 
     async def delete_by_conversation(
         self, conversation_id: str, user_key: str | None = None
