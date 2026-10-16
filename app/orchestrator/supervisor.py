@@ -43,7 +43,9 @@ def _should_decompose(plan: ExecutionPlan) -> bool:
     if any(hint in question for hint in _COMPLEX_QUESTION_HINTS):
         return True
     # 极长复合问题（>= 50 字且包含复合并列连词）
-    return len(question) >= 50 and any(conn in question for conn in ("以及", "并且", "同时", "另外"))
+    return len(question) >= 50 and any(
+        conn in question for conn in ("以及", "并且", "同时", "另外")
+    )
 
 
 class SupervisorService:
@@ -128,4 +130,3 @@ class SupervisorService:
 _inherit_plan_scope = inherit_plan_scope
 _build_sub_plans = build_sub_plans
 _validate_sub_plans = validate_sub_plans
-
