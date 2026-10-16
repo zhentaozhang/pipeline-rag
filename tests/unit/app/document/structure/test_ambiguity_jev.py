@@ -29,8 +29,15 @@ def _patch_jev(answers: dict):
     return patch("app.infra.jev_client.get_jev_client", return_value=mock)
 
 
+def _enable(monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings().jev, "structure_ambiguity_enabled", True)
+
+
 @pytest.mark.asyncio
-async def test_resolve_via_jev_applies_kind_and_level():
+async def test_resolve_via_jev_applies_kind_and_level(monkeypatch):
+    _enable(monkeypatch)
     resolver = DocumentStructureAmbiguityResolver()
     signals = [_signal(3), _signal(7)]
     answers = {
@@ -44,6 +51,7 @@ async def test_resolve_via_jev_applies_kind_and_level():
             ["a", "b", "c", "d", "e", "f", "g"], signals, signals
         )
 
+    assert merged is not None
     assert merged[0].kind == DocumentStructureSignalKind.HEADING
     assert merged[0].level_hint == 2
     assert merged[1].kind == DocumentStructureSignalKind.BODY
@@ -51,16 +59,18 @@ async def test_resolve_via_jev_applies_kind_and_level():
 
 
 @pytest.mark.asyncio
-async def test_resolve_via_jev_missing_kind_raises():
+async def test_resolve_via_jev_missing_kind_returns_none(monkeypatch):
+    _enable(monkeypatch)
     resolver = DocumentStructureAmbiguityResolver()
     signals = [_signal(3)]
-    with _patch_jev({"level_3": {"score": "一级标题"}}), pytest.raises(ValueError):
-        await resolver._resolve_via_jev(["a", "b", "c"], signals, signals)
+    with _patch_jev({"level_3": {"score": "一级标题"}}):
+        assert await resolver._resolve_via_jev(["a", "b", "c"], signals, signals) is None
 
 
 @pytest.mark.asyncio
-async def test_resolve_via_jev_empty_raises_for_fallback():
+async def test_resolve_via_jev_empty_returns_none(monkeypatch):
+    _enable(monkeypatch)
     resolver = DocumentStructureAmbiguityResolver()
     signals = [_signal(3)]
-    with _patch_jev({}), pytest.raises(ValueError):
-        await resolver._resolve_via_jev(["a", "b", "c"], signals, signals)
+    with _patch_jev({}):
+        assert await resolver._resolve_via_jev(["a", "b", "c"], signals, signals) is None

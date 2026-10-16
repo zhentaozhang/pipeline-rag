@@ -50,77 +50,67 @@ class AnswerCorrectnessMetric(Metric):
             )
 
         # JEV System 1 Score 原语（等级化事实一致性评分，毫秒级、强类型、无 JSON 解析）
-        from app.config import get_settings
+        from app.infra.jev_client import jev_decide
 
-        settings = get_settings()
-        jev_cfg = getattr(settings, "jev", None)
-        if jev_cfg and getattr(jev_cfg, "answer_correctness_enabled", True):
-            try:
-                from app.infra.jev_client import get_jev_client
+        def _parse(answers: dict) -> MetricResult:
+            if not answers:
+                raise ValueError("JEV returned empty answers")
+            score_data = answers.get("correctness")
+            if not isinstance(score_data, dict) or "score" not in score_data:
+                raise ValueError("JEV response missing valid correctness evaluation")
+            level_map = {
+                "完全不一致": 0.0,
+                "大部分不一致": 0.25,
+                "部分一致": 0.50,
+                "基本一致": 0.75,
+                "完全一致": 1.0,
+            }
+            level = score_data.get("score", "部分一致")
+            score = level_map.get(level, 0.50)
+            conf = float(score_data.get("confidence", 1.0))
+            distribution = (
+                score_data.get("distribution")
+                if isinstance(score_data.get("distribution"), dict)
+                else {}
+            )
+            return MetricResult(
+                metric_name="answer_correctness",
+                value=score,
+                reason=f"JEV Score: {level} (置信度={conf:.2f})",
+                metadata={
+                    "level": level,
+                    "confidence": conf,
+                    "distribution": distribution,
+                    "evaluated_by": "jev-system-one",
+                },
+            )
 
-                jev = get_jev_client()
-                state = (
-                    f"【问题】\n{question}\n\n"
-                    f"【标准答案】\n{ground_truth}\n\n"
-                    f"【待评答案】\n{answer}"
-                )
-                answers = await jev.system_one(
-                    state=state,
-                    questions={
-                        "correctness": {
-                            "type": "score",
-                            "instructions": (
-                                "评估待评答案与标准答案的事实一致性（是否覆盖关键事实且无矛盾），"
-                                "忽略措辞与格式差异"
-                            ),
-                            "levels": [
-                                "完全不一致",
-                                "大部分不一致",
-                                "部分一致",
-                                "基本一致",
-                                "完全一致",
-                            ],
-                        }
-                    },
-                )
-                if not answers:
-                    raise ValueError("JEV returned empty answers")
-
-                score_data = answers.get("correctness")
-                if not isinstance(score_data, dict) or "score" not in score_data:
-                    raise ValueError("JEV response missing valid correctness evaluation")
-
-                level_map = {
-                    "完全不一致": 0.0,
-                    "大部分不一致": 0.25,
-                    "部分一致": 0.50,
-                    "基本一致": 0.75,
-                    "完全一致": 1.0,
+        jev_result = await jev_decide(
+            "answer_correctness_enabled",
+            state=(
+                f"【问题】\n{question}\n\n【标准答案】\n{ground_truth}\n\n【待评答案】\n{answer}"
+            ),
+            questions={
+                "correctness": {
+                    "type": "score",
+                    "instructions": (
+                        "评估待评答案与标准答案的事实一致性（是否覆盖关键事实且无矛盾），"
+                        "忽略措辞与格式差异"
+                    ),
+                    "levels": [
+                        "完全不一致",
+                        "大部分不一致",
+                        "部分一致",
+                        "基本一致",
+                        "完全一致",
+                    ],
                 }
-                level = score_data.get("score", "部分一致")
-                score = level_map.get(level, 0.50)
-                conf = float(score_data.get("confidence", 1.0))
-                distribution = (
-                    score_data.get("distribution")
-                    if isinstance(score_data.get("distribution"), dict)
-                    else {}
-                )
-                return MetricResult(
-                    metric_name="answer_correctness",
-                    value=score,
-                    reason=f"JEV Score: {level} (置信度={conf:.2f})",
-                    metadata={
-                        "level": level,
-                        "confidence": conf,
-                        "distribution": distribution,
-                        "evaluated_by": "jev-system-one",
-                    },
-                )
-            except Exception as e:
-                logger.warning(
-                    "JEV answer correctness eval failed, falling back to LLM",
-                    error=str(e)[:120],
-                )
+            },
+            parse=_parse,
+            log_context="JEV answer correctness eval",
+        )
+        if jev_result is not None:
+            return jev_result
 
         content = (
             await self._call_llm(

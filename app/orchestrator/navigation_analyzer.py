@@ -409,36 +409,29 @@ async def has_navigation_intent_async(question: str) -> bool:
     if has_navigation_intent(question):
         return True
 
-    from app.config import get_settings
+    from app.infra.jev_client import jev_decide
 
-    settings = get_settings()
-    jev_cfg = getattr(settings, "jev", None)
-    if jev_cfg and getattr(jev_cfg, "navigation_intent_enabled", True):
-        try:
-            from app.infra.jev_client import get_jev_client
+    def _parse(answers: dict) -> bool:
+        res = answers.get("has_nav_intent")
+        prob = res.get("noul", 0.0) if isinstance(res, dict) else 0.0
+        return bool(prob >= 0.65)
 
-            jev = get_jev_client()
-            answers = await jev.system_one(
-                state=question,
-                questions={
-                    "has_nav_intent": {
-                        "type": "noul",
-                        "instructions": (
-                            "该问题是否涉及文档内结构导航意图（例如询问章节位置、上一节/下一节、"
-                            "大纲目录、具体某条款或步骤顺序，或需要在文档结构中定位某部分）。"
-                        ),
-                    }
-                },
-            )
-            res = answers.get("has_nav_intent")
-            prob = res.get("noul", 0.0) if isinstance(res, dict) else 0.0
-            return bool(prob >= 0.65)
-        except Exception as e:
-            logger.warning(
-                "JEV navigation intent check failed, falling back to rules", error=str(e)[:120]
-            )
-
-    return False
+    result = await jev_decide(
+        "navigation_intent_enabled",
+        state=question,
+        questions={
+            "has_nav_intent": {
+                "type": "noul",
+                "instructions": (
+                    "该问题是否涉及文档内结构导航意图（例如询问章节位置、上一节/下一节、"
+                    "大纲目录、具体某条款或步骤顺序，或需要在文档结构中定位某部分）。"
+                ),
+            }
+        },
+        parse=_parse,
+        log_context="JEV navigation intent check",
+    )
+    return bool(result)
 
 
 def _asks_outline(question: str) -> bool:

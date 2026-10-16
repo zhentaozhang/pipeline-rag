@@ -156,34 +156,30 @@ class ApprovalPolicy:
 
     async def _semantic_param_risk(self, tool_name: str, args: dict) -> bool:
         """JEV Noul 语义补充：参数级高风险判定；关闭/异常时返回 False（不影响规则结论）。"""
-        try:
-            from app.config import get_settings
+        from app.infra.jev_client import jev_decide
 
-            jev_cfg = getattr(get_settings(), "jev", None)
-            if not (jev_cfg and getattr(jev_cfg, "tool_risk_semantic_enabled", True)):
-                return False
-
-            from app.infra.jev_client import get_jev_client
-
-            answers = await get_jev_client().system_one(
-                state=f"工具：{tool_name}\n调用参数：{str(args)[:1500]}",
-                questions={
-                    "risk": {
-                        "type": "noul",
-                        "instructions": (
-                            "该工具调用参数是否涉及高风险或破坏性操作（删除/覆盖数据、"
-                            "执行代码、访问敏感数据、批量修改、外发数据等）？"
-                        ),
-                    }
-                },
-            )
+        def _parse(answers: dict) -> bool:
             res = answers.get("risk")
             if not isinstance(res, dict) or "noul" not in res:
                 return False
             return float(res["noul"]) >= 0.5
-        except Exception as e:
-            logger.warning("JEV 参数风险判定失败，跳过", error=str(e)[:120])
-            return False
+
+        result = await jev_decide(
+            "tool_risk_semantic_enabled",
+            state=f"工具：{tool_name}\n调用参数：{str(args)[:1500]}",
+            questions={
+                "risk": {
+                    "type": "noul",
+                    "instructions": (
+                        "该工具调用参数是否涉及高风险或破坏性操作（删除/覆盖数据、"
+                        "执行代码、访问敏感数据、批量修改、外发数据等）？"
+                    ),
+                }
+            },
+            parse=_parse,
+            log_context="JEV 参数风险判定",
+        )
+        return bool(result)
 
 
 async def _maybe_awaitable(func: Callable, *args: Any, **kwargs: Any) -> bool:
