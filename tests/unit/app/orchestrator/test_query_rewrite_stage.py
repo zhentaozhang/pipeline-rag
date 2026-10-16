@@ -65,3 +65,21 @@ class TestQueryRewriteStageSignal:
         result = await QueryRewriteStage().process(ctx)
         assert result.signal == StageSignal.CONTINUE
         assert ctx.rewritten_question == "原问题"
+
+    async def test_terminate_when_intent_is_open_even_if_no_rewrite_needed(self, monkeypatch):
+        """意图判定为 open 时，无论是否需要改写，均立即终止并转为开放提问计划。"""
+
+        async def fake_rewrite(self, **kwargs) -> RewriteResult:
+            return RewriteResult(
+                rewritten="今天天气如何",
+                sub_questions=["今天天气如何"],
+                keywords=[],
+                needs_rewrite=False,
+                intent="open",
+            )
+
+        monkeypatch.setattr(ChatQueryRewriteService, "rewrite", fake_rewrite)
+        ctx = _ctx(question="今天天气如何")
+        result = await QueryRewriteStage().process(ctx)
+        assert result.signal == StageSignal.TERMINATE
+        assert result.plan is not None

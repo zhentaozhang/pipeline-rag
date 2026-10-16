@@ -69,6 +69,32 @@ def looks_like_open_chat_question(question: str, requires_fresh_search: bool) ->
     return any(hint in question for hint in _CHITCHAT_HINTS)
 
 
+async def jev_classify_intent(question: str) -> dict:
+    """使用 JEV System 1 决策模型进行高泛化意图分类与实时性判断（弥补规则词表的盲区）"""
+    from app.infra.jev_client import get_jev_client
+
+    jev = get_jev_client()
+    return await jev.system_one(
+        state=question,
+        questions={
+            "intent": {
+                "type": "choice",
+                "instructions": "判断该问题的核心意图类别",
+                "options": {
+                    "document_qa": "可从企业知识库/内部规章文档中查到答案的业务问题",
+                    "open_chat": "需要联网实时信息（天气/股价/新闻等）或日常寒暄闲聊",
+                    "capability": "询问助手本身的功能、用法或身份",
+                    "ambiguous": "问题信息量严重不足，无法确定具体意图",
+                },
+            },
+            "needs_realtime": {
+                "type": "noul",
+                "instructions": "该问题是否必须依赖实时外部信息才能回答（天气/实时股市/最新新闻等）",
+            },
+        },
+    )
+
+
 def build_open_chat_suggestion() -> str:
     """「该问题更像开放式提问」的提示文案。
 
