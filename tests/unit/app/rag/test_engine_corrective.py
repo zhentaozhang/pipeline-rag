@@ -165,3 +165,50 @@ async def test_rewrite_same_query_no_retry(fake_llm, monkeypatch):
     ctx = await engine.retrieve_with_correction(plan)
     assert ctx.is_empty is True
     assert len(calls) == 1, "改写无变化时不重查"
+
+
+async def test_multi_sub_question_folding_is_noted(fake_llm, monkeypatch):
+    """多子问题全零命中时折叠为单查询，必须在 note 中留痕。
+
+    折叠本身是安全的（仅当 context.is_empty 即所有子问题零命中时才触发，
+    被替换的子问题未产出任何证据），但降级不能静默——否则"多子问题扇出
+    退化为单查询"在链路观测里完全不可见。
+    """
+    plan = _make_plan()
+    plan.sub_questions = [
+        SubQuestion(index=0, text="子问题A", original=plan.original_question),
+        SubQuestion(index=1, text="子问题B", original=plan.original_question),
+        SubQuestion(index=2, text="子问题C", original=plan.original_question),
+    ]
+    engine = RagRetrievalEngine()
+    sub_counts: list[int] = []
+
+    async def fake_retrieve(plan, tracer=None):
+        sub_counts.append(len(plan.sub_questions))
+        return _empty_context(plan.original_question)
+
+    monkeypatch.setattr(engine, "retrieve", fake_retrieve)
+    fake_llm.queue_json({"rewrite": "改写后的查询", "should_split": False, "sub_questions": []})
+
+    ctx = await engine.retrieve_with_correction(plan)
+    assert sub_counts[0] == 3, "首次检索应使用 3 个子问题"
+    assert sub_counts[1] == 1, "修正检索折叠为单查询"
+    assert any("折叠为单查询" in n for n in ctx.retrieval_notes)
+
+
+async def test_single_sub_question_has_no_folding_note(fake_llm, monkeypatch):
+    """只有一个子问题时无降级可言，不应出现"折叠"提示。"""
+    plan = _make_plan()
+    plan.sub_questions = [
+        SubQuestion(index=0, text="唯一子问题", original=plan.original_question),
+    ]
+    engine = RagRetrievalEngine()
+
+    async def fake_retrieve(plan, tracer=None):
+        return _empty_context(plan.original_question)
+
+    monkeypatch.setattr(engine, "retrieve", fake_retrieve)
+    fake_llm.queue_json({"rewrite": "改写后的查询", "should_split": False, "sub_questions": []})
+
+    ctx = await engine.retrieve_with_correction(plan)
+    assert not any("折叠为单查询" in n for n in ctx.retrieval_notes)

@@ -198,6 +198,10 @@ class RagRetrievalEngine:
                 break
             corrected = True
             base_question = rewritten
+            # 这里覆盖而非追加子问题：本分支只在 context.is_empty（全部子问题零命中）时
+            # 进入，被替换的子问题并未产出任何证据，重跑它们纯属浪费检索成本。
+            # 但仍把"多子问题扇出被折叠为单查询"记入 note，让降级可见。
+            collapsed_sub_questions = len(plan.sub_questions)
             plan.retrieval_question = rewritten
             plan.retrieval_sub_questions = [rewritten]
             from app.chat.schema import SubQuestion
@@ -212,7 +216,14 @@ class RagRetrievalEngine:
                 )
             ]
             context = await self.retrieve(plan, tracer=tracer)
-            context.retrieval_notes.append(f"检索证据不足，已按改写查询重查：{rewritten[:80]}")
+            folded = (
+                f"（原 {collapsed_sub_questions} 个子问题均无命中，已折叠为单查询）"
+                if collapsed_sub_questions > 1
+                else ""
+            )
+            context.retrieval_notes.append(
+                f"检索证据不足，已按改写查询重查：{rewritten[:80]}{folded}"
+            )
 
         if corrected:
             logger.info(
