@@ -18,10 +18,15 @@ class HistoryBuilder:
         if not payload:
             return HistoryPlanningContext()
         return HistoryPlanningContext(
-            goals=[payload.conversation_goal] if payload.conversation_goal else [],
-            facts=list(payload.stable_facts or []),
-            pending_questions=list(payload.pending_questions or []),
-            retrieval_hints=list(payload.retrieval_hints or []),
+            summary=getattr(payload, "summary", "") or "",
+            goals=[payload.conversation_goal]
+            if getattr(payload, "conversation_goal", None)
+            else [],
+            facts=list(getattr(payload, "stable_facts", None) or []),
+            user_preferences=list(getattr(payload, "user_preferences", None) or []),
+            resolved_points=list(getattr(payload, "resolved_points", None) or []),
+            pending_questions=list(getattr(payload, "pending_questions", None) or []),
+            retrieval_hints=list(getattr(payload, "retrieval_hints", None) or []),
         )
 
     @staticmethod
@@ -49,8 +54,14 @@ class HistoryBuilder:
         if not ctx:
             return ""
         builder: list[str] = []
+        if getattr(ctx, "summary", ""):
+            HistoryBuilder._append_section(builder, "历史背景摘要", ctx.summary)
         HistoryBuilder._append_section(builder, "会话目标", ctx.goals[0] if ctx.goals else "")
+        if getattr(ctx, "user_preferences", []):
+            HistoryBuilder._append_bullet_section(builder, "用户偏好与约束", ctx.user_preferences)
         HistoryBuilder._append_bullet_section(builder, "已确认事实", ctx.facts)
+        if getattr(ctx, "resolved_points", []):
+            HistoryBuilder._append_bullet_section(builder, "已解决问题", ctx.resolved_points)
         HistoryBuilder._append_bullet_section(builder, "待跟进问题", ctx.pending_questions)
         HistoryBuilder._append_bullet_section(builder, "检索提示", ctx.retrieval_hints)
         return "\n".join(builder).strip()

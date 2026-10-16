@@ -52,6 +52,21 @@ class TestNeedsRewrite:
         assert _needs_rewrite("有历史时中等长度问题", "有历史") is True
         assert _needs_rewrite("这个问题足够长所以不需要对它进行改写处理", "有历史") is False
 
+    def test_long_question_with_follow_up_reference_is_rewritten(self):
+        # 即使超过 18 字符，包含指代与追问特征时仍应触发改写
+        assert (
+            _needs_rewrite(
+                "请问上面提到的两阶段检索方案在生产环境中的性能表现如何？", "有历史上下文"
+            )
+            is True
+        )
+        assert (
+            _needs_rewrite("请结合前文列出的三项核心挑战进一步说明落地风险", "有历史上下文") is True
+        )
+        assert (
+            _needs_rewrite("针对刚才讨论的优化点我们具体应该怎么落地实施呢", "有历史上下文") is True
+        )
+
 
 class TestRuleBasedSplit:
     def test_splits_on_question_marks(self):

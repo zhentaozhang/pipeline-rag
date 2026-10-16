@@ -8,7 +8,7 @@ import structlog
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.chat.memory import MemoryContext, create_memory_strategy
+from app.chat.memory import MemoryContext, MemoryStrategy, create_memory_strategy
 from app.db.models.conversation import ConversationMemory
 
 logger = structlog.get_logger(__name__)
@@ -17,18 +17,49 @@ logger = structlog.get_logger(__name__)
 class PersistentConversationMemoryService:
     """统一记忆服务 — 封装策略模式提供的各操作"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, strategy_name: str | None = None):
         self.db = db
-        self._strategy = create_memory_strategy()
+        self._strategy_name = strategy_name
+        self._cached_strategies: dict[str, MemoryStrategy] = {}
+        self._strategy = (
+            create_memory_strategy(strategy_name) if strategy_name else create_memory_strategy()
+        )
+
+    async def _get_strategy_for_conversation(self, conversation_id: str) -> MemoryStrategy:
+        if self._strategy_name:
+            return self._strategy
+        if conversation_id in self._cached_strategies:
+            return self._cached_strategies[conversation_id]
+        strategy: MemoryStrategy = self._strategy
+        try:
+            from app.db.models.conversation import ConversationSession
+
+            stmt = select(ConversationSession.memory_strategy).where(
+                ConversationSession.conversation_id == conversation_id
+            )
+            res = await self.db.execute(stmt)
+            strat_val = res.scalar_one_or_none()
+            if strat_val and isinstance(strat_val, str) and strat_val.strip():
+                strategy = create_memory_strategy(strat_val.strip())
+        except Exception as e:
+            logger.debug(
+                "failed to query conversation session strategy, using default",
+                conversation_id=conversation_id,
+                error=str(e),
+            )
+        self._cached_strategies[conversation_id] = strategy
+        return strategy
 
     async def load(self, conversation_id: str) -> MemoryContext:
-        return await self._strategy.load(conversation_id, self.db)
+        strategy = await self._get_strategy_for_conversation(conversation_id)
+        return await strategy.load(conversation_id, self.db)
 
     async def save(
         self, conversation_id: str, question: str, answer: str, exchange_id: int
     ) -> None:
         try:
-            await self._strategy.save(
+            strategy = await self._get_strategy_for_conversation(conversation_id)
+            await strategy.save(
                 conversation_id=conversation_id,
                 question=question,
                 answer=answer,
@@ -47,7 +78,7 @@ class PersistentConversationMemoryService:
         await self.delete_memory(conversation_id)
         from app.chat.memory import SummaryCompressionStrategy
 
-        strategy = create_memory_strategy("summary_compression")
+        strategy = await self._get_strategy_for_conversation(conversation_id)
         if isinstance(strategy, SummaryCompressionStrategy):
             await strategy.compress_history(conversation_id, self.db)
 

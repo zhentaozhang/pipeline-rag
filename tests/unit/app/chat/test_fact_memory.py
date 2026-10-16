@@ -3,6 +3,8 @@
 import types
 from types import SimpleNamespace
 
+import pytest
+
 from app.chat.fact_memory import parse_extraction_response
 from app.rag.assembly import PromptAssemblyService
 
@@ -91,3 +93,43 @@ def test_agent_template_injects_user_memory():
         user_memory=[],
     )
     assert "已知的用户长期信息" not in out_empty
+
+
+@pytest.mark.asyncio
+async def test_retrieve_category_dedup_keeps_latest_edit_time(monkeypatch):
+    from datetime import datetime
+
+    from app.chat.fact_memory import FactMemoryStore
+
+    rows = [
+        # 同属于 preference 类别：旧记录距离更近 (0.2)，但时间较早；新记录距离 0.3，但时间最新
+        {
+            "content": "偏好简洁（旧）",
+            "category": "preference",
+            "edit_time": datetime(2026, 1, 1),
+            "dist": 0.2,
+        },
+        {
+            "content": "偏好详细（新）",
+            "category": "preference",
+            "edit_time": datetime(2026, 2, 1),
+            "dist": 0.3,
+        },
+        {
+            "content": "身份是架构师",
+            "category": "identity",
+            "edit_time": datetime(2026, 1, 15),
+            "dist": 0.1,
+        },
+    ]
+
+    async def fake_fetch(query, *args):
+        return rows
+
+    monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
+    store = FactMemoryStore()
+    results = await store.retrieve("conv-test", [0.1, 0.2], top_k=5)
+    # preference 应该保留最新编辑的 "偏好详细（新）"，而非陈旧的 "偏好简洁（旧）"
+    assert "偏好详细（新）" in results
+    assert "偏好简洁（旧）" not in results
+    assert "身份是架构师" in results
