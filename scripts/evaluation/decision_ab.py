@@ -434,10 +434,14 @@ async def _jev_quality_pass(sample: DecisionSample) -> BackendResult:
     from app.config import get_settings
     from app.executors.rag import AnswerQualityChecker
 
+    settings = get_settings()
+    settings.jev.quality_eval_enabled = True  # 评测即测 JEV 路径
     t0 = time.perf_counter()
     checker = AnswerQualityChecker()
     score = await checker._jev_quality_score(sample.input, sample.context or "")
-    passed = score >= get_settings().rag.quality_min_score
+    if score is None:
+        return BackendResult(None, (time.perf_counter() - t0) * 1000, "jev unavailable")
+    passed = score >= settings.rag.quality_min_score
     return BackendResult(passed, (time.perf_counter() - t0) * 1000, f"score={score}")
 
 
@@ -601,12 +605,14 @@ _KIND_TO_LABEL = {"HEADING": "heading", "LIST_ITEM": "list_item", "BODY": "body"
 
 async def _jev_structure_kind(sample: ChoiceSample) -> ChoiceResult:
     """复用生产路径：DocumentStructureAmbiguityResolver._resolve_via_jev。"""
+    from app.config import get_settings
     from app.document.structure.ambiguity import DocumentStructureAmbiguityResolver
     from app.document.structure.models import (
         DocumentStructureSignal,
         DocumentStructureSignalKind,
     )
 
+    get_settings().jev.structure_ambiguity_enabled = True  # 评测即测 JEV 路径
     t0 = time.perf_counter()
     resolver = DocumentStructureAmbiguityResolver()
     sig = DocumentStructureSignal(
@@ -617,6 +623,8 @@ async def _jev_structure_kind(sample: ChoiceSample) -> ChoiceResult:
         confidence=0.6,
     )
     merged = await resolver._resolve_via_jev([sample.input], [sig], [sig])
+    if merged is None:
+        return ChoiceResult(None, (time.perf_counter() - t0) * 1000, "jev unavailable")
     label = _KIND_TO_LABEL.get(str(merged[0].kind))
     return ChoiceResult(label, (time.perf_counter() - t0) * 1000, f"kind={merged[0].kind}")
 

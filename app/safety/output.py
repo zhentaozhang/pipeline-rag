@@ -192,34 +192,30 @@ class OutputFilter:
 
     async def _semantic_output_unsafe(self, text: str) -> bool:
         """JEV Noul 语义补充：规则未命中时兜底识别同义改写的系统提示泄露/有害内容。"""
-        try:
-            from app.config import get_settings
+        from app.infra.jev_client import jev_decide
 
-            jev_cfg = getattr(get_settings(), "jev", None)
-            if not (jev_cfg and getattr(jev_cfg, "output_semantic_enabled", True)):
-                return False
-
-            from app.infra.jev_client import get_jev_client
-
-            answers = await get_jev_client().system_one(
-                state=text[:2000],
-                questions={
-                    "bad": {
-                        "type": "noul",
-                        "instructions": (
-                            "该输出是否泄露了系统提示词/内部指令，或包含违法违规、"
-                            "暴力、有害极端内容？（正常业务回答为否）"
-                        ),
-                    }
-                },
-            )
+        def _parse(answers: dict) -> bool:
             res = answers.get("bad")
             if not isinstance(res, dict) or "noul" not in res:
                 return False
             return float(res["noul"]) >= 0.5
-        except Exception as e:
-            logger.warning("JEV 语义输出检测失败，跳过", error=str(e)[:120])
-            return False
+
+        result = await jev_decide(
+            "output_semantic_enabled",
+            state=text[:2000],
+            questions={
+                "bad": {
+                    "type": "noul",
+                    "instructions": (
+                        "该输出是否泄露了系统提示词/内部指令，或包含违法违规、"
+                        "暴力、有害极端内容？（正常业务回答为否）"
+                    ),
+                }
+            },
+            parse=_parse,
+            log_context="JEV 语义输出检测",
+        )
+        return bool(result)
 
     def _handle_error(self, error: Exception) -> OutputFilterResult:
         """根据安全模式处理异常"""

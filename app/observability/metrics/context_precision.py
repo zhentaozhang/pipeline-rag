@@ -74,63 +74,58 @@ class ContextPrecisionMetric(Metric):
             )
 
         # JEV System 1 并行 Noul 评测优化（单 pass 评估全部检索块相关性）
-        from app.config import get_settings
+        from app.infra.jev_client import jev_decide
 
-        settings = get_settings()
-        jev_cfg = getattr(settings, "jev", None)
-        if jev_cfg and getattr(jev_cfg, "context_precision_enabled", True):
-            try:
-                from app.infra.jev_client import get_jev_client
+        questions = {
+            f"chunk_{i}": {
+                "type": "noul",
+                "instructions": (
+                    f"该证据片段是否包含有助于回答以下问题的事实信息？\n"
+                    f"问题：{question}\n"
+                    f"片段内容：{c[:280]}"
+                ),
+            }
+            for i, c in enumerate(contexts)
+        }
 
-                jev = get_jev_client()
-                questions = {
-                    f"chunk_{i}": {
-                        "type": "noul",
-                        "instructions": (
-                            f"该证据片段是否包含有助于回答以下问题的事实信息？\n"
-                            f"问题：{question}\n"
-                            f"片段内容：{c[:280]}"
-                        ),
-                    }
-                    for i, c in enumerate(contexts)
-                }
-                state = f"用户目标问题：{question}"
-                answers = await jev.system_one(state=state, questions=questions)
+        def _parse(answers: dict) -> MetricResult:
+            if not answers:
+                raise ValueError("JEV returned empty answers")
+            threshold = 0.50
+            relevance = []
+            scores = []
+            for i in range(len(contexts)):
+                key = f"chunk_{i}"
+                res = answers.get(key)
+                if not isinstance(res, dict) or "noul" not in res:
+                    raise ValueError(f"JEV response missing valid evaluation for {key}")
+                prob = float(res.get("noul", 0.0))
+                scores.append(prob)
+                relevance.append(1 if prob >= threshold else 0)
+            total = len(relevance)
+            relevant = sum(relevance)
+            score = compute_rank_aware_context_precision(relevance)
+            return MetricResult(
+                metric_name="context_precision",
+                value=score,
+                reason=f"JEV: AP@K={score:.4f} ({relevant}/{total} chunks relevant)",
+                metadata={
+                    "total_chunks": total,
+                    "relevant_chunks": relevant,
+                    "scores": scores,
+                    "evaluated_by": "jev-system-one",
+                },
+            )
 
-                if not answers:
-                    raise ValueError("JEV returned empty answers")
-
-                threshold = 0.50
-                relevance = []
-                scores = []
-                for i in range(len(contexts)):
-                    key = f"chunk_{i}"
-                    res = answers.get(key)
-                    if not isinstance(res, dict) or "noul" not in res:
-                        raise ValueError(f"JEV response missing valid evaluation for {key}")
-                    prob = float(res.get("noul", 0.0))
-                    scores.append(prob)
-                    relevance.append(1 if prob >= threshold else 0)
-
-                total = len(relevance)
-                relevant = sum(relevance)
-                score = compute_rank_aware_context_precision(relevance)
-                return MetricResult(
-                    metric_name="context_precision",
-                    value=score,
-                    reason=f"JEV: AP@K={score:.4f} ({relevant}/{total} chunks relevant)",
-                    metadata={
-                        "total_chunks": total,
-                        "relevant_chunks": relevant,
-                        "scores": scores,
-                        "evaluated_by": "jev-system-one",
-                    },
-                )
-            except Exception as e:
-                logger.warning(
-                    "JEV context precision eval failed, falling back to LLM",
-                    error=str(e)[:120],
-                )
+        jev_result = await jev_decide(
+            "context_precision_enabled",
+            state=f"用户目标问题：{question}",
+            questions=questions,
+            parse=_parse,
+            log_context="JEV context precision eval",
+        )
+        if jev_result is not None:
+            return jev_result
 
         chunks_text = "\n\n---\n\n".join(f"Chunk {i + 1}: {c}" for i, c in enumerate(contexts))
         raw = (

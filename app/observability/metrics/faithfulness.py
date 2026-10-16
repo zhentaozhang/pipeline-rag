@@ -98,63 +98,56 @@ class FaithfulnessMetric(Metric):
             context_str = context_str[:_MAX_CONTEXT_CHARS] + "\n\n[...truncated]"
 
         # JEV System 1 Noul 评测优化（单 pass 并行判定，无需 LLM 自回归与 JSON 反序列化）
-        from app.config import get_settings
+        from app.infra.jev_client import jev_decide
 
-        settings = get_settings()
-        jev_cfg = getattr(settings, "jev", None)
-        if jev_cfg and getattr(jev_cfg, "faithfulness_eval_enabled", True):
-            try:
-                from app.infra.jev_client import get_jev_client
+        questions = {
+            f"stmt_{i}": {
+                "type": "noul",
+                "instructions": f"以下陈述命题是否能够直接从给定上下文中推断得出（不含推测与无中生有）：\n命题：{s}",
+            }
+            for i, s in enumerate(extracted.statements)
+        }
 
-                jev = get_jev_client()
-                questions = {
-                    f"stmt_{i}": {
-                        "type": "noul",
-                        "instructions": f"以下陈述命题是否能够直接从给定上下文中推断得出（不含推测与无中生有）：\n命题：{s}",
-                    }
-                    for i, s in enumerate(extracted.statements)
-                }
-                state = f"参考上下文证据：\n{context_str}"
-                answers = await jev.system_one(state=state, questions=questions)
+        def _parse(answers: dict) -> MetricResult:
+            if not answers:
+                raise ValueError("JEV returned empty answers")
+            verdicts = []
+            reasons = []
+            scores = []
+            for i in range(len(extracted.statements)):
+                key = f"stmt_{i}"
+                res = answers.get(key)
+                if not isinstance(res, dict) or "noul" not in res:
+                    raise ValueError(f"JEV response missing valid evaluation for {key}")
+                prob = float(res.get("noul", 0.0))
+                scores.append(prob)
+                is_sup = 1 if prob >= 0.50 else 0
+                verdicts.append(is_sup)
+                reasons.append(f"命题{i + 1}: {'支持' if is_sup else '无支持'}(置信度={prob:.2f})")
+            total = len(verdicts)
+            supported = sum(verdicts)
+            score = supported / total if total > 0 else 1.0
+            return MetricResult(
+                metric_name="faithfulness",
+                value=score,
+                reason=" | ".join(reasons[:5]),
+                metadata={
+                    "total_statements": total,
+                    "supported": supported,
+                    "scores": scores,
+                    "evaluated_by": "jev-system-one",
+                },
+            )
 
-                if not answers:
-                    raise ValueError("JEV returned empty answers")
-
-                verdicts = []
-                reasons = []
-                scores = []
-                for i in range(len(extracted.statements)):
-                    key = f"stmt_{i}"
-                    res = answers.get(key)
-                    if not isinstance(res, dict) or "noul" not in res:
-                        raise ValueError(f"JEV response missing valid evaluation for {key}")
-                    prob = float(res.get("noul", 0.0))
-                    scores.append(prob)
-                    is_sup = 1 if prob >= 0.50 else 0
-                    verdicts.append(is_sup)
-                    reasons.append(
-                        f"命题{i + 1}: {'支持' if is_sup else '无支持'}(置信度={prob:.2f})"
-                    )
-
-                total = len(verdicts)
-                supported = sum(verdicts)
-                score = supported / total if total > 0 else 1.0
-                return MetricResult(
-                    metric_name="faithfulness",
-                    value=score,
-                    reason=" | ".join(reasons[:5]),
-                    metadata={
-                        "total_statements": total,
-                        "supported": supported,
-                        "scores": scores,
-                        "evaluated_by": "jev-system-one",
-                    },
-                )
-            except Exception as e:
-                logger.warning(
-                    "JEV faithfulness eval failed, falling back to LLM",
-                    error=str(e)[:120],
-                )
+        jev_result = await jev_decide(
+            "faithfulness_eval_enabled",
+            state=f"参考上下文证据：\n{context_str}",
+            questions=questions,
+            parse=_parse,
+            log_context="JEV faithfulness eval",
+        )
+        if jev_result is not None:
+            return jev_result
 
         raw2 = (
             await self._call_llm(

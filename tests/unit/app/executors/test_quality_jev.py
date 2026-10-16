@@ -22,7 +22,8 @@ def _patch_jev(answers):
 
 
 @pytest.mark.asyncio
-async def test_jev_quality_score_maps_level():
+async def test_jev_quality_score_maps_level(monkeypatch):
+    _enable(monkeypatch)
     checker = AnswerQualityChecker()
     with _patch_jev({"quality": {"score": "优秀：完整、准确、有据且条理清晰", "confidence": 0.9}}):
         score = await checker._jev_quality_score("q", "a")
@@ -30,10 +31,11 @@ async def test_jev_quality_score_maps_level():
 
 
 @pytest.mark.asyncio
-async def test_jev_quality_score_missing_raises():
+async def test_jev_quality_score_missing_returns_none(monkeypatch):
+    _enable(monkeypatch)
     checker = AnswerQualityChecker()
-    with _patch_jev({"quality": None}), pytest.raises(ValueError):
-        await checker._jev_quality_score("q", "a")
+    with _patch_jev({"quality": None}):
+        assert await checker._jev_quality_score("q", "a") is None
 
 
 @pytest.mark.asyncio

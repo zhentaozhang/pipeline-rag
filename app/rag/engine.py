@@ -242,39 +242,37 @@ class RagRetrievalEngine:
         if context.is_empty:
             return False
 
-        jev_cfg = getattr(settings, "jev", None)
-        if not (jev_cfg and getattr(jev_cfg, "evidence_sufficiency_enabled", True)):
-            return True
+        evidence_texts = [
+            ev.content[:400]
+            for se in context.sub_question_evidence_list
+            for ev in se.evidences
+            if ev.content
+        ]
+        if not evidence_texts:
+            return False
 
-        try:
-            evidence_texts = [
-                ev.content[:400]
-                for se in context.sub_question_evidence_list
-                for ev in se.evidences
-                if ev.content
-            ]
-            if not evidence_texts:
-                return False
+        from app.infra.jev_client import jev_decide
 
-            from app.infra.jev_client import get_jev_client
-
-            state = f"问题：{question}\n\n检索到的证据片段：\n" + "\n---\n".join(evidence_texts[:6])
-            answers = await get_jev_client().system_one(
-                state=state,
-                questions={
-                    "sufficient": {
-                        "type": "noul",
-                        "instructions": "上述检索到的证据是否足以直接、完整地回答问题（无需再检索）？",
-                    }
-                },
-            )
+        def _parse(answers: dict) -> bool:
             res = answers.get("sufficient")
             if not isinstance(res, dict) or "noul" not in res:
-                return True
+                raise ValueError("JEV response missing sufficient evaluation")
             return float(res["noul"]) >= 0.5
-        except Exception as e:
-            logger.warning("JEV 证据充分性判定失败，按充分处理", error=str(e)[:120])
-            return True
+
+        result = await jev_decide(
+            "evidence_sufficiency_enabled",
+            state=f"问题：{question}\n\n检索到的证据片段：\n" + "\n---\n".join(evidence_texts[:6]),
+            questions={
+                "sufficient": {
+                    "type": "noul",
+                    "instructions": "上述检索到的证据是否足以直接、完整地回答问题（无需再检索）？",
+                }
+            },
+            parse=_parse,
+            log_context="JEV 证据充分性判定",
+        )
+        # JEV 关闭/异常 → None → 按"充分"处理（保持原行为）
+        return True if result is None else result
 
     async def _rewrite_query(self, question: str) -> str:
         """复用查询改写服务，强制改写为更利于检索的形式。"""

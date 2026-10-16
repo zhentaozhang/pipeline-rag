@@ -61,12 +61,9 @@ class DocumentStructureAmbiguityResolver:
             return source_signals
 
         # JEV System 1 优先：Choice（归类）+ Score（层级），一次请求并行判定，去 LLM
-        jev_cfg = getattr(get_settings(), "jev", None)
-        if jev_cfg and getattr(jev_cfg, "structure_ambiguity_enabled", True):
-            try:
-                return await self._resolve_via_jev(all_lines, source_signals, ambiguous_signals)
-            except Exception as e:
-                logger.warning("JEV 结构歧义判定失败，回退 LLM", error=str(e)[:120])
+        merged = await self._resolve_via_jev(all_lines, source_signals, ambiguous_signals)
+        if merged is not None:
+            return merged
 
         try:
             prompt = self._build_prompt(document_title, ambiguous_signals, all_lines)
@@ -102,15 +99,14 @@ class DocumentStructureAmbiguityResolver:
         all_lines: list[str],
         source_signals: list[DocumentStructureSignal],
         ambiguous_signals: list[DocumentStructureSignal],
-    ) -> list[DocumentStructureSignal]:
-        """用 JEV Choice（归类）+ Score（层级）一次性判定全部歧义行。
+    ) -> list[DocumentStructureSignal] | None:
+        """JEV Choice（归类）+ Score（层级）一次性判定全部歧义行。
 
-        所有歧义块的上下文拼成一个 state，每个块两个问题（kind/level），
-        单次请求并行判定；空/缺字段则抛错由调用方回退 LLM。
+        所有歧义块拼成一个 state，每块两问（kind/level）单次请求并行判定；
+        关闭/异常/响应不完整返回 None，由调用方回退 LLM。
         """
-        from app.infra.jev_client import get_jev_client
+        from app.infra.jev_client import jev_decide
 
-        state = self._build_jev_state(ambiguous_signals, all_lines)
         questions: dict[str, dict] = {}
         for s in ambiguous_signals:
             questions[f"kind_{s.line_no}"] = {
@@ -129,30 +125,37 @@ class DocumentStructureAmbiguityResolver:
                 "levels": _JEV_LEVELS,
             }
 
-        answers = await get_jev_client().system_one(state=state, questions=questions)
-        if not answers:
-            raise ValueError("JEV returned empty answers")
+        def _parse(answers: dict) -> list[DocumentStructureSignal]:
+            if not answers:
+                raise ValueError("JEV returned empty answers")
+            resolved_map: dict[int, dict] = {}
+            for s in ambiguous_signals:
+                kind_ans = answers.get(f"kind_{s.line_no}")
+                if not isinstance(kind_ans, dict) or "choice" not in kind_ans:
+                    raise ValueError(f"JEV missing kind for line {s.line_no}")
+                kind = kind_ans["choice"]
+                if kind not in _JEV_KIND_TO_SIGNAL:
+                    raise ValueError(f"JEV unexpected kind={kind}")
+                level_hint = None
+                if kind == "heading":
+                    level_ans = answers.get(f"level_{s.line_no}")
+                    if isinstance(level_ans, dict) and level_ans.get("score") in _JEV_LEVELS:
+                        level_hint = _JEV_LEVELS.index(level_ans["score"]) + 1
+                resolved_map[s.line_no] = {
+                    "resolved_kind": _JEV_KIND_TO_SIGNAL[kind],
+                    "level_hint": level_hint,
+                }
+            return [
+                self._apply_result(sig, resolved_map.get(sig.line_no)) for sig in source_signals
+            ]
 
-        resolved_map: dict[int, dict] = {}
-        for s in ambiguous_signals:
-            kind_ans = answers.get(f"kind_{s.line_no}")
-            if not isinstance(kind_ans, dict) or "choice" not in kind_ans:
-                raise ValueError(f"JEV missing kind for line {s.line_no}")
-            kind = kind_ans["choice"]
-            if kind not in _JEV_KIND_TO_SIGNAL:
-                raise ValueError(f"JEV unexpected kind={kind}")
-
-            level_hint = None
-            if kind == "heading":
-                level_ans = answers.get(f"level_{s.line_no}")
-                if isinstance(level_ans, dict) and level_ans.get("score") in _JEV_LEVELS:
-                    level_hint = _JEV_LEVELS.index(level_ans["score"]) + 1
-            resolved_map[s.line_no] = {
-                "resolved_kind": _JEV_KIND_TO_SIGNAL[kind],
-                "level_hint": level_hint,
-            }
-
-        return [self._apply_result(sig, resolved_map.get(sig.line_no)) for sig in source_signals]
+        return await jev_decide(
+            "structure_ambiguity_enabled",
+            state=self._build_jev_state(ambiguous_signals, all_lines),
+            questions=questions,
+            parse=_parse,
+            log_context="JEV 结构歧义判定",
+        )
 
     def _build_prompt(
         self,

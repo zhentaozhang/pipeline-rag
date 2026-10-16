@@ -80,14 +80,9 @@ class AnswerQualityChecker:
             return QualityResult(passed=True, score=10.0, issues=[])
 
         # JEV System 1 Score 优先：通过即免 LLM 调用；未通过再走 LLM 取具体问题/建议
-        jev_cfg = getattr(settings, "jev", None)
-        if jev_cfg and getattr(jev_cfg, "quality_eval_enabled", True):
-            try:
-                jev_score = await self._jev_quality_score(question, answer)
-                if jev_score >= settings.rag.quality_min_score:
-                    return QualityResult(passed=True, score=jev_score, issues=[])
-            except Exception as e:
-                logger.warning("JEV 质量审核失败，回退 LLM", error=str(e)[:120])
+        jev_score = await self._jev_quality_score(question, answer)
+        if jev_score is not None and jev_score >= settings.rag.quality_min_score:
+            return QualityResult(passed=True, score=jev_score, issues=[])
 
         prompt = self._build_prompt(question, answer)
         try:
@@ -132,9 +127,9 @@ class AnswerQualityChecker:
         template = self._jinja.get_template("quality_check.j2")
         return template.render(question=question, answer=answer)
 
-    async def _jev_quality_score(self, question: str, answer: str) -> float:
-        """JEV Score 原语：将回答质量映射到 0-10 分（有序等级）。"""
-        from app.infra.jev_client import get_jev_client
+    async def _jev_quality_score(self, question: str, answer: str) -> float | None:
+        """JEV Score 原语：回答质量映射到 0-10 分；关闭/异常返回 None（调用方回退 LLM）。"""
+        from app.infra.jev_client import jev_decide
 
         levels = [
             "很差：答非所问或内容空洞",
@@ -144,7 +139,15 @@ class AnswerQualityChecker:
             "优秀：完整、准确、有据且条理清晰",
         ]
         score_map = {levels[0]: 2.0, levels[1]: 5.0, levels[2]: 6.5, levels[3]: 8.0, levels[4]: 9.5}
-        answers = await get_jev_client().system_one(
+
+        def _parse(answers: dict) -> float:
+            res = answers.get("quality")
+            if not isinstance(res, dict) or "score" not in res:
+                raise ValueError("JEV missing quality score")
+            return score_map.get(res["score"], 5.0)
+
+        return await jev_decide(
+            "quality_eval_enabled",
             state=f"问题：{question}\n\n待评回答：\n{answer[:1500]}",
             questions={
                 "quality": {
@@ -153,11 +156,9 @@ class AnswerQualityChecker:
                     "levels": levels,
                 }
             },
+            parse=_parse,
+            log_context="JEV 质量审核",
         )
-        res = answers.get("quality")
-        if not isinstance(res, dict) or "score" not in res:
-            raise ValueError("JEV missing quality score")
-        return score_map.get(res["score"], 5.0)
 
     async def _call_llm(self, prompt: str) -> dict[str, Any]:
         model = settings.rag.quality_model or settings.llm.model

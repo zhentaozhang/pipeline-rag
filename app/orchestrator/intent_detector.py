@@ -69,12 +69,20 @@ def looks_like_open_chat_question(question: str, requires_fresh_search: bool) ->
     return any(hint in question for hint in _CHITCHAT_HINTS)
 
 
-async def jev_classify_intent(question: str) -> dict:
-    """使用 JEV System 1 决策模型进行高泛化意图分类与实时性判断（弥补规则词表的盲区）"""
-    from app.infra.jev_client import get_jev_client
+async def jev_classify_intent(question: str) -> dict | None:
+    """使用 JEV System 1 决策模型进行高泛化意图分类与实时性判断（弥补规则词表的盲区）。
 
-    jev = get_jev_client()
-    return await jev.system_one(
+    开关关闭或调用/解析异常时返回 None，由调用方走原有规则/改写路径。
+    """
+    from app.infra.jev_client import jev_decide
+
+    def _parse(answers: dict) -> dict:
+        if not answers or "intent" not in answers:
+            raise ValueError("JEV intent response missing/invalid")
+        return answers
+
+    return await jev_decide(
+        "intent_detection_enabled",
         state=question,
         questions={
             "intent": {
@@ -92,6 +100,8 @@ async def jev_classify_intent(question: str) -> dict:
                 "instructions": "该问题是否必须依赖实时外部信息才能回答（天气/实时股市/最新新闻等）",
             },
         },
+        parse=_parse,
+        log_context="JEV intent classification",
     )
 
 
