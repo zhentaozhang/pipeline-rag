@@ -349,35 +349,32 @@ JSON 格式：
         )
 
     async def _resolve_intent(self, question: str) -> str:
-        jev_cfg = getattr(settings, "jev", None)
-        if jev_cfg and getattr(jev_cfg, "intent_detection_enabled", True):
-            try:
-                from app.infra.jev_client import get_jev_client
+        from app.infra.jev_client import jev_decide
 
-                jev = get_jev_client()
-                answers = await jev.system_one(
-                    state=question,
-                    questions={
-                        "intent": {
-                            "type": "choice",
-                            "instructions": "该用户问题的知识检索意图类型",
-                            "options": {
-                                "knowledge": "可从企业内部文档与知识库中查证的业务咨询",
-                                "open": "需要外部搜索的实时信息（天气、新闻、股票等）或日常闲聊",
-                                "ambiguous": "信息不完整或模糊不清，需要澄清",
-                            },
-                        }
+        def _parse(answers: dict) -> str | None:
+            intent_res = answers.get("intent")
+            choice = intent_res.get("choice") if isinstance(intent_res, dict) else intent_res
+            return str(choice) if choice in ("knowledge", "open", "ambiguous") else None
+
+        jev_intent = await jev_decide(
+            "intent_detection_enabled",
+            state=question,
+            questions={
+                "intent": {
+                    "type": "choice",
+                    "instructions": "该用户问题的知识检索意图类型",
+                    "options": {
+                        "knowledge": "可从企业内部文档与知识库中查证的业务咨询",
+                        "open": "需要外部搜索的实时信息（天气、新闻、股票等）或日常闲聊",
+                        "ambiguous": "信息不完整或模糊不清，需要澄清",
                     },
-                )
-                intent_res = answers.get("intent")
-                choice = intent_res.get("choice") if isinstance(intent_res, dict) else intent_res
-                if choice in ("knowledge", "open", "ambiguous"):
-                    return str(choice)
-            except Exception as e:
-                logger.warning(
-                    "JEV intent in query rewriter failed, falling back to rule-based",
-                    error=str(e)[:120],
-                )
+                }
+            },
+            parse=_parse,
+            log_context="JEV intent in query rewriter",
+        )
+        if jev_intent is not None:
+            return jev_intent
         return self._rule_based_intent(question)
 
     def _rule_based_intent(self, question: str) -> str:

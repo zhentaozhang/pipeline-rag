@@ -26,7 +26,6 @@ class QueryRewriteStage(Stage[PrepareContext, "ExecutionPlan"]):
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:
         # ── P0-1b 意图分流 · 规则快速路径 + JEV 语义判断────────────────────
         if ctx.chat_mode == ChatQueryMode.AUTO_DOCUMENT:
-            from app.config import get_settings
             from app.orchestrator.intent_detector import (
                 jev_classify_intent,
                 looks_like_open_chat_question,
@@ -43,41 +42,36 @@ class QueryRewriteStage(Stage[PrepareContext, "ExecutionPlan"]):
                 return StageResult(signal=StageSignal.TERMINATE, plan=plan)
 
             # 语义路径：JEV System 1 决策模型兜底判别（消除时间词/口语化误判）
-            settings = get_settings()
-            jev_cfg = getattr(settings, "jev", None)
-            if jev_cfg and getattr(jev_cfg, "intent_detection_enabled", True):
-                try:
-                    answers = await jev_classify_intent(ctx.question)
-                    intent_data = answers.get("intent")
-                    intent_choice = (
-                        intent_data.get("choice") if isinstance(intent_data, dict) else intent_data
-                    )
-                    realtime_data = answers.get("needs_realtime")
-                    needs_realtime_prob = (
-                        realtime_data.get("noul", 0.0) if isinstance(realtime_data, dict) else 0.0
-                    )
+            answers = await jev_classify_intent(ctx.question)
+            if answers is not None:
+                intent_data = answers.get("intent")
+                intent_choice = (
+                    intent_data.get("choice") if isinstance(intent_data, dict) else intent_data
+                )
+                realtime_data = answers.get("needs_realtime")
+                needs_realtime_prob = (
+                    realtime_data.get("noul", 0.0) if isinstance(realtime_data, dict) else 0.0
+                )
 
-                    if intent_choice == "open_chat" or needs_realtime_prob > 0.75:
-                        logger.info(
-                            "intent jev-redirected to open_chat",
-                            question=ctx.question[:80],
-                            intent=intent_choice,
-                            realtime_prob=needs_realtime_prob,
-                            path="jev_semantic_intent",
-                        )
-                        plan = PlanBuilder.build_open_chat_plan(ctx)
-                        return StageResult(signal=StageSignal.TERMINATE, plan=plan)
+                if intent_choice == "open_chat" or needs_realtime_prob > 0.75:
+                    logger.info(
+                        "intent jev-redirected to open_chat",
+                        question=ctx.question[:80],
+                        intent=intent_choice,
+                        realtime_prob=needs_realtime_prob,
+                        path="jev_semantic_intent",
+                    )
+                    plan = PlanBuilder.build_open_chat_plan(ctx)
+                    return StageResult(signal=StageSignal.TERMINATE, plan=plan)
 
-                    if intent_choice == "capability":
-                        logger.info(
-                            "intent jev-redirected capability question",
-                            question=ctx.question[:80],
-                            path="jev_capability",
-                        )
-                        plan = PlanBuilder.build_open_chat_plan(ctx)
-                        return StageResult(signal=StageSignal.TERMINATE, plan=plan)
-                except Exception as e:
-                    logger.warning("jev_intent_classification_failed", error=str(e)[:120])
+                if intent_choice == "capability":
+                    logger.info(
+                        "intent jev-redirected capability question",
+                        question=ctx.question[:80],
+                        path="jev_capability",
+                    )
+                    plan = PlanBuilder.build_open_chat_plan(ctx)
+                    return StageResult(signal=StageSignal.TERMINATE, plan=plan)
 
         # ── 查询改写 ──────────────────────────────────────────────────
         rewrite_service = ChatQueryRewriteService()

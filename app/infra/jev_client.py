@@ -6,7 +6,8 @@ JEV System 1 本地服务 Python 客户端
 from __future__ import annotations
 
 import time
-from typing import Any, cast
+from collections.abc import Callable
+from typing import Any, TypeVar, cast
 
 import httpx
 import structlog
@@ -20,6 +21,8 @@ from app.infra.metrics import (
 )
 
 logger = structlog.get_logger(__name__)
+
+T = TypeVar("T")
 
 # JEV 支持的问题类型（限制 label 取值，避免高基数）
 _JEV_QUESTION_TYPES = frozenset({"noul", "choice", "score"})
@@ -143,3 +146,38 @@ def get_jev_client() -> JEVClient:
     if _jev_client is None:
         _jev_client = JEVClient()
     return _jev_client
+
+
+async def jev_decide(
+    flag: str,
+    state: str,
+    questions: dict[str, Any],
+    parse: Callable[[dict[str, Any]], T],
+    *,
+    extra_enabled: bool = True,
+    log_context: str = "JEV",
+) -> T | None:
+    """统一 JEV 决策入口：开关判定 + 调用 + 解析 + 异常回退，消除各调用点重复样板。
+
+    返回 ``parse(answers)`` 的结果；以下情况记录 warning 并返回 ``None``（调用方据此走
+    原有 LLM/规则路径，绝不中断主流程）：
+    - ``settings.jev.<flag>`` 为假（或 settings 不可用）；
+    - ``extra_enabled`` 为假（调用方附加开关，如 safety 侧的护栏开关）；
+    - 客户端调用或 ``parse`` 抛任何异常（服务不可达、熔断、响应不完整等）。
+
+    注意：``parse`` 需自行校验 answers 完整性并在不满足时抛错——抛错即触发回退。
+    """
+    try:
+        jev_cfg = getattr(get_settings(), "jev", None)
+        enabled = bool(jev_cfg) and bool(getattr(jev_cfg, flag, True)) and extra_enabled
+    except Exception:  # noqa: BLE001 — 配置不可用按关闭处理
+        enabled = False
+    if not enabled:
+        return None
+
+    try:
+        answers = await get_jev_client().system_one(state=state, questions=questions)
+        return parse(answers)
+    except Exception as e:  # noqa: BLE001 — 任何失败都回退到原路径
+        logger.warning(f"{log_context} failed, falling back", error=str(e)[:120])
+        return None
