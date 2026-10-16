@@ -88,32 +88,44 @@ async def verify_citations(
             answers = await jev.system_one(state=state, questions=questions)
 
             threshold = getattr(jev_cfg, "citation_confidence_threshold", 0.60)
+            review_low = getattr(jev_cfg, "citation_review_low", 0.45)
             unsupported = []
+            ambiguous = []
             scores = {}
             for ref_n in refs:
                 key = f"cite_{ref_n}"
                 res = answers.get(key) or {}
                 prob = res.get("noul", 1.0) if isinstance(res, dict) else 1.0
                 scores[str(ref_n)] = prob
-                if prob < threshold:
+                if prob < review_low:
                     unsupported.append(ref_n)
+                elif prob < threshold:
+                    # 灰区：既非明确不支持，也未达高置信支持 -> 整轮升级到既有 LLM 审计
+                    ambiguous.append(ref_n)
 
-            _meta = {
-                "status": "jev_judged",
-                "unsupported": unsupported,
-                "scores": scores,
-            }
-            logger.info("citation verify JEV judge", **_meta)
+            if ambiguous:
+                logger.warning(
+                    "citation verify JEV uncertain -> escalate to LLM",
+                    ambiguous=ambiguous,
+                    scores=scores,
+                )
+            else:
+                _meta = {
+                    "status": "jev_judged",
+                    "unsupported": unsupported,
+                    "scores": scores,
+                }
+                logger.info("citation verify JEV judge", **_meta)
 
-            if not unsupported:
-                return answer, [], _meta
+                if not unsupported:
+                    return answer, [], _meta
 
-            cited = "、".join(f"[{u}]" for u in unsupported)
-            note = (
-                f"\n\n（注：回答中 {cited} 的引用内容未能在当前知识库证据中找到支持，"
-                "相关内容请以官方文件为准。）"
-            )
-            return answer + note, unsupported, _meta
+                cited = "、".join(f"[{u}]" for u in unsupported)
+                note = (
+                    f"\n\n（注：回答中 {cited} 的引用内容未能在当前知识库证据中找到支持，"
+                    "相关内容请以官方文件为准。）"
+                )
+                return answer + note, unsupported, _meta
         except Exception as e:
             logger.warning("JEV citation verify failed, falling back to LLM", error=str(e)[:120])
 
