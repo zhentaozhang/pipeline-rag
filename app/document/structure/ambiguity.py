@@ -11,9 +11,9 @@ logger = structlog.get_logger(__name__)
 
 # JEV 结构歧义：归类选项 + 层级等级（有序 → Score）
 _JEV_KIND_OPTIONS = {
-    "heading": "章节标题（用于分节，如“第一章”“1.2 概述”“概述”这类标题行）",
-    "list_item": "列表项或步骤项（如“1. xxx”“- xxx”“步骤一：xxx”）",
-    "body": "正文内容（普通段落文字，非标题也非列表）",
+    "heading": "章节标题：用于分节、概括性的短标题，通常不是可执行动作（如“第一章 概述”“1.2 系统架构”“关于我们”）",
+    "list_item": "列表项或操作步骤：可执行动作或枚举条目（如“1. 打开配置文件”“- 检查依赖”“步骤一：安装”“（1）提交申请”）",
+    "body": "正文段落：用完整句子陈述信息的普通内容，既不是标题也不是清单项",
 }
 _JEV_KIND_TO_SIGNAL = {
     "heading": "HEADING",
@@ -110,7 +110,7 @@ class DocumentStructureAmbiguityResolver:
         """
         from app.infra.jev_client import get_jev_client
 
-        state = self._build_candidate_blocks(ambiguous_signals, all_lines)
+        state = self._build_jev_state(ambiguous_signals, all_lines)
         questions: dict[str, dict] = {}
         for s in ambiguous_signals:
             questions[f"kind_{s.line_no}"] = {
@@ -165,6 +165,24 @@ class DocumentStructureAmbiguityResolver:
         return template.render(
             document_title=document_title or "未命名文档", candidate_blocks=blocks
         )
+
+    def _build_jev_state(
+        self, ambiguous_signals: list[DocumentStructureSignal], all_lines: list[str]
+    ) -> str:
+        """构建 JEV 用的中性上下文（不带 `初始判断` 等偏置字段，避免模型被初始类别带偏）。"""
+        safe_lines = all_lines or []
+        context_window = max(1, self.properties.context_window_lines)
+        blocks = []
+        for signal in ambiguous_signals:
+            current_index = max(0, signal.line_no - 1)
+            start = max(0, current_index - context_window)
+            end = min(len(safe_lines) - 1, current_index + context_window)
+            lines = []
+            for i in range(start, end + 1):
+                prefix = ">> " if i + 1 == signal.line_no else "   "
+                lines.append(f"{prefix}{i + 1}: {safe_lines[i] or ''}")
+            blocks.append(f"### 候选行 {signal.line_no}\n" + "\n".join(lines))
+        return "\n\n".join(blocks).strip()
 
     def _build_candidate_blocks(
         self, ambiguous_signals: list[DocumentStructureSignal], all_lines: list[str]
