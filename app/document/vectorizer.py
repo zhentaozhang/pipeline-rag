@@ -77,6 +77,9 @@ class VectorizerService:
             task_id,
             getattr(chunks[0], "tenant_id", "default") if chunks else "default",
             document_name,
+            scope_code=scope_code,
+            business_category=business_category,
+            document_tags=document_tags,
         )
 
         return len(child_chunks)
@@ -109,6 +112,9 @@ class VectorizerService:
         task_id: str = "0",
         tenant_id: str = "default",
         document_name: str = "",
+        scope_code: str = "",
+        business_category: str = "",
+        document_tags: str = "",
     ) -> None:
         """写入 PGVector 表，使用 UPSERT 语义（ON CONFLICT DO UPDATE）"""
         import json
@@ -223,7 +229,8 @@ class VectorizerService:
                         "tokenCount": chunk.token_count or 0,
                         "embeddingModel": embedding_model_name,
                         "scope_code": getattr(chunk, "scope_code", None) or scope_code,
-                        "businessCategory": getattr(chunk, "business_category", None) or business_category,
+                        "businessCategory": getattr(chunk, "business_category", None)
+                        or business_category,
                         "documentTags": getattr(chunk, "document_tags", None) or document_tags,
                     },
                     ensure_ascii=False,
