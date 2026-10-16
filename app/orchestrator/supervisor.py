@@ -84,6 +84,7 @@ class SupervisorService:
             plan.mode = ExecutionMode.MULTI_AGENT
             plan.sub_plans = graph_sub_plans
             plan.aggregation_style = "synthesize"
+            _inherit_plan_scope(plan)
             logger.info(
                 "supervisor decomposed via graph",
                 count=len(graph_sub_plans),
@@ -97,7 +98,9 @@ class SupervisorService:
             logger.warning("supervisor graph rejected sub-plans, keeping single mode")
             return plan
 
-        return await self._decompose_legacy(plan)
+        legacy_plan = await self._decompose_legacy(plan)
+        _inherit_plan_scope(legacy_plan)
+        return legacy_plan
 
     async def _decompose_via_graph(self, plan: ExecutionPlan) -> tuple[list[SubPlan] | None, bool]:
         """调用 LangGraph supervisor 图。
@@ -287,6 +290,25 @@ class SupervisorService:
         except Exception:
             logger.exception("sub_plan_review_failed")
             return True, ""
+
+
+def _inherit_plan_scope(plan: ExecutionPlan) -> None:
+    """把父计划的路由与导航范围下传到子计划。
+
+    子计划由 LLM 生成，只带 id / mode / question / depends_on；若不显式继承，
+    worker 的 ``retrieval_document_ids`` 恒为空 —— 并行分支会绕过知识路由，
+    在全部文档范围内检索，且不会进入图谱/导航模式。
+
+    仅在子计划真正会被执行时生效（``supervisor_mode`` + ``MULTI_AGENT``），
+    评审耗尽后残留的 rejected 子计划不在此列。
+    """
+    if not plan.supervisor_mode or not plan.sub_plans:
+        return
+    for sp in plan.sub_plans:
+        if not sp.doc_ids:
+            sp.doc_ids = list(plan.retrieval_document_ids or [])
+        if sp.navigation_decision is None:
+            sp.navigation_decision = plan.navigation_decision
 
 
 def _build_sub_plans(raw_plans: list[dict]) -> list[SubPlan]:
