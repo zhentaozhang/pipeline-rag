@@ -242,3 +242,156 @@ GUARDRAIL_DATASET: list[DecisionSample] = [
         metadata={"threat": "none"},
     ),
 ]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 任务 3：证据充分性（正样本 = 证据足以回答问题）
+#   input=问题，context=检索到的证据，label=是否足以回答
+# ══════════════════════════════════════════════════════════════════════════
+EVIDENCE_SUFFICIENCY_DATASET: list[DecisionSample] = [
+    DecisionSample(
+        id="es_p01",
+        input="试用期时长是如何根据劳动合同期限确定的？",
+        context="合同期限3个月以上不满1年：试用期1个月；1年以上不满3年：2个月；3年以上或无固定期限：6个月。",
+        label=True,
+    ),
+    DecisionSample(
+        id="es_p02",
+        input="员工主动辞职需要提前多久通知？",
+        context="员工主动辞职须提前30天以书面形式通知，试用期员工提前3天即可。",
+        label=True,
+    ),
+    DecisionSample(
+        id="es_p03",
+        input="员工年度带薪年假如何计算？",
+        context="年假按司龄计算：满1年5天，满10年10天，满20年15天。",
+        label=True,
+    ),
+    DecisionSample(
+        id="es_p04",
+        input="A 类城市经理级的每日住宿标准是多少？",
+        context="差旅住宿标准：经理级（M3）A 类城市上限 600 元/晚。",
+        label=True,
+    ),
+    DecisionSample(
+        id="es_p05",
+        input="试用期转正需要满足什么条件？",
+        context="转正条件：考核评分≥70分且无重大违规违纪记录。",
+        label=True,
+    ),
+    DecisionSample(
+        id="es_p06",
+        input="试用期薪酬如何计算？",
+        context="试用期薪酬为转正薪酬的80%，不低于当地最低工资标准。",
+        label=True,
+    ),
+    DecisionSample(
+        id="es_n01",
+        input="试用期时长是如何根据劳动合同期限确定的？",
+        context="公司年会定于每年一月中旬举行，届时公布年度优秀员工名单。",
+        label=False,
+    ),
+    DecisionSample(
+        id="es_n02",
+        input="员工主动辞职需要提前多久通知？",
+        context="办公区咖啡机每日 09:00-18:00 开放，请自觉清理台面。",
+        label=False,
+    ),
+    DecisionSample(
+        id="es_n03",
+        input="员工年度带薪年假如何计算？",
+        context="报销单据需在费用发生后 30 日内提交，逾期需附情况说明。",
+        label=False,
+    ),
+    DecisionSample(
+        id="es_n04",
+        input="A 类城市经理级的每日住宿标准是多少？",
+        context="公司核心价值观包括客户至上、创新驱动、务实高效、诚信合规。",
+        label=False,
+    ),
+    DecisionSample(
+        id="es_n05",
+        input="试用期转正需要满足什么条件？",
+        context="员工离职时应归还公司配发的笔记本电脑、门禁卡及工牌等资产。",
+        label=False,
+    ),
+    DecisionSample(
+        id="es_n06",
+        input="试用期薪酬如何计算？",
+        context="公司总部位于上海，部分岗位支持每周两天远程办公。",
+        label=False,
+    ),
+]
+
+# ══════════════════════════════════════════════════════════════════════════
+# 任务 4：回答质量（正样本 = 回答通过质量门限，score >= 7）
+#   input=问题，context=待评回答，label=是否通过
+# ══════════════════════════════════════════════════════════════════════════
+QUALITY_DATASET: list[DecisionSample] = [
+    DecisionSample(
+        id="q_p01",
+        input="试用期时长如何确定？",
+        context="合同3个月以上不满1年为1个月；1年以上不满3年为2个月；3年以上或无固定期限为6个月。",
+        label=True,
+    ),
+    DecisionSample(
+        id="q_p02",
+        input="员工主动辞职需要提前多久通知？",
+        context="正式员工提前30天书面通知，试用期员工提前3天。",
+        label=True,
+    ),
+    DecisionSample(
+        id="q_p03",
+        input="A 类城市经理级住宿标准？",
+        context="经理级（M3）在 A 类城市住宿上限 600 元/晚。",
+        label=True,
+    ),
+    DecisionSample(
+        id="q_p04",
+        input="转正条件是什么？",
+        context="考核评分≥70分且无重大违规违纪记录；未达标可延长试用期1个月。",
+        label=True,
+    ),
+    DecisionSample(
+        id="q_p05",
+        input="年假如何计算？",
+        context="按司龄计算：满1年5天，满10年10天，满20年15天。",
+        label=True,
+    ),
+    DecisionSample(
+        id="q_n01",
+        input="试用期时长如何确定？",
+        context="这个我不太确定，可能是一年吧。",
+        label=False,
+    ),
+    DecisionSample(
+        id="q_n02",
+        input="员工主动辞职需要提前多久通知？",
+        context="辞职需要提前很久，具体以公司规定为准。",
+        label=False,
+    ),
+    DecisionSample(
+        id="q_n03",
+        input="A 类城市经理级住宿标准？",
+        context="住宿费都可以全额报销，没有上限。",
+        label=False,
+    ),
+    DecisionSample(
+        id="q_n04",
+        input="转正条件是什么？",
+        context="我也不太清楚，你直接去问 HR 吧。",
+        label=False,
+    ),
+    DecisionSample(
+        id="q_n05",
+        input="年假如何计算？",
+        context="公司没有年假制度。",
+        label=False,
+    ),
+    DecisionSample(
+        id="q_n06",
+        input="试用期薪酬如何计算？",
+        context="试用期不发工资，转正后一起补发。",
+        label=False,
+    ),
+]

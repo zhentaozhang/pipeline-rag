@@ -9,7 +9,9 @@ import pytest
 from scripts.evaluation.datasets.base import DecisionSample
 from scripts.evaluation.datasets.decision_data import (
     CONTEXT_RELEVANCE_DATASET,
+    EVIDENCE_SUFFICIENCY_DATASET,
     GUARDRAIL_DATASET,
+    QUALITY_DATASET,
 )
 from scripts.evaluation.decision_ab import (
     BackendResult,
@@ -107,18 +109,30 @@ class TestEvaluateBackend:
 
 class TestDatasets:
     def test_ids_unique_and_labels_bool(self):
-        for dataset in (CONTEXT_RELEVANCE_DATASET, GUARDRAIL_DATASET):
+        for dataset in (
+            CONTEXT_RELEVANCE_DATASET,
+            GUARDRAIL_DATASET,
+            EVIDENCE_SUFFICIENCY_DATASET,
+            QUALITY_DATASET,
+        ):
             ids = [s.id for s in dataset]
             assert len(ids) == len(set(ids))
             assert all(isinstance(s.label, bool) for s in dataset)
 
     def test_both_classes_present(self):
-        for dataset in (CONTEXT_RELEVANCE_DATASET, GUARDRAIL_DATASET):
+        for dataset in (
+            CONTEXT_RELEVANCE_DATASET,
+            GUARDRAIL_DATASET,
+            EVIDENCE_SUFFICIENCY_DATASET,
+            QUALITY_DATASET,
+        ):
             labels = {s.label for s in dataset}
             assert labels == {True, False}
 
     def test_context_relevance_has_context(self):
         assert all(s.context for s in CONTEXT_RELEVANCE_DATASET)
+        assert all(s.context for s in EVIDENCE_SUFFICIENCY_DATASET)
+        assert all(s.context for s in QUALITY_DATASET)
 
 
 class TestReport:
