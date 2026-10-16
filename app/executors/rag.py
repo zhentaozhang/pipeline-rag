@@ -79,6 +79,16 @@ class AnswerQualityChecker:
         if not settings.rag.quality_enabled:
             return QualityResult(passed=True, score=10.0, issues=[])
 
+        # JEV System 1 Score 优先：通过即免 LLM 调用；未通过再走 LLM 取具体问题/建议
+        jev_cfg = getattr(settings, "jev", None)
+        if jev_cfg and getattr(jev_cfg, "quality_eval_enabled", True):
+            try:
+                jev_score = await self._jev_quality_score(question, answer)
+                if jev_score >= settings.rag.quality_min_score:
+                    return QualityResult(passed=True, score=jev_score, issues=[])
+            except Exception as e:
+                logger.warning("JEV 质量审核失败，回退 LLM", error=str(e)[:120])
+
         prompt = self._build_prompt(question, answer)
         try:
             if self._tracer is not None:
@@ -121,6 +131,33 @@ class AnswerQualityChecker:
     def _build_prompt(self, question: str, answer: str) -> str:
         template = self._jinja.get_template("quality_check.j2")
         return template.render(question=question, answer=answer)
+
+    async def _jev_quality_score(self, question: str, answer: str) -> float:
+        """JEV Score 原语：将回答质量映射到 0-10 分（有序等级）。"""
+        from app.infra.jev_client import get_jev_client
+
+        levels = [
+            "很差：答非所问或内容空洞",
+            "较差：只覆盖很少要点或存在明显错误",
+            "一般：部分相关，完整性或准确性不足",
+            "良好：较完整、准确、基于证据",
+            "优秀：完整、准确、有据且条理清晰",
+        ]
+        score_map = {levels[0]: 2.0, levels[1]: 5.0, levels[2]: 6.5, levels[3]: 8.0, levels[4]: 9.5}
+        answers = await get_jev_client().system_one(
+            state=f"问题：{question}\n\n待评回答：\n{answer[:1500]}",
+            questions={
+                "quality": {
+                    "type": "score",
+                    "instructions": "评估该回答对问题的整体质量（相关性、完整性、准确性、有据性）",
+                    "levels": levels,
+                }
+            },
+        )
+        res = answers.get("quality")
+        if not isinstance(res, dict) or "score" not in res:
+            raise ValueError("JEV missing quality score")
+        return score_map.get(res["score"], 5.0)
 
     async def _call_llm(self, prompt: str) -> dict[str, Any]:
         model = settings.rag.quality_model or settings.llm.model

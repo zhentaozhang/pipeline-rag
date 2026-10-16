@@ -191,7 +191,7 @@ class RagRetrievalEngine:
         base_question = (plan.rewritten_question or plan.original_question).strip()
         corrected = False
         for _ in range(max_rounds):
-            if not context.is_empty:
+            if await self._evidence_is_sufficient(base_question, context):
                 break
             rewritten = await self._rewrite_query(base_question)
             if not rewritten or rewritten == base_question:
@@ -233,6 +233,48 @@ class RagRetrievalEngine:
                 notes=context.retrieval_notes,
             )
         return context
+
+    async def _evidence_is_sufficient(self, question: str, context: RagRetrievalContext) -> bool:
+        """判定检索证据是否足以回答问题（JEV Noul 语义充分性）。
+
+        规则：空证据一定不足。JEV 关闭/异常时退化为"非空即充分"（保持原行为，绝不误触发纠错）。
+        """
+        if context.is_empty:
+            return False
+
+        jev_cfg = getattr(settings, "jev", None)
+        if not (jev_cfg and getattr(jev_cfg, "evidence_sufficiency_enabled", True)):
+            return True
+
+        try:
+            evidence_texts = [
+                ev.content[:400]
+                for se in context.sub_question_evidence_list
+                for ev in se.evidences
+                if ev.content
+            ]
+            if not evidence_texts:
+                return False
+
+            from app.infra.jev_client import get_jev_client
+
+            state = f"问题：{question}\n\n检索到的证据片段：\n" + "\n---\n".join(evidence_texts[:6])
+            answers = await get_jev_client().system_one(
+                state=state,
+                questions={
+                    "sufficient": {
+                        "type": "noul",
+                        "instructions": "上述检索到的证据是否足以直接、完整地回答问题（无需再检索）？",
+                    }
+                },
+            )
+            res = answers.get("sufficient")
+            if not isinstance(res, dict) or "noul" not in res:
+                return True
+            return float(res["noul"]) >= 0.5
+        except Exception as e:
+            logger.warning("JEV 证据充分性判定失败，按充分处理", error=str(e)[:120])
+            return True
 
     async def _rewrite_query(self, question: str) -> str:
         """复用查询改写服务，强制改写为更利于检索的形式。"""
