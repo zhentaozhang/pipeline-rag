@@ -18,19 +18,8 @@ _CAPABILITY_HINTS = {
     "怎么用你",
     "你能帮我什么",
 }
-_OPEN_CHAT_HINTS = {
-    "天气",
-    "温度",
-    "下雨",
-    "新闻",
-    "股价",
-    "汇率",
-    "热搜",
-    "今天",
-    "明天",
-    "最新",
-    "现在",
-}
+
+# 寒暄/致谢类，与"实时信息"无关，命中即走开放问答。
 _CHITCHAT_HINTS = {"你好", "您好", "hello", "hi", "谢谢", "感谢", "再见", "拜拜"}
 
 
@@ -54,13 +43,42 @@ def looks_like_capability_question(question: str) -> bool:
 
 
 def looks_like_open_chat_question(question: str, requires_fresh_search: bool) -> bool:
+    """问题是否应分流到开放问答（ReAct Agent + 联网检索）。
+
+    分流依据只有两类，且都不含"时间限定词"：
+
+    1. ``requires_fresh_search`` —— 由 ``TimeSensitiveQueryHelper`` 判定，语义是
+       "该问题需要实时/联网信息"；
+    2. 命中实时信息领域词（天气 / 股价 / 汇率 / 新闻 …，唯一来源
+       ``TimeSensitiveQueryHelper.is_fresh_info_domain``）或寒暄词。
+
+    注意：不要把「今天 / 明天 / 最新 / 现在」这类**时间限定词**放进分流依据。
+    它们表达时间语义，与是否需要联网无关。早前它们混在领域词表里，导致
+    「今天报销流程有变化吗」在 AUTO_DOCUMENT 模式下被静默改道到联网搜索，
+    完全绕过知识库。
+    """
     if not question:
         return False
     if requires_fresh_search:
         return True
-    if any(hint in question for hint in _OPEN_CHAT_HINTS):
+
+    from app.orchestrator.time_helper import TimeSensitiveQueryHelper
+
+    if TimeSensitiveQueryHelper.is_fresh_info_domain(question):
         return True
     return any(hint in question for hint in _CHITCHAT_HINTS)
+
+
+def build_open_chat_suggestion() -> str:
+    """「该问题更像开放式提问」的提示文案。
+
+    与分流判定解耦：调整措辞不应影响路由行为，反之亦然。
+    """
+    return (
+        "当前你正在使用\u201c当前文档问答\u201d模式，我只能基于所选文档回答。"
+        "这个问题更像开放式提问，例如天气、最新信息或一般交流。"
+        "如果你想继续问这类问题，请切换到\u201c开放式提问\u201d模式。"
+    )
 
 
 def build_document_mode_no_evidence_reply(question: str, requires_fresh_search: bool) -> str:
@@ -73,11 +91,7 @@ def build_document_mode_no_evidence_reply(question: str, requires_fresh_search: 
             "如果你想了解我能做什么，请切换到\u201c开放式提问\u201d模式。"
         )
     if looks_like_open_chat_question(normalized_question, requires_fresh_search):
-        return (
-            "当前你正在使用\u201c当前文档问答\u201d模式，我只能基于所选文档回答。"
-            "这个问题更像开放式提问，例如天气、最新信息或一般交流。"
-            "如果你想继续问这类问题，请切换到\u201c开放式提问\u201d模式。"
-        )
+        return build_open_chat_suggestion()
     return (
         settings.rag.no_evidence_reply
         or "当前没有从当前文档中检索到足够证据，暂时不能给出可靠结论。"

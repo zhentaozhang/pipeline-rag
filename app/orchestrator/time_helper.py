@@ -166,6 +166,16 @@ class TimeSensitiveQueryHelper:
         )
 
     @staticmethod
+    def is_fresh_info_domain(query: str) -> bool:
+        """是否命中实时信息领域词（天气 / 股价 / 汇率 / 新闻 …）。
+
+        与 ``requires_fresh_search`` 的区别：本方法只看领域词，不排除历史意图与
+        显式日期。供"是否该分流到联网问答"这类调用方复用同一份词表，避免各模块
+        各自维护一份近似词表而逐渐漂移。
+        """
+        return TimeSensitiveQueryHelper._looks_current_info_domain(query)
+
+    @staticmethod
     def build_effective_search_query(query: str, current_date: str) -> str:
         if not query or not query.strip():
             return query
