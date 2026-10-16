@@ -31,7 +31,9 @@ import structlog
 from scripts.evaluation.datasets.base import DecisionSample
 from scripts.evaluation.datasets.decision_data import (
     CONTEXT_RELEVANCE_DATASET,
+    EVIDENCE_SUFFICIENCY_DATASET,
     GUARDRAIL_DATASET,
+    QUALITY_DATASET,
 )
 
 logger = structlog.get_logger(__name__)
@@ -208,9 +210,41 @@ class GuardrailTask(DecisionTask):
         return {"jev": _jev_guardrail, "rules": _rules_guardrail, "llm": _llm_guardrail}
 
 
+class EvidenceSufficiencyTask(DecisionTask):
+    """证据是否足以回答问题（正类 = 充分）"""
+
+    name = "evidence_sufficiency"
+    positive_hint = "证据充分"
+
+    def samples(self) -> list[DecisionSample]:
+        return EVIDENCE_SUFFICIENCY_DATASET
+
+    def predictors(self) -> dict[str, Predictor]:
+        return {
+            "jev": _jev_evidence_sufficiency,
+            "rules": _rules_evidence_sufficiency,
+            "llm": _llm_evidence_sufficiency,
+        }
+
+
+class QualityTask(DecisionTask):
+    """回答是否通过质量门限（正类 = 通过）"""
+
+    name = "quality"
+    positive_hint = "质量通过"
+
+    def samples(self) -> list[DecisionSample]:
+        return QUALITY_DATASET
+
+    def predictors(self) -> dict[str, Predictor]:
+        return {"jev": _jev_quality_pass, "llm": _llm_quality_pass}
+
+
 TASKS: dict[str, type[DecisionTask]] = {
     "context_relevance": ContextRelevanceTask,
     "guardrail": GuardrailTask,
+    "evidence_sufficiency": EvidenceSufficiencyTask,
+    "quality": QualityTask,
 }
 
 
@@ -333,6 +367,103 @@ async def _llm_guardrail(sample: DecisionSample) -> BackendResult:
     return BackendResult(
         is_unsafe, (time.perf_counter() - t0) * 1000, f"action={data.get('action')}"
     )
+
+
+# ── evidence_sufficiency 后端（正类 = 充分）────────────────────────────────
+
+
+def _build_evidence_context(question: str, evidence: str):
+    from app.chat.schema import Evidence, SubQuestion, SubQuestionEvidence
+    from app.rag.engine import RagRetrievalContext
+
+    sq = SubQuestion(index=0, text=question, original=question)
+    ev = Evidence(content=evidence, reference_id="1", chunk_id="c1", doc_id="d1", title="t")
+    return RagRetrievalContext(
+        retrieval_question=question,
+        sub_question_evidence_list=[SubQuestionEvidence(sub_question=sq, evidences=[ev])],
+    )
+
+
+async def _jev_evidence_sufficiency(sample: DecisionSample) -> BackendResult:
+    """复用生产路径：RagRetrievalEngine._evidence_is_sufficient（JEV Noul）。"""
+    from app.rag.engine import RagRetrievalEngine
+
+    t0 = time.perf_counter()
+    engine = RagRetrievalEngine.__new__(RagRetrievalEngine)
+    ctx = _build_evidence_context(sample.input, sample.context or "")
+    sufficient = await engine._evidence_is_sufficient(sample.input, ctx)
+    return BackendResult(sufficient, (time.perf_counter() - t0) * 1000, f"sufficient={sufficient}")
+
+
+async def _rules_evidence_sufficiency(sample: DecisionSample) -> BackendResult:
+    """原规则：非空即充分。"""
+    t0 = time.perf_counter()
+    sufficient = bool((sample.context or "").strip())
+    return BackendResult(sufficient, (time.perf_counter() - t0) * 1000, "non-empty=sufficient")
+
+
+async def _llm_evidence_sufficiency(sample: DecisionSample) -> BackendResult:
+    from app.common.llm_client import get_eval_client
+
+    t0 = time.perf_counter()
+    client = get_eval_client()
+    prompt = (
+        "判断给出的证据是否足以直接、完整地回答该问题。只回答“是”或“否”，不要输出其他内容。\n\n"
+        f"问题：{sample.input}\n\n证据：{(sample.context or '')[:800]}"
+    )
+    resp = await client.chat.completions.create(
+        model=_eval_model(),
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.0,
+        max_tokens=512,
+    )
+    content = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+    if not content:
+        return BackendResult(None, (time.perf_counter() - t0) * 1000, "empty content")
+    verdict = "否" not in content[:4] and ("是" in content[:4] or "yes" in content.lower())
+    return BackendResult(verdict, (time.perf_counter() - t0) * 1000, f"llm={content[:6]!r}")
+
+
+# ── quality 后端（正类 = 通过质量门限）──────────────────────────────────────
+
+
+async def _jev_quality_pass(sample: DecisionSample) -> BackendResult:
+    """复用生产路径：AnswerQualityChecker._jev_quality_score（JEV Score）。"""
+    from app.config import get_settings
+    from app.executors.rag import AnswerQualityChecker
+
+    t0 = time.perf_counter()
+    checker = AnswerQualityChecker()
+    score = await checker._jev_quality_score(sample.input, sample.context or "")
+    passed = score >= get_settings().rag.quality_min_score
+    return BackendResult(passed, (time.perf_counter() - t0) * 1000, f"score={score}")
+
+
+async def _llm_quality_pass(sample: DecisionSample) -> BackendResult:
+    from app.common.llm_client import get_eval_client
+    from app.config import get_settings
+
+    t0 = time.perf_counter()
+    client = get_eval_client()
+    prompt = (
+        "评估回答对问题的质量（相关性、完整性、准确性、有据性），只输出一个 0-100 的整数分数。\n\n"
+        f"问题：{sample.input}\n\n回答：{(sample.context or '')[:800]}"
+    )
+    resp = await client.chat.completions.create(
+        model=_eval_model(),
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.0,
+        max_tokens=512,
+    )
+    content = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+    import re
+
+    match = re.search(r"\d+", content)
+    if not match:
+        return BackendResult(None, (time.perf_counter() - t0) * 1000, "unparsable")
+    score = min(100, max(0, int(match.group()))) / 10.0
+    passed = score >= get_settings().rag.quality_min_score
+    return BackendResult(passed, (time.perf_counter() - t0) * 1000, f"score={score}")
 
 
 # ── 报告与 CLI ──────────────────────────────────────────────────────────────
