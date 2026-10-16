@@ -12,6 +12,7 @@ FRONTEND_COMPOSE := docker compose -f docker-compose.frontend.yml
 .PHONY: help init build up up-obs down down-all restart logs ps shell migrate verify test test-integration \
         lint format format-check typecheck check config-check eval-ab \
         obs-up obs-down obs-logs \
+        jev-up jev-logs \
         fe-build fe-up fe-down fe-restart fe-logs fe-lint fe-test \
         up-all clean reset
 
@@ -63,6 +64,12 @@ up: ## 启动后端栈（幂等；等价 ./bin/deploy.sh）
 
 up-obs: ## 启动后端栈 + Langfuse 可观测性
 	./bin/deploy.sh --with-observability
+
+jev-up: ## 构建并启动 JEV 决策服务（含开发 override）
+	$(BACKEND_COMPOSE) -f docker-compose.override.yml up -d --build jev-service
+
+jev-logs: ## 跟踪 JEV 决策服务日志
+	$(BACKEND_COMPOSE) logs -f --tail=100 jev-service
 
 down: ## 停止后端栈（保留数据卷）
 	$(BACKEND_COMPOSE) down --remove-orphans
