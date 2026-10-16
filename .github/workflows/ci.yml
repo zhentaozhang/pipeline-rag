@@ -5,8 +5,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # ── 静态检查 + 单元测试 + 编排语法 ─────────────────────────────────────────
+  # ── 静态检查 + 单元测试 + 编排语法 + 镜像构建冒烟 ─────────────────────────
   quality:
     runs-on: ubuntu-latest
     steps:
@@ -26,30 +30,35 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check .
 
-      # 格式门禁：此前只跑 ruff check，未跑 format check，导致 116 个文件长期偏离
-      # 配置的格式规范（已一次性 ruff format 收敛）。补上门禁防止再次漂移。
+      # 格式门禁：防止代码风格再次偏离
       - name: Format check (ruff)
         run: uv run ruff format --check .
 
       - name: Type check (mypy)
         run: uv run mypy app
 
-      # 提供占位 LLM_API_KEY：部分模块在导入/实例化时即构造 OpenAI 客户端，
-      # 空 key 会抛 OpenAIError 导致收集失败；不影响断言代码默认值的用例。
+      # 提供占位 LLM_API_KEY：部分模块在导入/实例化时即构造 OpenAI 客户端
       - name: Unit tests
         env:
           LLM_API_KEY: ci-dummy-key
         run: uv run pytest tests/unit -q
 
-      - name: Validate docker compose files
+      - name: Validate all docker compose files
         run: |
           cp .env.example .env
           docker compose -f docker-compose.yml config >/dev/null
           docker compose -f docker-compose.frontend.yml config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.observability.yml --profile observability config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.override.yml config >/dev/null
+
+      # 镜像构建冒烟验证：确保 Dockerfile 指令、apt 源、COPY 路径在 CI 中可重放
+      - name: Build Docker images (smoke check)
+        run: |
+          docker compose build app
+          docker compose -f docker-compose.frontend.yml build
+          docker build -t pipeline-rag-jev:ci ./jev_service
 
   # ── 前端：lint + 单元测试（vitest + jsdom）──────────────────────────────────
-  # 此前前端只有 lint 未纳入 CI，vitest 配置就位但 package.json 无 test 脚本，
-  # 导致 chatStore / api.ts 这类高频改动区域完全没有回归保护。
   frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -132,3 +141,79 @@ jobs:
             cat "$file"
             exit 1
           fi
+
+  # ── 真实环境集成测试：覆盖 Redis 租约锁 / 记忆管理 / SSE 链路等 ────────────
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-pass
+          MYSQL_DATABASE: pipeline_rag
+          MYSQL_USER: pipeline_rag
+          MYSQL_PASSWORD: ci-app-pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --protocol=tcp"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: pipeline_rag_vector
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-pg-pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7.2
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: "3306"
+      MYSQL_DB: pipeline_rag
+      MYSQL_USER: pipeline_rag
+      MYSQL_PASSWORD: ci-app-pass
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: pipeline_rag_vector
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ci-pg-pass
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: "6379"
+      LLM_API_KEY: ci-dummy-key
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Prepare database schema
+        run: uv run alembic upgrade head
+
+      - name: Run integration tests
+        run: uv run pytest tests/integration -q

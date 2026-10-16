@@ -45,6 +45,10 @@ services:
       timeout: 5s
       retries: 5
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 2G
 
   # ── PostgreSQL 16 + PGVector（向量检索）──────────────────────────────────
   postgres:
@@ -63,10 +67,21 @@ services:
       timeout: 5s
       retries: 5
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 2G
 
-  # ── Elasticsearch 8.13（关键词检索 + IK 分词）────────────────────────────
+  # ── Elasticsearch 8.13（关键词检索 + IK 分词预烘焙）─────────────────────
   elasticsearch:
-    image: elasticsearch:8.13.4
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.elasticsearch
+      args:
+        IK_PLUGIN_URL: ${ES_IK_PLUGIN_URL:-https://get.infini.cloud/elasticsearch/analysis-ik/8.13.4}
+        HTTP_PROXY: ${ES_HTTP_PROXY:-}
+        HTTPS_PROXY: ${ES_HTTP_PROXY:-}
+    image: pipeline-rag-elasticsearch:8.13.4
     container_name: pipeline-rag-es
     restart: unless-stopped
     environment:
@@ -74,43 +89,19 @@ services:
       - xpack.security.enabled=false
       - ES_JAVA_OPTS=${ES_JAVA_OPTS:--Xms512m -Xmx1g}
       - "cluster.name=pipeline-rag-es"
-      # IK 插件来源（国内 CDN）；如需经宿主代理下载，设置 ES_HTTP_PROXY
-      - IK_PLUGIN_URL=${ES_IK_PLUGIN_URL:-https://get.infini.cloud/elasticsearch/analysis-ik/8.13.4}
-      - HTTPS_PROXY=${ES_HTTP_PROXY:-}
-      - HTTP_PROXY=${ES_HTTP_PROXY:-}
-      # 健康检查 curl 必须绕过代理访问容器本地 9200
-      - NO_PROXY=localhost,127.0.0.1
-      - no_proxy=localhost,127.0.0.1
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    command: >
-      bash -c '
-        IK_DIR=/usr/share/elasticsearch/plugins/ik;
-        if [ ! -f "$$IK_DIR/plugin-descriptor.properties" ]; then
-          echo "Installing IK analysis plugin via curl...";
-          rm -rf "$$IK_DIR"; mkdir -p "$$IK_DIR";
-          PROXY_OPT=""; [ -n "$$HTTPS_PROXY" ] && PROXY_OPT="-x $$HTTPS_PROXY";
-          if ( timeout 300 curl -fL $$PROXY_OPT --retry 3 --retry-delay 2 -o /tmp/ik.zip "$$IK_PLUGIN_URL" \
-               && unzip -o /tmp/ik.zip -d "$$IK_DIR" ); then
-            echo "IK plugin installed at $$IK_DIR";
-          else
-            echo "WARN: IK plugin install failed — 继续启动 ES（中文分词降级为默认分析器）";
-            rm -rf "$$IK_DIR";
-          fi;
-        fi;
-        /usr/local/bin/docker-entrypoint.sh eswrapper
-      '
     volumes:
       - es_data:/usr/share/elasticsearch/data
-      - es_plugins:/usr/share/elasticsearch/plugins
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 5
-      # IK 插件为 best-effort 安装（最长 180s），期间不计入失败
-      start_period: 240s
+      start_period: 30s
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 2G
 
   # ── Neo4j 5.20（文档结构图谱）───────────────────────────────────────────
   neo4j:
@@ -129,6 +120,10 @@ services:
       timeout: 10s
       retries: 5
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 2G
 
   # ── Redis 7.2（缓存 + 分布式锁 + Celery Broker）─────────────────────────
   redis:
@@ -144,6 +139,10 @@ services:
       timeout: 5s
       retries: 5
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
   # ── MinIO（对象存储）───────────────────────────────────────────────────
   minio:
@@ -201,6 +200,8 @@ services:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+      neo4j:
+        condition: service_healthy
       redis:
         condition: service_healthy
       minio:
@@ -219,9 +220,16 @@ services:
       # Celery broker/backend 默认为 localhost，容器内必须显式指向 redis 服务名
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      # JEV System 1 决策服务容器内网络解析
+      JEV_BASE_URL: http://jev-service:8080
     ports:
       - "${APP_PORT:-8080}:8080"
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
 
   # ── Celery Worker（异步任务）────────────────────────────────────────────
   celery-worker:
@@ -238,6 +246,8 @@ services:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+      neo4j:
+        condition: service_healthy
       redis:
         condition: service_healthy
       minio:
@@ -253,10 +263,16 @@ services:
       NEO4J_URI: bolt://neo4j:7687
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      JEV_BASE_URL: http://jev-service:8080
     command: celery -A app.celery_app worker -l info -c 4 --without-gossip --without-mingle
     healthcheck:
       disable: true
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
 
   # ── Celery Beat（定时调度：文档孤儿清理等）─────────────────────────────
   celery-beat:
@@ -285,12 +301,39 @@ services:
       disable: true
     logging: *default-logging
 
+  # ── JEV 本地判断模型服务（System 1 决策层）─────────────────────────────
+  jev-service:
+    build:
+      context: ./jev_service
+    container_name: pipeline-rag-jev
+    restart: unless-stopped
+    environment:
+      JEV_MODEL: ${JEV_MODEL:-Qwen/Qwen2.5-1.5B-Instruct}
+      JEV_DEVICE: ${JEV_DEVICE:-cpu}
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
+    volumes:
+      - jev_model_cache:/data/cache
+    ports:
+      - "${JEV_PORT:-8085}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
+
 volumes:
   mysql_data:
   postgres_data:
   es_data:
-  es_plugins:
   neo4j_data:
   neo4j_logs:
   redis_data:
   minio_data:
+  jev_model_cache:
