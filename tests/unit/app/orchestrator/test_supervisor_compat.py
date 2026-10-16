@@ -76,7 +76,6 @@ async def test_decompose_applies_sub_plans_from_graph(fake_llm):
     assert result.supervisor_mode is True
     assert result.mode == ExecutionMode.MULTI_AGENT
     assert len(result.sub_plans) == 2
-    assert result.aggregation_style == "synthesize"
     assert result.sub_plans[0].review_status == "approved"
     assert result.sub_plans[0].review_feedback == "无"
 

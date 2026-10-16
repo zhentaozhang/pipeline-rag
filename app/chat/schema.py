@@ -2,7 +2,6 @@
 Chat 核心 Schema — Pydantic DTO
 """
 
-from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -136,13 +135,6 @@ class StreamLaunchPlan(BaseModel):
     current_date_text: str = ""
 
 
-class AggregationStyle(StrEnum):
-    """多源合并策略"""
-
-    SYNTHESIZE = "synthesize"  # LLM 综合多源回答
-    CONCATENATE = "concatenate"  # 简单拼接
-
-
 class SubPlan(BaseModel):
     """子执行计划（多 Agent 场景下的单个 Worker 计划）"""
 
@@ -204,7 +196,6 @@ class ExecutionPlan(BaseModel):
     # ── 多 Agent 并行执行 ────────────────────────────────────────────
     supervisor_mode: bool = False
     sub_plans: list[SubPlan] = Field(default_factory=list)
-    aggregation_style: str = AggregationStyle.SYNTHESIZE
     selected_document_name: str | None = None
     selected_task_id: str | None = None
     retrieval_document_ids: list[str] = Field(default_factory=list)

@@ -83,7 +83,6 @@ class SupervisorService:
             plan.supervisor_mode = True
             plan.mode = ExecutionMode.MULTI_AGENT
             plan.sub_plans = graph_sub_plans
-            plan.aggregation_style = "synthesize"
             _inherit_plan_scope(plan)
             logger.info(
                 "supervisor decomposed via graph",
@@ -236,7 +235,6 @@ class SupervisorService:
         plan.supervisor_mode = True
         plan.mode = ExecutionMode.MULTI_AGENT
         plan.sub_plans = sub_plans
-        plan.aggregation_style = "synthesize"
         logger.info(
             "supervisor decomposed",
             count=len(sub_plans),
