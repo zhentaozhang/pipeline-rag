@@ -26,6 +26,11 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check .
 
+      # 格式门禁：此前只跑 ruff check，未跑 format check，导致 116 个文件长期偏离
+      # 配置的格式规范（已一次性 ruff format 收敛）。补上门禁防止再次漂移。
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
       - name: Type check (mypy)
         run: uv run mypy app
 
@@ -41,6 +46,33 @@ jobs:
           cp .env.example .env
           docker compose -f docker-compose.yml config >/dev/null
           docker compose -f docker-compose.frontend.yml config >/dev/null
+
+  # ── 前端：lint + 单元测试（vitest + jsdom）──────────────────────────────────
+  # 此前前端只有 lint 未纳入 CI，vitest 配置就位但 package.json 无 test 脚本，
+  # 导致 chatStore / api.ts 这类高频改动区域完全没有回归保护。
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (eslint)
+        run: npm run lint
+
+      - name: Unit tests (vitest)
+        run: npm test
 
   # ── 全新库迁移冒烟：upgrade → downgrade → upgrade，并断言与 ORM 一致 ──────
   migration:

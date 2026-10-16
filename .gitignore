@@ -75,6 +75,7 @@ frontend/dist/
 .opencode/
 .agents/
 .claude/
+.workbuddy-ai/
 skills-lock.json
 
 # Playwright MCP debug artifacts (local tooling)
