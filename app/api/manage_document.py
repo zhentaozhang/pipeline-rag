@@ -1,6 +1,5 @@
 """管理 API — /manage/document/* (文档 CRUD)"""
 
-import contextlib
 import json
 from typing import Any
 
@@ -37,6 +36,11 @@ _FILE_TYPE_NAMES = {
     DocumentFileTypeEnum.TXT: "TXT",
     DocumentFileTypeEnum.MD: "MD",
     DocumentFileTypeEnum.HTML: "HTML",
+    DocumentFileTypeEnum.PPT: "PPT",
+    DocumentFileTypeEnum.PPTX: "PPTX",
+    DocumentFileTypeEnum.XLS: "XLS",
+    DocumentFileTypeEnum.XLSX: "XLSX",
+    DocumentFileTypeEnum.CSV: "CSV",
 }
 _PARSE_STATUS_NAMES = {
     DocumentParseStatusEnum.WAIT_PARSE: "等待解析",
@@ -98,9 +102,11 @@ async def upload_document(
 
     meta_dict = {}
     if meta:
-        meta_bytes = await meta.read()
-        with contextlib.suppress(json.JSONDecodeError, UnicodeDecodeError):
+        try:
+            meta_bytes = await meta.read()
             meta_dict = json.loads(meta_bytes.decode("utf-8"))
+        except Exception:
+            meta_dict = {}
     scope_code = meta_dict.get("knowledgeScopeCode", "")
     title = meta_dict.get("documentName", "")
     tags = meta_dict.get("documentTags", "")
@@ -109,6 +115,111 @@ async def upload_document(
         return ApiResponse.ok(data=data)
     except ValueError as e:
         return ApiResponse.fail(str(e))
+
+
+@router.post(
+    "/document/upload/batch",
+    summary="批量上传文档",
+    description="支持一次性上传多个文档文件，自动逐个解析入库并触发处理流水线。",
+)
+async def upload_documents_batch(
+    files: list[UploadFile] = File(...),
+    meta: UploadFile = File(None),
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> dict[str, Any]:
+    """POST /manage/document/upload/batch — 批量上传文档"""
+    from app.manage.service.document_service import upload_document
+
+    meta_dict = {}
+    if meta:
+        try:
+            meta_bytes = await meta.read()
+            meta_dict = json.loads(meta_bytes.decode("utf-8"))
+        except Exception:
+            meta_dict = {}
+    scope_code = meta_dict.get("knowledgeScopeCode", "")
+    tags = meta_dict.get("documentTags", "")
+
+    succeeded: list[dict] = []
+    failed: list[dict] = []
+
+    for f in files:
+        try:
+            res = await upload_document(db, f, scope_code, None, tags)
+            succeeded.append({"filename": f.filename, "result": res})
+        except Exception as e:
+            await db.rollback()
+            logger.warning("batch upload single file failed", filename=f.filename, error=str(e))
+            failed.append({"filename": f.filename, "error": str(e)})
+
+    return ApiResponse.ok(data={"total": len(files), "succeeded": succeeded, "failed": failed})
+
+
+@router.post(
+    "/document/upload/archive",
+    summary="上传压缩包解压导入",
+    description="支持上传包含多个离线文档的 ZIP 压缩包，自动解压并批量建立索引流水线（内置 Zip-Slip 安全路径校验）。",
+)
+async def upload_archive(
+    archive: UploadFile = File(...),
+    meta: UploadFile = File(None),
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> dict[str, Any]:
+    """POST /manage/document/upload/archive — 压缩包批量解压导入"""
+    import io
+    import tempfile
+    import zipfile
+    from pathlib import Path
+
+    from app.document.connectors.local_connector import import_from_local_directory
+
+    if not archive.filename or not archive.filename.lower().endswith(".zip"):
+        return ApiResponse.fail("目前仅支持 .zip 格式的离线压缩包")
+
+    meta_dict = {}
+    if meta:
+        try:
+            meta_bytes = await meta.read()
+            meta_dict = json.loads(meta_bytes.decode("utf-8"))
+        except Exception:
+            meta_dict = {}
+    scope_code = meta_dict.get("knowledgeScopeCode", "")
+    tags = meta_dict.get("documentTags", "")
+
+    archive_bytes = await archive.read()
+    if not archive_bytes:
+        return ApiResponse.fail("压缩包内容为空")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        try:
+            total_uncompressed_bytes = 0
+            max_uncompressed_limit = 500 * 1024 * 1024  # 500MB 上限防 Zip Bomb
+            with zipfile.ZipFile(io.BytesIO(archive_bytes)) as zf:
+                for member in zf.infolist():
+                    target_path = (tmp_path / member.filename).resolve()
+                    # 安全防御 1：防 Zip Slip 路径穿越
+                    if not target_path.is_relative_to(tmp_path):
+                        return ApiResponse.fail(f"非法压缩包路径: {member.filename}")
+
+                    # 安全防御 2：防符号链接（Symlink）逃逸
+                    if (member.external_attr >> 16) & 0o170000 == 0o120000:
+                        continue
+
+                    # 安全防御 3：防 Zip Bomb 炸弹攻击
+                    total_uncompressed_bytes += member.file_size
+                    if total_uncompressed_bytes > max_uncompressed_limit:
+                        return ApiResponse.fail("压缩包解压体积超过 500MB 安全限制")
+
+                zf.extractall(tmp_path)
+        except Exception as e:
+            return ApiResponse.fail(f"解包失败: {e}")
+
+        # 调用目录导入器
+        res = await import_from_local_directory(tmp_path, scope_code=scope_code, tags=tags)
+        return ApiResponse.ok(data=res)
 
 
 @router.post(

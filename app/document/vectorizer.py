@@ -48,10 +48,15 @@ class VectorizerService:
             "vectorizing chunks", count=len(chunks), task_id=task_id, document_name=document_name
         )
 
-        child_chunks = [c for c in chunks if c.chunk_type == "child"]
+        child_chunks = [
+            c for c in chunks if c.chunk_type == "child" and c.content and c.content.strip()
+        ]
         logger.info(
             "filtered child chunks for embedding", total=len(chunks), child_count=len(child_chunks)
         )
+
+        max_tokens = getattr(settings.rag, "max_embedding_tokens", 8191) or 8191
+        from app.document.chunker.utils import truncate_text_to_tokens
 
         # 先获取 embeddings，仅针对 child_chunks
         # 注：批次失败时直接抛出，由 Celery 任务层标记失败并重试（max_retries=3），
@@ -60,9 +65,12 @@ class VectorizerService:
         for i in range(0, len(child_chunks), self._batch_size):
             batch = child_chunks[i : i + self._batch_size]
             texts = [
-                self._build_contextual_text(c, document_name)
-                if settings.rag.contextual_chunking_enabled
-                else c.content
+                truncate_text_to_tokens(
+                    self._build_contextual_text(c, document_name)
+                    if settings.rag.contextual_chunking_enabled
+                    else c.content,
+                    max_tokens,
+                )
                 for c in batch
             ]
             embs = await self._embed_batch(texts)
@@ -98,7 +106,13 @@ class VectorizerService:
         if section:
             parts.append(f"章节：{section}")
         parts.append(chunk.content)
-        return "\n".join(parts)
+        full_text = "\n".join(parts)
+
+        # 防御性硬截断，防止拼接后超过 embedding 模型上下文上限抛 HTTP 400
+        max_tokens = getattr(settings.rag, "max_embedding_tokens", 8191) or 8191
+        from app.document.chunker.utils import truncate_text_to_tokens
+
+        return truncate_text_to_tokens(full_text, max_tokens)
 
     async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
         """批量调用嵌入提供者（支持 provider 切换）"""
@@ -163,25 +177,29 @@ class VectorizerService:
         datetime.now(UTC)
         embedding_model_name = settings.llm.embedding_model
 
-        # Convert task_id to BIGINT for the embedding table
-        # Use stable hash (Python builtin hash() is randomized per process)
-        def _to_bigint(val: str | None) -> int:
-            if val is None:
-                return 0
-            s = str(val)
-            result = safe_int(s, default=None)
-            if result is not None:
-                return result
-            import hashlib
+        from app.common.utils import stable_id_to_int
 
-            digest = hashlib.md5(s.encode("utf-8")).digest()
-            return int.from_bytes(digest[:8], "big") % (10**15)
-
-        task_id_bigint = _to_bigint(task_id) if task_id != "0" else 0
+        task_id_bigint = stable_id_to_int(task_id) if task_id != "0" else 0
 
         async with _pg_transaction() as conn:
-            # 0. 清理该文档的旧 chunk（避免 pipeline 重跑后累积重复）
+            # 0. 清理该文档的旧 chunk 和旧向量（避免 pipeline 重跑或更新分块后残留幽灵向量）
             doc_id_to_clean = all_chunks[0].doc_id if all_chunks else None
+            doc_internal_id_to_clean = None
+            for c in all_chunks:
+                if getattr(c, "document_id", None):
+                    doc_internal_id_to_clean = c.document_id
+                    break
+            if not doc_internal_id_to_clean:
+                for c in child_chunks:
+                    if getattr(c, "document_id", None):
+                        doc_internal_id_to_clean = c.document_id
+                        break
+
+            if doc_internal_id_to_clean:
+                await conn.execute(
+                    "DELETE FROM pipeline_rag_document_embedding WHERE document_id = $1",
+                    doc_internal_id_to_clean,
+                )
             if doc_id_to_clean:
                 await conn.execute("DELETE FROM document_chunk WHERE doc_id = $1", doc_id_to_clean)
 
@@ -208,8 +226,8 @@ class VectorizerService:
             for chunk, emb in zip(child_chunks, embeddings, strict=False):
                 document_id = chunk.document_id or 0
 
-                emb_id = _to_bigint(chunk.chunk_id)
-                parent_id = _to_bigint(chunk.parent_chunk_id)
+                emb_id = stable_id_to_int(chunk.chunk_id)
+                parent_id = stable_id_to_int(chunk.parent_chunk_id)
 
                 metadata_json = json.dumps(
                     {
@@ -238,6 +256,7 @@ class VectorizerService:
 
                 # item_index 默认用 0，若有结构树字段也一并传
                 item_index = getattr(chunk, "item_index", 0) or 0
+                plan_id_val = getattr(chunk, "plan_id", 0) or 0
 
                 embed_values.append(
                     (
@@ -245,7 +264,7 @@ class VectorizerService:
                         tenant_id,
                         document_id,
                         task_id_bigint,
-                        0,
+                        plan_id_val,
                         parent_id,
                         chunk.chunk_index,
                         0,
@@ -255,7 +274,7 @@ class VectorizerService:
                         chunk.canonical_path or "",
                         item_index,
                         chunk.content,
-                        chunk.token_count or 0,
+                        len(chunk.content),
                         chunk.token_count or 0,
                         embedding_model_name,
                         metadata_json,

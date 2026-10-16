@@ -10,9 +10,11 @@ from app.celery_app import celery_app, run_async
 from app.common.enums import DocumentPipelineStageEnum, DocumentTaskStageEnum
 from app.document.tasks._base import (
     _compensate,
+    _compensate_async,
     _get_mysql_session,
     _infer_stage,
     _update_document_failed,
+    _update_document_failed_async,
 )
 from app.document.tasks._chunk import task_chunk_document
 from app.document.tasks._index import task_index_document
@@ -34,36 +36,51 @@ logger = structlog.get_logger(__name__)
 
 @celery_app.task(name="document.cleanup_orphans")
 def cleanup_orphan_documents():
-    """定时扫描异常状态的文档，执行补偿 + 重试"""
+    """定时扫描停滞超时的文档，执行补偿 + 失败标记（避免误杀正常处理中的文档）"""
 
     async def _do():
+        from datetime import datetime, timedelta
+
         from sqlalchemy import select
 
         from app.db.models.document import Document as DocModel
 
+        # 仅针对超过 2 小时未更新且停留在中间处理状态（PARSED=1 到 VECTORIZED=3）的停滞文档
+        # INDEXED=4 说明主要索引已完成，严禁清理
+        stale_threshold = datetime.now() - timedelta(hours=2)
         async with _get_mysql_session() as db:
             stmt = (
                 select(DocModel)
                 .where(
                     DocModel.pipeline_stage.between(
                         DocumentPipelineStageEnum.PARSED.value,
-                        DocumentPipelineStageEnum.INDEXED.value,
+                        DocumentPipelineStageEnum.VECTORIZED.value,
                     ),
                     DocModel.status == 1,
+                    DocModel.updated_at < stale_threshold,
                 )
                 .order_by(DocModel.id.desc())
+                .limit(100)
             )
             rows = (await db.execute(stmt)).scalars().all()
 
         for doc in rows:
-            logger.warning("orphaned document found", doc_id=doc.doc_id, stage=doc.pipeline_stage)
+            logger.warning(
+                "stale orphaned document found, compensating",
+                doc_id=doc.doc_id,
+                stage=doc.pipeline_stage,
+            )
             stage_map = {
-                1: DocumentTaskStageEnum.CHUNK_EXECUTE.value,
-                2: DocumentTaskStageEnum.VECTORIZE.value,
-                3: DocumentTaskStageEnum.STORE_COMPLETE.value,
-                4: DocumentTaskStageEnum.STORE_COMPLETE.value,
+                DocumentPipelineStageEnum.PARSED.value: DocumentTaskStageEnum.CHUNK_EXECUTE.value,
+                DocumentPipelineStageEnum.CHUNKED.value: DocumentTaskStageEnum.VECTORIZE.value,
+                DocumentPipelineStageEnum.VECTORIZED.value: DocumentTaskStageEnum.STORE_COMPLETE.value,
             }
-            _compensate(doc.doc_id, stage_map.get(doc.pipeline_stage))
+            target_stage = stage_map.get(doc.pipeline_stage)
+            if target_stage:
+                await _compensate_async(doc.doc_id, target_stage)
+                await _update_document_failed_async(
+                    doc.doc_id, "文档处理停滞超时(>2h)，系统已执行补偿清理。"
+                )
 
     run_async(_do())
 
@@ -100,7 +117,9 @@ __all__ = [
     "cleanup_traces",
     "import_web_documents",
     "_compensate",
+    "_compensate_async",
     "_infer_stage",
     "_update_document_failed",
+    "_update_document_failed_async",
     "celery_app",
 ]

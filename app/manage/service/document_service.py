@@ -57,16 +57,61 @@ async def upload_document(
     original_file_name = re.sub(r"[^\w\-.]", "_", file.filename)
 
     file_ext = original_file_name.split(".")[-1].lower() if "." in original_file_name else ""
-    supported_extensions = {"pdf", "doc", "docx", "txt", "md", "html"}
+    supported_extensions = {
+        "pdf",
+        "doc",
+        "docx",
+        "txt",
+        "md",
+        "html",
+        "ppt",
+        "pptx",
+        "xls",
+        "xlsx",
+        "csv",
+    }
     if file_ext not in supported_extensions:
         raise ValueError(f"Unsupported file type: .{file_ext}")
 
     file_type = DocumentFileTypeEnum.__members__.get(file_ext.upper())
     file_type_code = file_type.value if file_type else 0
 
-    file_bytes = await file.read()
+    max_size_bytes = 200 * 1024 * 1024  # 默认 200MB 上限防 OOM
+    file_bytes = await file.read(max_size_bytes + 1)
     if not file_bytes:
         raise ValueError("Empty file content")
+    if len(file_bytes) > max_size_bytes:
+        raise ValueError(f"File size exceeds maximum limit of {max_size_bytes // (1024 * 1024)}MB")
+
+    from app.db.models.document import Document as DocModel
+    from app.db.models.document import DocumentTask
+
+    # 知识域校验
+    scope = await KnowledgeRepository.get_scope_by_code(db, scope_code)
+    if scope_code and not scope:
+        raise ValueError(f"Knowledge scope not found: {scope_code}")
+
+    # 查重检测：若同知识域下已存在相同文件且构建成功，秒传复用已有文档，防止重复向量化污染
+    from sqlalchemy import select
+
+    dup_stmt = select(DocModel).where(
+        DocModel.file_size == len(file_bytes),
+        DocModel.original_file_name == original_file_name,
+        DocModel.knowledge_scope_code == scope_code,
+        DocModel.status == 1,
+    )
+    existing_doc = (await db.execute(dup_stmt)).scalars().first()
+    if existing_doc and existing_doc.index_status == DocumentIndexStatusEnum.BUILD_SUCCESS.value:
+        logger.info("identical document already exists, reusing", doc_id=existing_doc.doc_id)
+        return {
+            "docId": existing_doc.doc_id,
+            "taskId": existing_doc.last_index_task_id or "",
+            "status": "already_exists",
+            "message": f"文档《{existing_doc.document_name}》在当前知识域下已完成构建，自动复用。",
+            "parseStatus": existing_doc.parse_status,
+            "strategyStatus": existing_doc.strategy_status,
+            "indexStatus": existing_doc.index_status,
+        }
 
     doc_id = next_id_str()
     doc_internal_id = next_id_int()
@@ -74,11 +119,6 @@ async def upload_document(
     stored_info = await upload_original_file(
         doc_id, original_file_name, file_bytes, file.content_type or "application/octet-stream"
     )
-
-    scope = await KnowledgeRepository.get_scope_by_code(db, scope_code)
-
-    from app.db.models.document import Document as DocModel
-    from app.db.models.document import DocumentTask
 
     task_id_val = next_id_str()
     doc = DocModel(
