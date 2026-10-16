@@ -189,3 +189,70 @@ async def test_rule_prefilter_allows_complex_question(fake_llm):
         assert len(fake_llm.calls) > 0
     finally:
         settings.rag.supervisor_rule_prefilter = original
+
+
+async def test_decompose_propagates_route_scope_to_sub_plans(fake_llm):
+    """回归（审查报告 D3）：子计划必须继承父计划的路由范围与导航决策。
+
+    `_build_sub_plans` 只从 LLM JSON 取 id/mode/question/depends_on，
+    `SubPlan.doc_ids` 恒为空；ParallelExecutor 又用它构造 worker 计划的
+    `retrieval_document_ids` —— 并行分支因此绕过知识路由，在全部文档上检索。
+    """
+    from app.chat.schema import DocumentNavigationDecision
+    from app.orchestrator.supervisor import SupervisorService
+
+    fake_llm.queue_json(
+        {
+            "decompose": True,
+            "reasoning": "ok",
+            "sub_plans": [
+                {"id": "1", "mode": "RETRIEVAL", "question": "子问题1", "depends_on": []},
+                {"id": "2", "mode": "RETRIEVAL", "question": "子问题2", "depends_on": ["1"]},
+            ],
+        }
+    )
+    fake_llm.queue_json({"approved": True, "feedback": ""})
+
+    plan = _plan()
+    plan.retrieval_document_ids = ["11", "22"]
+    plan.navigation_decision = DocumentNavigationDecision(execution_mode="GRAPH_ONLY")
+
+    result = await SupervisorService().decompose(plan)
+
+    assert result.supervisor_mode is True
+    assert result.mode == ExecutionMode.MULTI_AGENT
+    assert len(result.sub_plans) == 2
+    for sp in result.sub_plans:
+        assert sp.doc_ids == ["11", "22"], "子计划未继承父计划的路由文档范围"
+        assert sp.navigation_decision is not None
+        assert sp.navigation_decision.execution_mode == "GRAPH_ONLY"
+
+
+def test_inherit_scope_keeps_explicit_sub_plan_scope():
+    """子计划自带范围时不覆盖（LLM 若显式指定，尊重它）。"""
+    from app.chat.schema import SubPlan
+    from app.orchestrator.supervisor import _inherit_plan_scope
+
+    plan = _plan()
+    plan.supervisor_mode = True
+    plan.retrieval_document_ids = ["11"]
+    plan.sub_plans = [
+        SubPlan(id="1", mode=ExecutionMode.RETRIEVAL, question="q", doc_ids=["99"]),
+    ]
+
+    _inherit_plan_scope(plan)
+    assert plan.sub_plans[0].doc_ids == ["99"]
+
+
+def test_inherit_scope_skipped_when_not_multi_agent():
+    """评审耗尽后残留的 rejected 子计划不会被执行，不应继承范围。"""
+    from app.chat.schema import SubPlan
+    from app.orchestrator.supervisor import _inherit_plan_scope
+
+    plan = _plan()
+    plan.supervisor_mode = False  # 保持单模式
+    plan.retrieval_document_ids = ["11"]
+    plan.sub_plans = [SubPlan(id="1", mode=ExecutionMode.RETRIEVAL, question="q")]
+
+    _inherit_plan_scope(plan)
+    assert plan.sub_plans[0].doc_ids == []
