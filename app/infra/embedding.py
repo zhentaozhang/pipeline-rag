@@ -47,8 +47,8 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         dimensions: int | None = None,
     ) -> None:
         self._client = client or get_embedding_client()
-        self._model = model or settings.llm.embedding_model
-        self._dim = dimensions or settings.llm.embedding_dimensions
+        self._model = model or get_settings().llm.embedding_model
+        self._dim = dimensions or get_settings().llm.embedding_dimensions
         self._dim_checked = False
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
@@ -68,7 +68,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                     expected=self._dim,
                     actual=actual_dim,
                     model=self._model,
-                    hint="Ensure settings.llm.embedding_dimensions matches the model dimension, otherwise PGVector insert will fail",
+                    hint="Ensure get_settings().llm.embedding_dimensions matches the model dimension, otherwise PGVector insert will fail",
                 )
             self._dim_checked = True
         return embeddings
@@ -86,16 +86,16 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
         model: str | None = None,
         dimensions: int | None = None,
     ) -> None:
-        raw_url = (base_url or settings.llm.embedding_base_url or "http://localhost:11434").rstrip(
-            "/"
-        )
+        raw_url = (
+            base_url or get_settings().llm.embedding_base_url or "http://localhost:11434"
+        ).rstrip("/")
         if raw_url.endswith("/v1"):
             raw_url = raw_url[:-3].rstrip("/")
         self._base_url = raw_url
-        self._model = model or settings.llm.embedding_model
-        self._dim = dimensions or settings.llm.embedding_dimensions
+        self._model = model or get_settings().llm.embedding_model
+        self._dim = dimensions or get_settings().llm.embedding_dimensions
         self._dim_checked = False
-        self._client = httpx.AsyncClient(timeout=float(settings.llm.timeout_seconds))
+        self._client = httpx.AsyncClient(timeout=float(get_settings().llm.timeout_seconds))
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         if not texts:
@@ -140,7 +140,7 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
                     expected=self._dim,
                     actual=actual_dim,
                     model=self._model,
-                    hint="Ensure settings.llm.embedding_dimensions matches the model dimension",
+                    hint="Ensure get_settings().llm.embedding_dimensions matches the model dimension",
                 )
             self._dim_checked = True
 
@@ -161,21 +161,21 @@ class LocalTEIEmbeddingProvider(EmbeddingProvider):
         dimensions: int | None = None,
         api_key: str | None = None,
     ) -> None:
-        raw_url = (base_url or settings.llm.embedding_base_url or "http://localhost:8080").rstrip(
-            "/"
-        )
+        raw_url = (
+            base_url or get_settings().llm.embedding_base_url or "http://localhost:8080"
+        ).rstrip("/")
         if raw_url.endswith("/v1"):
             raw_url = raw_url[:-3].rstrip("/")
         self._base_url = raw_url
-        self._model = model or settings.llm.embedding_model
-        self._dim = dimensions or settings.llm.embedding_dimensions
-        self._api_key = api_key or settings.llm.embedding_api_key or "EMPTY"
+        self._model = model or get_settings().llm.embedding_model
+        self._dim = dimensions or get_settings().llm.embedding_dimensions
+        self._api_key = api_key or get_settings().llm.embedding_api_key or "EMPTY"
         self._dim_checked = False
         headers = {}
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
         self._client = httpx.AsyncClient(
-            headers=headers, timeout=float(settings.llm.timeout_seconds)
+            headers=headers, timeout=float(get_settings().llm.timeout_seconds)
         )
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
@@ -219,7 +219,7 @@ class LocalTEIEmbeddingProvider(EmbeddingProvider):
                     expected=self._dim,
                     actual=actual_dim,
                     model=self._model,
-                    hint="Ensure settings.llm.embedding_dimensions matches the model dimension",
+                    hint="Ensure get_settings().llm.embedding_dimensions matches the model dimension",
                 )
             self._dim_checked = True
 
