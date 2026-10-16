@@ -60,6 +60,22 @@ class PlanBuilder:
         )
 
     @staticmethod
+    def build_unavailable_plan(ctx: PrepareContext, reason: str) -> ExecutionPlan:
+        """服务不可用（服务端配置缺失）时的终止计划。
+
+        复用 REFUSAL 执行器直出可读文案，但带独立的思考提示——该场景不是安全事件，
+        不应显示"触发安全护栏拦截"。调用方负责记录 ERROR 日志与降级指标。
+        """
+        return ExecutionPlan(
+            mode=ExecutionMode.REFUSAL,
+            chat_mode=ctx.chat_mode,
+            refusal_reply=reason,
+            refusal_thinking="文档问答能力未启用，已终止本次检索。",
+            no_evidence_reply=get_settings().rag.no_evidence_reply,
+            **PlanBuilder.build_common_kwargs(ctx),
+        )
+
+    @staticmethod
     def build_open_chat_plan(ctx: PrepareContext) -> ExecutionPlan:
         settings = get_settings()
         return ExecutionPlan(

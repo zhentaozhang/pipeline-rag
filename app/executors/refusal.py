@@ -32,14 +32,21 @@ class RefusalExecutor(ConversationExecutor):
             if plan is None
             else (plan.refusal_reply or "根据企业安全规范，我无法回答该问题。")
         )
+        # 终止原因不同（安全拦截 / 能力不可用），思考提示需可区分，
+        # 否则"能力未启用"会显示成"触发安全护栏拦截"。
+        thinking_step = (
+            "触发安全护栏拦截。"
+            if plan is None or not plan.refusal_thinking
+            else plan.refusal_thinking
+        )
 
         yield sse_event(
             SSEEventType.THINKING,
-            "触发安全护栏拦截。",
+            thinking_step,
             conversation_id=conv_id,
             exchange_id=exch_id,
         )
-        self.task.thinking_steps.append("触发安全护栏拦截。")
+        self.task.thinking_steps.append(thinking_step)
 
         if tracer is not None:
             async with tracer.span("refusal", kind=SpanKind.PIPELINE):

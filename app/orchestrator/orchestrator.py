@@ -129,7 +129,11 @@ def _build_orchestrator_pipeline() -> Pipeline[PrepareContext, ExecutionPlan]:
             PipelineStage(HistoryBuildingStage()),
             PipelineStage(TimeSensitivityStage()),
             PipelineStage(GuardrailStage()),
-            PipelineStage(ValidationStage()),
+            # OPEN_CHAT 不依赖 RAG，必须在 OpenChatShortcutStage 之前排除；
+            # 否则 RAG_ENABLED=false 时闲聊请求会被"文档问答未启用"拦下并抛异常。
+            PipelineStage(ValidationStage()).when(
+                lambda ctx: ctx.chat_mode != ChatQueryMode.OPEN_CHAT
+            ),
             PipelineStage(OpenChatShortcutStage()).when(
                 lambda ctx: ctx.chat_mode == ChatQueryMode.OPEN_CHAT
             ),
