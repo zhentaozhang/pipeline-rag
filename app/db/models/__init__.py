@@ -26,6 +26,9 @@ from app.db.models.rag_observability import (
     ConversationRetrievalResult,
     ConversationTraceStage,
     RagEvaluationDataset,
+    TraceObservability,
+    TraceObservabilityScore,
+    TraceObservabilitySpan,
 )
 from app.db.models.routing import KnowledgeRouteTrace, ShadowRouterRecord
 from app.db.models.task_log import DocumentTaskLog
@@ -59,4 +62,7 @@ __all__ = [
     "PipelineRAGDocumentTask",
     "TimestampMixin",
     "TopicDocumentRelation",
+    "TraceObservability",
+    "TraceObservabilitySpan",
+    "TraceObservabilityScore",
 ]

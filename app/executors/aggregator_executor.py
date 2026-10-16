@@ -98,38 +98,75 @@ class AggregatorExecutor:
 
         prompt = _render_synthesis_prompt(question, valid)
         s = _get_settings()
-        try:
-            stream = await self._get_client().chat.completions.create(
-                model=s.llm.model,
-                messages=[
-                    {"role": "system", "content": "你是一个专业的多源信息综合助手。"},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.3,
-                max_tokens=2048,
-                timeout=s.llm.timeout_seconds,
-                stream=True,
-            )
-            async for event in stream:
-                if not event.choices:
-                    continue
-                delta = event.choices[0].delta
-                if delta.content:
-                    yield sse_event(
-                        SSEEventType.TEXT,
-                        delta.content,
-                        conversation_id=conversation_id,
-                        exchange_id=exchange_id,
+        from app.chat.service_utils import _estimate_tokens
+        from app.observability import SpanKind, get_active_tracer
+        from app.observability.llm_observe import record_generation
+        from app.observability.tracer import span_of
+
+        active_tracer = get_active_tracer()
+        output_chunks: list[str] = []
+        prompt_tokens = _estimate_tokens(prompt)
+        completion_tokens = 0
+
+        span_mgr = span_of(active_tracer, "agent_aggregate", kind=SpanKind.AGENT)
+        async with span_mgr:
+            try:
+                stream = await self._get_client().chat.completions.create(
+                    model=s.llm.model,
+                    messages=[
+                        {"role": "system", "content": "你是一个专业的多源信息综合助手。"},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.3,
+                    max_tokens=2048,
+                    timeout=s.llm.timeout_seconds,
+                    stream=True,
+                    stream_options={"include_usage": True},
+                )
+                async for event in stream:
+                    usage = getattr(event, "usage", None)
+                    if usage:
+                        prompt_tokens = getattr(usage, "prompt_tokens", 0) or prompt_tokens
+                        completion_tokens = (
+                            getattr(usage, "completion_tokens", 0) or completion_tokens
+                        )
+                    if not event.choices:
+                        continue
+                    delta = event.choices[0].delta
+                    if delta.content:
+                        output_chunks.append(delta.content)
+                        yield sse_event(
+                            SSEEventType.TEXT,
+                            delta.content,
+                            conversation_id=conversation_id,
+                            exchange_id=exchange_id,
+                        )
+                if not completion_tokens:
+                    completion_tokens = _estimate_tokens("".join(output_chunks))
+                if active_tracer:
+                    record_generation(
+                        active_tracer,
+                        "agent_aggregate_llm",
+                        model=s.llm.model,
+                        input=prompt,
+                        output="".join(output_chunks),
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
                     )
-        except Exception:
-            logger.exception("synthesis_streaming_failed")
-            merged_text, _ = self._concatenate(valid)
-            yield sse_event(
-                SSEEventType.TEXT,
-                merged_text,
-                conversation_id=conversation_id,
-                exchange_id=exchange_id,
-            )
+            except Exception as exc:
+                logger.exception("synthesis_streaming_failed")
+                if hasattr(span_mgr, "_span"):
+                    from app.observability.enums import SpanStatus
+
+                    span_mgr._span.status = SpanStatus.ERROR
+                    span_mgr._span.output = {"fallback": True, "error": str(exc)}
+                merged_text, _ = self._concatenate(valid)
+                yield sse_event(
+                    SSEEventType.TEXT,
+                    merged_text,
+                    conversation_id=conversation_id,
+                    exchange_id=exchange_id,
+                )
 
         self._last_refs = _merge_references(results)
 

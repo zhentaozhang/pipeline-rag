@@ -17,6 +17,9 @@ __all__ = [
     "ConversationRetrievalResult",
     "ConversationTraceStage",
     "RagEvaluationDataset",
+    "TraceObservability",
+    "TraceObservabilitySpan",
+    "TraceObservabilityScore",
 ]
 
 
@@ -200,3 +203,56 @@ class RagEvaluationDataset(Base, TimestampMixin):
     answer_correctness_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     eval_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     evaluated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class TraceObservability(Base):
+    """自研轻量级 Trace 根记录"""
+
+    __tablename__ = "trace_observability"
+
+    trace_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    exchange_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    root_span_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    input: Mapped[str | None] = mapped_column(Text, nullable=True)
+    output: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_: Mapped[str | None] = mapped_column("metadata", Text, nullable=True)
+    tags: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    flushed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class TraceObservabilitySpan(Base):
+    """自研 Trace Span 记录"""
+
+    __tablename__ = "trace_observability_span"
+
+    span_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    trace_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    parent_span_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(32), default="pipeline")
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="ok")
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    input: Mapped[str | None] = mapped_column(Text, nullable=True)
+    output: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_: Mapped[str | None] = mapped_column("metadata", Text, nullable=True)
+    tags: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class TraceObservabilityScore(Base):
+    """自研 Trace 评测打分记录"""
+
+    __tablename__ = "trace_observability_score"
+
+    score_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    trace_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    span_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    metric_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    value: Mapped[float] = mapped_column(Float, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_: Mapped[str | None] = mapped_column("metadata", Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
