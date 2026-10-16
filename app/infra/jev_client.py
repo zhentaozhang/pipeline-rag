@@ -13,8 +13,16 @@ import structlog
 
 from app.config import get_settings
 from app.infra.circuit_breaker import CircuitBreakerConfig, CircuitBreakerRegistry
+from app.infra.metrics import (
+    JEV_CALL_LATENCY_SECONDS,
+    JEV_CALL_TOTAL,
+    JEV_QUESTIONS_TOTAL,
+)
 
 logger = structlog.get_logger(__name__)
+
+# JEV 支持的问题类型（限制 label 取值，避免高基数）
+_JEV_QUESTION_TYPES = frozenset({"noul", "choice", "score"})
 
 # 为 JEV 决策微服务注册独立熔断器（与 LLM / ES 独立隔离）
 # 连续失败 3 次即刻熔断开路，避免超时风暴阻塞 RAG 问答链路
@@ -90,6 +98,7 @@ class JEVClient:
         :return: answers 结果字典
         """
         if not questions:
+            JEV_CALL_TOTAL.labels(outcome="empty").inc()
             return {}
 
         url = f"{self.base_url}/v1/systemone"
@@ -99,12 +108,23 @@ class JEVClient:
             "questions": questions,
         }
         t0 = time.perf_counter()
-        async with _jev_breaker:
-            client = self._get_client()
-            resp = await client.post(url, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            answers = data.get("answers", {})
+        try:
+            async with _jev_breaker:
+                client = self._get_client()
+                resp = await client.post(url, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                answers = data.get("answers", {})
+        except Exception:
+            JEV_CALL_TOTAL.labels(outcome="error").inc()
+            raise
+
+        JEV_CALL_LATENCY_SECONDS.observe(time.perf_counter() - t0)
+        JEV_CALL_TOTAL.labels(outcome="success").inc()
+        for question in questions.values():
+            qtype = question.get("type") if isinstance(question, dict) else None
+            if qtype in _JEV_QUESTION_TYPES:
+                JEV_QUESTIONS_TOTAL.labels(type=qtype).inc()
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
         logger.debug(
