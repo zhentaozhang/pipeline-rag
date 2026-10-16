@@ -51,9 +51,14 @@ def task_parse_document(self, doc_id: str, file_path: str) -> dict:
 
     try:
         # 从 MinIO 下载文件到临时目录，因为 DocumentParser 需要本地路径
+        # 若 file_path 本身就是本地有效文件，则直接解析，避免 MinIO 报错
         async def _download_and_parse():
             import os
             import tempfile
+
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                parser = DocumentParser()
+                return await parser.parse(file_path)
 
             from app.infra.minio import download_bytes
 
@@ -70,6 +75,8 @@ def task_parse_document(self, doc_id: str, file_path: str) -> dict:
 
         async def _execute_full_parse():
             result = await _download_and_parse()
+            if not result.text or not result.text.strip():
+                raise ValueError(f"文档《{doc_id}》解析内容为空，未提取到有效文本")
 
             import os
             import tempfile

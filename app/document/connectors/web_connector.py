@@ -265,8 +265,12 @@ def _extract_links(html: str, base_url: str) -> list[str]:
     return links
 
 
-async def import_from_web() -> dict[str, object]:
-    """网页导入入口：发现 → 过滤 → 下载 → 触发流水线。返回导入报告。"""
+async def import_from_web(
+    scope_code: str = "",
+    tags: str = "",
+    tenant_id: str = "default",
+) -> dict[str, object]:
+    """网页导入入口：发现 → 过滤 → 下载 → 转存 MinIO → 创建元数据 → 触发流水线。返回导入报告。"""
     from typing import Any
 
     from app.config import get_settings
@@ -276,29 +280,75 @@ async def import_from_web() -> dict[str, object]:
     if not cfg.enabled:
         return {"enabled": False, "skipped": True, "reason": "CONNECTOR_WEB_ENABLED=false"}
 
-    from app.infra.id_generator import next_id
+    from app.db.repositories.knowledge_repository import KnowledgeRepository
+    from app.db.session import get_session_factory, init_db
+
+    session_factory = get_session_factory()
+    if session_factory is None:
+        await init_db()
+        session_factory = get_session_factory()
+
+    if session_factory is None:
+        raise RuntimeError("Failed to initialize database session factory")
+
+    scope_name = ""
+    if scope_code:
+        async with session_factory() as db:
+            scope = await KnowledgeRepository.get_scope_by_code(db, scope_code)
+            if not scope:
+                raise ValueError(f"Knowledge scope not found: {scope_code}")
+            scope_name = scope.scope_name or ""
 
     connector = WebConnector()
     all_files = await connector.list_files()
 
-    report: dict[str, Any] = {"total": len(all_files), "imported": 0, "errors": []}
+    report: dict[str, Any] = {
+        "total": len(all_files),
+        "imported": 0,
+        "skipped": 0,
+        "errors": [],
+    }
 
     if not all_files:
         return report
 
-    from app.document.tasks import trigger_document_pipeline
+    max_size_bytes = 200 * 1024 * 1024  # 默认 200MB 上限防 OOM
+
+    from app.document.connectors.base import process_connector_file
 
     with tempfile.TemporaryDirectory(prefix="rag-connector-web") as tmp:
         tmp_dir = Path(tmp)
         for file in all_files:
             try:
                 local_path = await connector.fetch_to_local(file, tmp_dir)
-                doc_id = next_id()
-                task_id = trigger_document_pipeline(str(doc_id), str(local_path))
-                report["imported"] += 1
-                logger.info(
-                    "web document imported", url=file.remote_key, doc_id=doc_id, task_id=task_id
+                content = local_path.read_bytes()
+
+                res = await process_connector_file(
+                    session_factory=session_factory,
+                    filename=file.name,
+                    content=content,
+                    mime_type="text/markdown",
+                    scope_code=scope_code,
+                    scope_name=scope_name,
+                    tags=tags,
+                    tenant_id=tenant_id,
+                    source_label="网页爬虫",
+                    detail={"url": file.remote_key},
+                    max_size_bytes=max_size_bytes,
                 )
+
+                if res.status == "imported":
+                    report["imported"] += 1
+                    logger.info(
+                        "web document imported",
+                        url=file.remote_key,
+                        doc_id=res.doc_id,
+                        task_id=res.task_id,
+                    )
+                elif res.status == "skipped":
+                    report["skipped"] += 1
+                else:
+                    report["errors"].append({"url": file.remote_key, "error": res.error})
             except Exception as e:
                 report["errors"].append({"url": file.remote_key, "error": str(e)})
                 logger.warning("web import failed", url=file.remote_key, error=str(e))

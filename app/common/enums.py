@@ -169,6 +169,11 @@ class DocumentFileTypeEnum(IntEnum):
     TXT = 4
     MD = 5
     HTML = 6
+    PPT = 7
+    PPTX = 8
+    XLS = 9
+    XLSX = 10
+    CSV = 11
 
 
 class DocumentIndexStatusEnum(IntEnum):

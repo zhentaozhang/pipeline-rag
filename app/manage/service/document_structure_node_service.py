@@ -52,6 +52,8 @@ async def save_nodes(
 
     logger.info(f"saving structure nodes for doc_id={doc_id}, count={len(nodes)}")
 
+    from sqlalchemy import delete
+
     from app.db.models.document import Document as Doc
     from app.db.models.document import DocumentStructureNode as Node
 
@@ -61,6 +63,9 @@ async def save_nodes(
     if doc_internal_id is None:
         logger.error("document not found for saving structure nodes", doc_id=doc_id)
         return
+
+    # 先清理该文档原有的旧结构树节点，确保幂等，杜绝重试导致节点累加
+    await db.execute(delete(Node).where(Node.document_id == doc_internal_id))
 
     id_map: dict[int, int] = {}
     for node in nodes:
@@ -103,11 +108,11 @@ async def save_nodes(
         await db.flush()
         logger.info("mysql save nodes success", doc_id=doc_id, count=len(db_entities))
     except Exception as e:
-        logger.error("failed to save nodes to mysql", error=str(e))
-        return
+        logger.error("failed to save nodes to mysql", error=str(e), exc_info=True)
+        raise
 
     if get_settings().neo4j.enabled:
-        await _sync_to_neo4j(doc_id, db_entities)
+        await _sync_to_neo4j(doc_id, db_entities, doc_internal_id=doc_internal_id)
     else:
         logger.info("neo4j sync skipped (disabled by config)", doc_id=doc_id)
 
@@ -120,11 +125,15 @@ async def save_nodes(
         logger.error("failed to sync nodes to navigation index", error=str(e))
 
 
-async def _sync_to_neo4j(doc_id: str, db_nodes: list[DocumentStructureNode]) -> None:
+async def _sync_to_neo4j(
+    doc_id: str,
+    db_nodes: list[DocumentStructureNode],
+    doc_internal_id: int | None = None,
+) -> None:
     """
     同步节点和关系到 Neo4j。
     Neo4j 图结构投影同步：
-    - Document 节点 + documentName + parseTaskId + currentVersion
+    - Document 节点 + documentId + docId + documentName + parseTaskId + currentVersion
     - Section 节点: 所有字段 + parseTaskId + normalizedTitle + normalizedPath
     - Item 节点: 所有字段 + parseTaskId + normalizedTitle
     - Document -[:HAS_SECTION]-> Section; Section -[:BELONGS_TO_DOCUMENT]-> Document
@@ -138,20 +147,25 @@ async def _sync_to_neo4j(doc_id: str, db_nodes: list[DocumentStructureNode]) -> 
     document_name = ""
     try:
         from app.db.models.document import Document as DocModel
-        from app.db.session import _session_factory as async_session_maker
+        from app.db.session import get_session_factory
 
-        if async_session_maker is None:
-            raise RuntimeError("db session factory not initialized")
-        async with async_session_maker() as db:
-            stmt = select(DocModel.document_name).where(DocModel.doc_id == doc_id)
-            res = await db.execute(stmt)
-            row = res.scalar_one_or_none()
-            if row:
-                document_name = _safe_text(row)
+        sf = get_session_factory()
+        if sf is not None:
+            async with sf() as db:
+                stmt = select(DocModel.document_name).where(DocModel.doc_id == doc_id)
+                res = await db.execute(stmt)
+                row = res.scalar_one_or_none()
+                if row:
+                    document_name = _safe_text(row)
     except Exception as e:
         logger.warning("failed to fetch document name", doc_id=doc_id, error=str(e))
 
-    db_doc_id = safe_int(doc_id)
+    # 优先使用真实内部整数 ID，绝不能对 UUID doc_id 执行 safe_int 导致归零
+    db_doc_id = (
+        doc_internal_id
+        or (db_nodes[0].document_id if db_nodes and db_nodes[0].document_id else None)
+        or safe_int(doc_id, default=0)
+    )
 
     try:
         async with driver.session() as session:
@@ -159,13 +173,14 @@ async def _sync_to_neo4j(doc_id: str, db_nodes: list[DocumentStructureNode]) -> 
             await session.run(
                 """
                     MATCH (n)
-                    WHERE (n:Document OR n:Section OR n:Item) AND n.documentId = $documentId
+                    WHERE (n:Document OR n:Section OR n:Item) AND (n.documentId = $documentId OR n.docId = $docId)
                     DETACH DELETE n
                 """,
                 documentId=db_doc_id,
+                docId=doc_id,
             )
 
-            # 2. 创建 Document 节点 (含 parseTaskId + currentVersion)
+            # 2. 创建 Document 节点 (含 parseTaskId + currentVersion + docId)
             parse_task_val = 0
             if db_nodes and db_nodes[0].parse_task_id:
                 raw_task_id = db_nodes[0].parse_task_id
@@ -177,12 +192,14 @@ async def _sync_to_neo4j(doc_id: str, db_nodes: list[DocumentStructureNode]) -> 
                 """
                     CREATE (d:Document {
                       documentId: $documentId,
+                      docId: $docId,
                       documentName: $documentName,
                       parseTaskId: $parseTaskId,
                       currentVersion: $parseTaskId
                     })
                 """,
                 documentId=db_doc_id,
+                docId=doc_id,
                 documentName=document_name,
                 parseTaskId=parse_task_val,
             )
@@ -196,12 +213,13 @@ async def _sync_to_neo4j(doc_id: str, db_nodes: list[DocumentStructureNode]) -> 
                     # DOCUMENT type — 不投影到 Neo4j (已在步骤2创建)
                     continue
                 if n.node_type == 1:
-                    # Section 节点 (含 parseTaskId)
+                    # Section 节点 (含 parseTaskId + docId)
                     await session.run(
                         """
                             CREATE (s:Section {
                               nodeId: $nodeId,
                               documentId: $documentId,
+                              docId: $docId,
                               parseTaskId: $parseTaskId,
                               nodeNo: $nodeNo,
                               depth: $depth,
@@ -221,6 +239,7 @@ async def _sync_to_neo4j(doc_id: str, db_nodes: list[DocumentStructureNode]) -> 
                         {
                             "nodeId": n.id,
                             "documentId": db_doc_id,
+                            "docId": doc_id,
                             "parseTaskId": parse_task_val,
                             "nodeNo": n.node_no or 0,
                             "depth": n.depth or 0,
@@ -238,13 +257,14 @@ async def _sync_to_neo4j(doc_id: str, db_nodes: list[DocumentStructureNode]) -> 
                         },
                     )
                 else:
-                    # Item 节点 (STEP / LIST_ITEM，含 parseTaskId + depth)
+                    # Item 节点 (STEP / LIST_ITEM，含 parseTaskId + depth + docId)
                     item_node_type = "STEP" if n.node_type == 3 else "LIST_ITEM"
                     await session.run(
                         """
                             CREATE (i:Item {
                               nodeId: $nodeId,
                               documentId: $documentId,
+                              docId: $docId,
                               parseTaskId: $parseTaskId,
                               nodeNo: $nodeNo,
                               nodeType: $nodeType,
@@ -264,6 +284,7 @@ async def _sync_to_neo4j(doc_id: str, db_nodes: list[DocumentStructureNode]) -> 
                         {
                             "nodeId": n.id,
                             "documentId": db_doc_id,
+                            "docId": doc_id,
                             "parseTaskId": parse_task_val,
                             "nodeNo": n.node_no or 0,
                             "nodeType": item_node_type,
