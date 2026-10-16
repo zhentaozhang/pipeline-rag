@@ -20,6 +20,7 @@ class JEVSettings(BaseSettings):
     citation_verify_enabled: bool = True  # M6: 引用真实性审计
     faithfulness_eval_enabled: bool = True  # M7: 忠实度评测
     answer_relevancy_enabled: bool = True  # M8: 答案相关性评测
+    answer_correctness_enabled: bool = True  # M8b: 答案正确性评测
     context_precision_enabled: bool = True  # M9: 检索精度评测
     context_recall_enabled: bool = True  # M9: 检索召回评测
 
