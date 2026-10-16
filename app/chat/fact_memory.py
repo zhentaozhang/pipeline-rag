@@ -62,7 +62,9 @@ def parse_extraction_response(raw: str) -> list[UserFact]:
         content = str(item.get("content") or "").strip()
         if not content or len(content) < 4:
             continue
-        facts.append(UserFact(content=content, category=_norm_category(str(item.get("category", "fact")))))
+        facts.append(
+            UserFact(content=content, category=_norm_category(str(item.get("category", "fact"))))
+        )
     return facts
 
 
@@ -126,7 +128,9 @@ class FactMemoryStore:
                 seen[cat] = str(r["content"])
         return list(seen.values())
 
-    async def delete_by_conversation(self, conversation_id: str, user_key: str | None = None) -> int:
+    async def delete_by_conversation(
+        self, conversation_id: str, user_key: str | None = None
+    ) -> int:
         """删除会话的全部事实记忆（会话重置/删除时调用，隐私清理）。
 
         user_key 提供时同时清除该用户的全部事实（用户注销/隐私擦除场景）。

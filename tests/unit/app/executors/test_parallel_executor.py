@@ -8,7 +8,9 @@ from app.executors.parallel_executor import _topological_layers
 
 
 def _sp(id: str, depends_on: list[str] | None = None) -> SubPlan:
-    return SubPlan(id=id, mode=ExecutionMode.RAG_CHAT, question=f"问题{id}", depends_on=depends_on or [])
+    return SubPlan(
+        id=id, mode=ExecutionMode.RAG_CHAT, question=f"问题{id}", depends_on=depends_on or []
+    )
 
 
 class TestTopologicalLayers:
@@ -55,11 +57,16 @@ class TestExecuteEmptyPlan:
         task = ChatTaskInfo(conversation_id="conv-1", question="q")
         executor = ParallelExecutor(db=None, task=task, registry=None)
 
-        chunks = [chunk async for chunk in executor.execute(ExecutionPlan(
-            mode=ExecutionMode.MULTI_AGENT,
-            original_question="q",
-            rewritten_question="q",
-        ))]
+        chunks = [
+            chunk
+            async for chunk in executor.execute(
+                ExecutionPlan(
+                    mode=ExecutionMode.MULTI_AGENT,
+                    original_question="q",
+                    rewritten_question="q",
+                )
+            )
+        ]
 
         assert len(chunks) == 1
         assert "无需并行处理" in chunks[0]

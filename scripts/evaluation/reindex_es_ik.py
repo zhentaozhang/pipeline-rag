@@ -6,6 +6,7 @@
 用法：
     uv run python -m scripts.evaluation.reindex_es_ik
 """
+
 from __future__ import annotations
 
 import asyncio

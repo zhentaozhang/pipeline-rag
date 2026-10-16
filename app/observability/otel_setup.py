@@ -124,14 +124,10 @@ def init_otel(app: Any = None) -> TracerProvider | None:
         langfuse.public_key,
         langfuse.secret_key,
     )
-    exporter = OTLPSpanExporter(
-        endpoint=settings.exporter_otlp_endpoint, headers=headers or None
-    )
+    exporter = OTLPSpanExporter(endpoint=settings.exporter_otlp_endpoint, headers=headers or None)
     # 采样可配置：默认 1.0（全采）。低流量/高并发热点可按比例降采样。
     ratio = min(max(settings.sample_rate, 0.0), 1.0)
-    provider = TracerProvider(
-        resource=resource, sampler=ParentBased(TraceIdRatioBased(ratio))
-    )
+    provider = TracerProvider(resource=resource, sampler=ParentBased(TraceIdRatioBased(ratio)))
     provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
     _provider = provider

@@ -7,6 +7,7 @@
 成本：每轮 1 次轻量 LLM 调用（仅当回答含引用且证据非空时触发）。
 开关：RAG_CITATION_VERIFY_ENABLED（默认开，延迟敏感场景可关）。
 """
+
 from __future__ import annotations
 
 import re
@@ -71,7 +72,7 @@ async def verify_citations(
     system = (
         "你是引用审计助手。回答中的 [n] 表示该论断引用自第 n 条证据。"
         "逐条判断每个 [n] 引用的论断是否确实被对应编号证据支持。"
-        "只输出 JSON：{\"unsupported\": [1, 3]} （列出所有证据不支持的引用编号，全部支持则为空数组）"
+        '只输出 JSON：{"unsupported": [1, 3]} （列出所有证据不支持的引用编号，全部支持则为空数组）'
     )
     user = (
         f"问题：{question}\n\n回答：{answer}\n\n"

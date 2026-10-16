@@ -42,9 +42,7 @@ class TestRoute:
     @pytest.mark.asyncio
     async def test_no_candidates_react_agent(self, monkeypatch):
         svc = FakeRouteService(decision=KnowledgeRouteDecision(route_status="FAILED"))
-        monkeypatch.setattr(
-            "app.orchestrator.route_service.KnowledgeRouteService", lambda: svc
-        )
+        monkeypatch.setattr("app.orchestrator.route_service.KnowledgeRouteService", lambda: svc)
         decision = await route("q")
         assert decision.execution_mode == "REACT_AGENT"
         assert svc.auto_calls == []
@@ -54,9 +52,7 @@ class TestRoute:
         svc = FakeRouteService(
             decision=KnowledgeRouteDecision(route_status="SUCCESS", documents=[make_doc("7")])
         )
-        monkeypatch.setattr(
-            "app.orchestrator.route_service.KnowledgeRouteService", lambda: svc
-        )
+        monkeypatch.setattr("app.orchestrator.route_service.KnowledgeRouteService", lambda: svc)
         decision = await route("q", "rq", conversation_id="c1", exchange_id=3)
         assert decision.execution_mode == "RETRIEVAL"
         assert decision.doc_ids == ["7"]
@@ -68,12 +64,13 @@ class TestRoute:
         svc = FakeRouteService(
             decision=KnowledgeRouteDecision(
                 route_status="SUCCESS",
-                documents=[make_doc("1", "手册A", scope_code="A", score="0.9"), make_doc("2", "手册B", scope_code="B", score="0.8")],
+                documents=[
+                    make_doc("1", "手册A", scope_code="A", score="0.9"),
+                    make_doc("2", "手册B", scope_code="B", score="0.8"),
+                ],
             )
         )
-        monkeypatch.setattr(
-            "app.orchestrator.route_service.KnowledgeRouteService", lambda: svc
-        )
+        monkeypatch.setattr("app.orchestrator.route_service.KnowledgeRouteService", lambda: svc)
         decision = await route("q")
         assert decision.execution_mode == "CLARIFICATION"
         assert decision.clarification_options == [
@@ -87,12 +84,13 @@ class TestRoute:
         svc = FakeRouteService(
             decision=KnowledgeRouteDecision(
                 route_status="SUCCESS",
-                documents=[make_doc("1", "手册A", scope_code="A", score="0.9"), make_doc("2", "手册B", scope_code="A", score="0.8")],
+                documents=[
+                    make_doc("1", "手册A", scope_code="A", score="0.9"),
+                    make_doc("2", "手册B", scope_code="A", score="0.8"),
+                ],
             )
         )
-        monkeypatch.setattr(
-            "app.orchestrator.route_service.KnowledgeRouteService", lambda: svc
-        )
+        monkeypatch.setattr("app.orchestrator.route_service.KnowledgeRouteService", lambda: svc)
         decision = await route("q")
         assert decision.execution_mode == "RETRIEVAL"
         assert decision.doc_ids == ["1"]
@@ -100,9 +98,7 @@ class TestRoute:
     @pytest.mark.asyncio
     async def test_service_error_propagates(self, monkeypatch):
         svc = FakeRouteService(error=RuntimeError("down"))
-        monkeypatch.setattr(
-            "app.orchestrator.route_service.KnowledgeRouteService", lambda: svc
-        )
+        monkeypatch.setattr("app.orchestrator.route_service.KnowledgeRouteService", lambda: svc)
         with pytest.raises(RuntimeError):
             await route("q")
 
@@ -121,8 +117,7 @@ class TestRouteByDocument:
 
     @pytest.mark.asyncio
     async def test_nav_none(self, monkeypatch):
-        monkeypatch.setattr(
-            "app.orchestrator.navigation_analyzer.analyze", FakeAsyncNone())
+        monkeypatch.setattr("app.orchestrator.navigation_analyzer.analyze", FakeAsyncNone())
         decision = await route_by_document("1", "q")
         assert decision.execution_mode == "RETRIEVAL"
         assert decision.doc_ids == ["1"]
@@ -141,7 +136,9 @@ class TestRouteByDocument:
         monkeypatch.setattr(
             "app.orchestrator.navigation_analyzer.analyze",
             FakeAsyncDecision(
-                FakeNavDecision(action="ITEM_REFERENCE", item_anchor=types.SimpleNamespace(item_index=2))
+                FakeNavDecision(
+                    action="ITEM_REFERENCE", item_anchor=types.SimpleNamespace(item_index=2)
+                )
             ),
         )
         decision = await route_by_document("1", "q")

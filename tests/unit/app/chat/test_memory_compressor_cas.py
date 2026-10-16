@@ -15,9 +15,7 @@ from app.chat.memory_compressor import ConversationMemoryCompressor
 
 
 def _exchange(eid: int) -> SimpleNamespace:
-    return SimpleNamespace(
-        id=eid, question=f"问题{eid}", answer=f"回答{eid}", turn_status=2
-    )
+    return SimpleNamespace(id=eid, question=f"问题{eid}", answer=f"回答{eid}", turn_status=2)
 
 
 class _Scalars:
@@ -108,15 +106,21 @@ class TestSelectOverflowBatches:
 
     def test_no_overflow_returns_empty(self):
         # 55 轮但窗口 60 → 无溢出
-        assert ConversationMemoryCompressor._select_overflow_batches(
-            [_exchange(i) for i in range(1, 56)], 60, 6
-        ) == []
+        assert (
+            ConversationMemoryCompressor._select_overflow_batches(
+                [_exchange(i) for i in range(1, 56)], 60, 6
+            )
+            == []
+        )
 
     def test_window_exact_boundary(self):
         # 恰好窗口大小 → 无溢出（最近 4 轮全部保留）
-        assert ConversationMemoryCompressor._select_overflow_batches(
-            [_exchange(i) for i in range(1, 5)], 4, 6
-        ) == []
+        assert (
+            ConversationMemoryCompressor._select_overflow_batches(
+                [_exchange(i) for i in range(1, 5)], 4, 6
+            )
+            == []
+        )
 
 
 class TestCompressVersionCAS:

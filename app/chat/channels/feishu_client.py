@@ -100,9 +100,7 @@ def update_card(message_id: str, content: str) -> None:
     resp = _get_lark().im.v1.message.update(req)
     if not resp.success():
         # 更新失败不影响主流程（下一轮会再尝试）
-        logger.warning(
-            "feishu update failed", message_id=message_id, code=resp.code, msg=resp.msg
-        )
+        logger.warning("feishu update failed", message_id=message_id, code=resp.code, msg=resp.msg)
 
 
 # ── 长连接网关 ───────────────────────────────────────────────────────────────

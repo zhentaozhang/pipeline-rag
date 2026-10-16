@@ -26,7 +26,9 @@ def make_doc(document_id="1", **overrides):
 
 class TestRouteQueryContext:
     def test_defaults(self):
-        ctx = RouteQueryContext(question="q", rewrite_question="r", routing_text="t", query_terms=["a"])
+        ctx = RouteQueryContext(
+            question="q", rewrite_question="r", routing_text="t", query_terms=["a"]
+        )
         assert ctx.query_embedding is None
 
 
@@ -47,6 +49,8 @@ class TestKnowledgeRouteDecision:
 
     def test_scopes_and_topics(self):
         d = KnowledgeRouteDecision(
-            scopes=[ScopeRouteCandidate(scope_code="A", scope_name="域", score=Decimal("1"), reason="r")],
+            scopes=[
+                ScopeRouteCandidate(scope_code="A", scope_name="域", score=Decimal("1"), reason="r")
+            ],
         )
         assert d.scopes[0].scope_code == "A"

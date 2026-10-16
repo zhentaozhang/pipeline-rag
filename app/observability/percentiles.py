@@ -51,7 +51,9 @@ def collect_histogram_quantiles(
             samples = list(metric_family.samples)  # Sample 对象（name/labels/value 属性）
             series: dict[tuple[str, ...], dict[str, int | float]] = {}
             for sample in samples:
-                label_key = tuple(sample.labels.get(k, "") for k in sorted(sample.labels) if k != "le")
+                label_key = tuple(
+                    sample.labels.get(k, "") for k in sorted(sample.labels) if k != "le"
+                )
                 series.setdefault(label_key, {})
                 series[label_key][sample.name] = sample.value
 
@@ -62,9 +64,13 @@ def collect_histogram_quantiles(
                     if full_name.endswith("_count"):
                         total = int(value)
                 for sample in samples:
-                    if sample.name.endswith("_bucket") and tuple(
-                        sample.labels.get(k, "") for k in sorted(sample.labels) if k != "le"
-                    ) == label_key:
+                    if (
+                        sample.name.endswith("_bucket")
+                        and tuple(
+                            sample.labels.get(k, "") for k in sorted(sample.labels) if k != "le"
+                        )
+                        == label_key
+                    ):
                         le = sample.labels.get("le", "+Inf")
                         if le != "+Inf":
                             buckets.append((float(le), int(sample.value)))

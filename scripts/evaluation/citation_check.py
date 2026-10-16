@@ -9,6 +9,7 @@
     uv run python -m scripts.evaluation.citation_check --questions 10
     uv run python -m scripts.evaluation.citation_check --questions 10 --only-miss
 """
+
 from __future__ import annotations
 
 import argparse
@@ -91,14 +92,12 @@ async def judge_citations(
     if not evidences:
         return 0.0, [{"ref": None, "reason": "无证据（拒答或检索为空）"}]
 
-    evidence_block = "\n".join(
-        f"[{i + 1}] {ev[:300]}" for i, ev in enumerate(evidences)
-    )
+    evidence_block = "\n".join(f"[{i + 1}] {ev[:300]}" for i, ev in enumerate(evidences))
     ref_list = ", ".join(str(r) for r in refs)
     system = (
         "你是引用审计助手。回答中的 [n] 表示该论断引用自第 n 条证据。"
         "请逐条判断：每个 [n] 引用的论断是否确实被对应编号的证据支持。"
-        "只输出 JSON：{\"results\": [{\"ref\": 1, \"supported\": true/false, \"reason\": \"...\"}]}"
+        '只输出 JSON：{"results": [{"ref": 1, "supported": true/false, "reason": "..."}]}'
     )
     user = (
         f"问题：{question}\n\n回答：{answer}\n\n"
@@ -158,13 +157,16 @@ async def main() -> None:
         total_refs += len(refs)
         total_issues += len(issues)
         status = "✅" if score >= 1.0 else ("⚠️" if score >= 0.5 else "❌")
-        print(
-            f"{status} Q{i} 引用[{len(refs)}] 准确率={score:.2f} "
-            f"{item.question[:24]}"
-        )
+        print(f"{status} Q{i} 引用[{len(refs)}] 准确率={score:.2f} {item.question[:24]}")
         rows.append(
-            {"question": item.question, "answer_len": len(answer), "refs": refs,
-             "evidence_count": len(evidences), "accuracy": score, "issues": issues}
+            {
+                "question": item.question,
+                "answer_len": len(answer),
+                "refs": refs,
+                "evidence_count": len(evidences),
+                "accuracy": score,
+                "issues": issues,
+            }
         )
         if issues and not args.only_miss:
             for iss in issues[:3]:

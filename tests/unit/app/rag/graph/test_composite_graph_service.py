@@ -1,4 +1,3 @@
-
 import pytest
 
 import app.rag.graph.composite_graph_service as composite_module
@@ -42,9 +41,7 @@ def services(monkeypatch):
     def install(available=True, error=None):
         holder["neo4j"] = FakeNeo4j(available=available, error=error)
         holder["mysql"] = FakeMysql()
-        monkeypatch.setattr(
-            composite_module, "Neo4jGraphService", lambda: holder["neo4j"]
-        )
+        monkeypatch.setattr(composite_module, "Neo4jGraphService", lambda: holder["neo4j"])
         monkeypatch.setattr(composite_module, "MysqlGraphService", lambda: holder["mysql"])
         return CompositeGraphService(), holder
 

@@ -26,7 +26,15 @@ from app.document.connectors.base import ConnectorFile, DocumentConnector
 logger = structlog.get_logger(__name__)
 
 _UA = "Mozilla/5.0 (compatible; PipelineRagBot/0.1; +https://github.com/pipeline-rag)"
-_TRACKING_PARAMS = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "ref", "spm"}
+_TRACKING_PARAMS = {
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "ref",
+    "spm",
+}
 _SLUG_BLACKLIST = re.compile(r"[^\w\-.]+")
 
 
@@ -35,7 +43,11 @@ def normalize_url(url: str) -> str:
     parts = urlsplit(url.strip())
     if parts.scheme not in ("http", "https") or not parts.netloc:
         return ""
-    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k.lower() not in _TRACKING_PARAMS]
+    query = [
+        (k, v)
+        for k, v in parse_qsl(parts.query, keep_blank_values=True)
+        if k.lower() not in _TRACKING_PARAMS
+    ]
     return urlunsplit((parts.scheme, parts.netloc.lower(), parts.path or "/", urlencode(query), ""))
 
 
@@ -80,7 +92,9 @@ class WebConnector(DocumentConnector):
             urls = await self._fetch_sitemap(self._sitemap_url)
             if urls:
                 return urls[: self._max_pages]
-            logger.warning("sitemap empty or failed, falling back to seeds", sitemap=self._sitemap_url)
+            logger.warning(
+                "sitemap empty or failed, falling back to seeds", sitemap=self._sitemap_url
+            )
 
         # 种子 BFS 递归：同域 + 深度限制 + 页面数上限
         if not self._seed_urls:
@@ -176,7 +190,9 @@ class WebConnector(DocumentConnector):
 
         import trafilatura
 
-        markdown = trafilatura.extract(html, output_format="markdown", include_comments=False, include_tables=True)
+        markdown = trafilatura.extract(
+            html, output_format="markdown", include_comments=False, include_tables=True
+        )
         if not markdown or not markdown.strip():
             raise RuntimeError(f"no extractable content: {file.remote_key}")
 
@@ -215,7 +231,9 @@ class WebConnector(DocumentConnector):
             disallows: list[str] = []
             try:
                 async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-                    resp = await client.get(f"{origin}/robots.txt", headers={"User-Agent": self._user_agent})
+                    resp = await client.get(
+                        f"{origin}/robots.txt", headers={"User-Agent": self._user_agent}
+                    )
                 if resp.status_code == 200:
                     for line in resp.text.splitlines():
                         line = line.strip()
@@ -278,7 +296,9 @@ async def import_from_web() -> dict[str, object]:
                 doc_id = next_id()
                 task_id = trigger_document_pipeline(str(doc_id), str(local_path))
                 report["imported"] += 1
-                logger.info("web document imported", url=file.remote_key, doc_id=doc_id, task_id=task_id)
+                logger.info(
+                    "web document imported", url=file.remote_key, doc_id=doc_id, task_id=task_id
+                )
             except Exception as e:
                 report["errors"].append({"url": file.remote_key, "error": str(e)})
                 logger.warning("web import failed", url=file.remote_key, error=str(e))

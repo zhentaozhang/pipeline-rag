@@ -129,7 +129,9 @@ def repo(monkeypatch):
     def fake_get_provider():
         return FakeProvider([])
 
-    monkeypatch.setattr("app.orchestrator.route_repository.get_embedding_provider", fake_get_provider)
+    monkeypatch.setattr(
+        "app.orchestrator.route_repository.get_embedding_provider", fake_get_provider
+    )
     import app.infra.redis_lease as redis_lease
 
     fake_redis = FakeRedis()
@@ -262,7 +264,9 @@ class TestBuildQueryContext:
     @pytest.mark.asyncio
     async def test_with_tokenize_fn(self, repo):
         repo.embedding_provider = FakeProvider([[1.0]])
-        ctx = await repo.build_query_context("如何配置", "如何配置日志", tokenize_fn=lambda t: ["配置"])
+        ctx = await repo.build_query_context(
+            "如何配置", "如何配置日志", tokenize_fn=lambda t: ["配置"]
+        )
         assert ctx.question == "如何配置"
         assert ctx.rewrite_question == "如何配置日志"
         assert ctx.routing_text == "如何配置 如何配置日志"
@@ -300,9 +304,7 @@ class TestGetRankedScopes:
                 make_doc(2, "排障文档", scope_code="ops", tags="故障,排查"),
             ]
         )
-        candidates = await repo.get_ranked_scopes(
-            session, make_ctx([1.0, 0.0]), RouteScorer()
-        )
+        candidates = await repo.get_ranked_scopes(session, make_ctx([1.0, 0.0]), RouteScorer())
         assert len(candidates) == 1
         assert candidates[0].scope_code == "ops"
         assert candidates[0].score > 0
@@ -353,9 +355,7 @@ class TestGetRankedTopics:
         repo.embedding_provider = FakeProvider([])
         repo.es_repo = FakeES()
         session = FakeSession(profiles=[])
-        candidates = await repo.get_ranked_topics(
-            session, make_ctx(None), [], RouteScorer()
-        )
+        candidates = await repo.get_ranked_topics(session, make_ctx(None), [], RouteScorer())
         assert candidates == []
 
     @pytest.mark.asyncio
@@ -367,7 +367,10 @@ class TestGetRankedTopics:
             profiles=[make_profile(1, topics='["安装部署"]')],
         )
         candidates = await repo.get_ranked_topics(
-            session, make_ctx([1.0, 0.0]), [ScopeRouteCandidate("ops", "运维", Decimal("1.0"), "")], RouteScorer()
+            session,
+            make_ctx([1.0, 0.0]),
+            [ScopeRouteCandidate("ops", "运维", Decimal("1.0"), "")],
+            RouteScorer(),
         )
         assert len(candidates) == 1
         assert candidates[0].topic_name == "安装部署"
@@ -409,7 +412,9 @@ class TestGetRankedDocuments:
     @pytest.mark.asyncio
     async def test_no_documents_es_fallback(self, repo):
         repo.embedding_provider = FakeProvider([])
-        fallback = [DocumentRouteCandidate("1", "回退文档", "", "ops", "", "", "", Decimal("0"), "")]
+        fallback = [
+            DocumentRouteCandidate("1", "回退文档", "", "ops", "", "", "", Decimal("0"), "")
+        ]
         repo.es_repo = FakeES(fallback=fallback)
         candidates = await repo.get_ranked_documents(
             FakeSession(), make_ctx(None), [], [], RouteScorer()
@@ -442,7 +447,9 @@ class TestGetRankedDocuments:
         session = FakeSession(
             documents=[make_doc(1, "安装文档", scope_code="ops")],
             profiles=[make_profile(1, topics='["无关主题"]', questions='["无关问题"]')],
-            relations=[TopicDocumentRelation(topic_code="t1", document_id=1, relation_score=Decimal("0.5"))],
+            relations=[
+                TopicDocumentRelation(topic_code="t1", document_id=1, relation_score=Decimal("0.5"))
+            ],
         )
         topic = TopicRouteCandidate("t1", "主题甲", "ops", Decimal("1.0"), "")
         candidates = await repo.get_ranked_documents(
@@ -460,9 +467,7 @@ class TestGetRankedDocuments:
             documents=[make_doc(1, "完全无关文档", scope_code="ops")],
             profiles=[make_profile(1, summary="", topics='["无关"]', questions='["无关"]')],
         )
-        candidates = await repo.get_ranked_documents(
-            session, make_ctx(None), [], [], RouteScorer()
-        )
+        candidates = await repo.get_ranked_documents(session, make_ctx(None), [], [], RouteScorer())
         assert candidates == fallback
 
     @pytest.mark.asyncio
@@ -474,9 +479,7 @@ class TestGetRankedDocuments:
             documents=[make_doc(1, "完全无关文档", scope_code="ops")],
             profiles=[make_profile(1, summary="", topics='["无关"]', questions='["无关"]')],
         )
-        candidates = await repo.get_ranked_documents(
-            session, make_ctx(None), [], [], RouteScorer()
-        )
+        candidates = await repo.get_ranked_documents(session, make_ctx(None), [], [], RouteScorer())
         assert candidates == fallback
 
     @pytest.mark.asyncio

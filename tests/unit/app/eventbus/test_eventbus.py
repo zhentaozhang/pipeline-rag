@@ -14,7 +14,9 @@ from app.eventbus.events import (
 
 
 def make_event(name="chat.started", payload=None):
-    return Event(name=name, payload=payload or ConversationStartedPayload(question="q", chat_mode="auto"))
+    return Event(
+        name=name, payload=payload or ConversationStartedPayload(question="q", chat_mode="auto")
+    )
 
 
 class TestEventDefaults:

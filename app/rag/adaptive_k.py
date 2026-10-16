@@ -44,7 +44,7 @@ def adaptive_truncate(
 
     if not scored or scored[0][1] <= 0:
         # 得分无区分度（全 0 或缺失）→ 保底 min_k，不误伤
-        return [doc for doc, _ in scored[: min_k]]
+        return [doc for doc, _ in scored[:min_k]]
 
     top_score = scored[0][1]
     kept: list[Any] = []

@@ -63,9 +63,7 @@ def rerank_settings():
 
 @pytest.fixture
 def reranker(monkeypatch, rerank_settings):
-    monkeypatch.setattr(
-        reranker_module, "settings", make_settings(rerank_settings)
-    )
+    monkeypatch.setattr(reranker_module, "settings", make_settings(rerank_settings))
     return Reranker()
 
 
@@ -122,12 +120,7 @@ class TestRerankCall:
     async def test_top_n_truncation(self, reranker, monkeypatch):
         fake = FakeClient(
             FakeResponse(
-                {
-                    "results": [
-                        {"index": i, "relevance_score": 1.0 - i / 10}
-                        for i in range(5)
-                    ]
-                }
+                {"results": [{"index": i, "relevance_score": 1.0 - i / 10} for i in range(5)]}
             )
         )
         monkeypatch.setattr(reranker_module, "_get_rerank_client", lambda: fake)
@@ -148,9 +141,7 @@ class TestRerankCall:
 
     @pytest.mark.asyncio
     async def test_out_of_range_index_skipped(self, reranker, monkeypatch):
-        fake = FakeClient(
-            FakeResponse({"results": [{"index": 5, "relevance_score": 0.9}]})
-        )
+        fake = FakeClient(FakeResponse({"results": [{"index": 5, "relevance_score": 0.9}]}))
         monkeypatch.setattr(reranker_module, "_get_rerank_client", lambda: fake)
 
         result = await reranker.rerank("q", [ev("a")])

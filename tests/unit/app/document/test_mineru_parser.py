@@ -6,17 +6,25 @@ from app.document.mineru_parser import MineruParser
 
 
 def test_modes_select_endpoints(monkeypatch):
-    settings = type("M", (), {
-        "mineru": type("S", (), {
-            "enabled": True,
-            "base_url": "https://mineru.net",
-            "api_key": "",
-            "mode": "agent",
-            "timeout_seconds": 5,
-            "poll_interval_seconds": 0,
-            "max_poll_retries": 1,
-        }),
-    })
+    settings = type(
+        "M",
+        (),
+        {
+            "mineru": type(
+                "S",
+                (),
+                {
+                    "enabled": True,
+                    "base_url": "https://mineru.net",
+                    "api_key": "",
+                    "mode": "agent",
+                    "timeout_seconds": 5,
+                    "poll_interval_seconds": 0,
+                    "max_poll_retries": 1,
+                },
+            ),
+        },
+    )
     monkeypatch.setattr("app.document.mineru_parser.get_settings", lambda: settings)
     parser = MineruParser()
     assert parser._mode == "agent"
@@ -27,17 +35,25 @@ async def test_parse_failure_raises(monkeypatch, tmp_path):
     """Agent 上传失败（HTTP 4xx）→ 抛异常，供调用方降级"""
     fake_pdf = tmp_path / "doc.pdf"
     fake_pdf.write_bytes(b"%PDF-1.4 fake")
-    settings = type("M", (), {
-        "mineru": type("S", (), {
-            "enabled": True,
-            "base_url": "https://mineru.net",
-            "api_key": "",
-            "mode": "agent",
-            "timeout_seconds": 5,
-            "poll_interval_seconds": 0,
-            "max_poll_retries": 1,
-        }),
-    })
+    settings = type(
+        "M",
+        (),
+        {
+            "mineru": type(
+                "S",
+                (),
+                {
+                    "enabled": True,
+                    "base_url": "https://mineru.net",
+                    "api_key": "",
+                    "mode": "agent",
+                    "timeout_seconds": 5,
+                    "poll_interval_seconds": 0,
+                    "max_poll_retries": 1,
+                },
+            ),
+        },
+    )
     monkeypatch.setattr("app.document.mineru_parser.get_settings", lambda: settings)
 
     class _FakeResp:

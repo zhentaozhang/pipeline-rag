@@ -25,9 +25,7 @@ class LangfuseDatasetSync:
     ) -> None:
         # 数据集已存在（create_dataset 非幂等，重名 raise）——忽略，后续按 name 追加 item
         with suppress(Exception):
-            self._client.create_dataset(
-                name=name, description=description, metadata=metadata
-            )
+            self._client.create_dataset(name=name, description=description, metadata=metadata)
 
     def upsert_items(self, dataset_name: str, items: list[dict[str, Any]]) -> None:
         for item in items:

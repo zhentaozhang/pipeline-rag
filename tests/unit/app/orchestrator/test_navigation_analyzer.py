@@ -108,15 +108,11 @@ class TestNormalizeSubQuestions:
         assert _normalize_sub_questions(RewriteResult(sub_questions=[]), "fb") == ["fb"]
 
     def test_strips_and_drops_empty(self):
-        result = _normalize_sub_questions(
-            RewriteResult(sub_questions=[" a ", "", "  b"]), "fb"
-        )
+        result = _normalize_sub_questions(RewriteResult(sub_questions=[" a ", "", "  b"]), "fb")
         assert result == ["a", "b"]
 
     def test_deduplicates(self):
-        result = _normalize_sub_questions(
-            RewriteResult(sub_questions=["a", "a", "b"]), "fb"
-        )
+        result = _normalize_sub_questions(RewriteResult(sub_questions=["a", "a", "b"]), "fb")
         assert result == ["a", "b"]
 
     def test_dict_style_sub_questions(self):
@@ -161,7 +157,9 @@ class TestBuildQueryHints:
         assert hints == ["安装", "部署"]
 
     def test_capped_at_10(self):
-        plan = RetrievalQuestionPlan("甲甲 乙乙 丙丙 丁丁 戊戊 己己 庚庚 辛辛 壬壬 癸癸 子子 丑丑", [])
+        plan = RetrievalQuestionPlan(
+            "甲甲 乙乙 丙丙 丁丁 戊戊 己己 庚庚 辛辛 壬壬 癸癸 子子 丑丑", []
+        )
         hints = _build_query_hints(plan, None, None)
         assert len(hints) == 10
 
@@ -230,9 +228,7 @@ class TestAnalyze:
 
     @pytest.mark.asyncio
     async def test_rewrite_result_preferred(self):
-        rewrite = RewriteResult(
-            rewritten_question="问题甲", sub_questions=["问题甲", "问题乙"]
-        )
+        rewrite = RewriteResult(rewritten_question="问题甲", sub_questions=["问题甲", "问题乙"])
         decision = await analyze(None, "原始", rewrite)
         assert decision.query_context_hints == ["问题甲"]
         assert decision.execution_mode == "RETRIEVAL"
@@ -267,9 +263,7 @@ class TestRouteByDocument:
         async def fake_resolve(doc_id, original, rewritten):
             return None
 
-        monkeypatch.setattr(
-            "app.orchestrator.navigation_analyzer._resolve_section", fake_resolve
-        )
+        monkeypatch.setattr("app.orchestrator.navigation_analyzer._resolve_section", fake_resolve)
         decision = await route_by_document("doc1", "上一节是什么")
         assert decision is not None
         assert decision.execution_mode == "GRAPH_ONLY"
@@ -286,9 +280,7 @@ class TestRouteByDocument:
                 "contentText": "第一步 初始化。第二步 配置。",
             }
 
-        monkeypatch.setattr(
-            "app.orchestrator.navigation_analyzer._resolve_section", fake_resolve
-        )
+        monkeypatch.setattr("app.orchestrator.navigation_analyzer._resolve_section", fake_resolve)
         decision = await route_by_document("doc1", "第二步做什么")
         assert decision is not None
         assert decision.execution_mode == "GRAPH_THEN_EVIDENCE"
@@ -299,9 +291,7 @@ class TestRouteByDocument:
         async def fake_resolve(doc_id, original, rewritten):
             return None
 
-        monkeypatch.setattr(
-            "app.orchestrator.navigation_analyzer._resolve_section", fake_resolve
-        )
+        monkeypatch.setattr("app.orchestrator.navigation_analyzer._resolve_section", fake_resolve)
         decision = await route_by_document("doc1", "如何配置")
         assert decision is not None
         assert decision.execution_mode == "RETRIEVAL"
@@ -312,11 +302,11 @@ class TestNavigationIntentPrefilter:
     """P0-3：导航意图快速预筛"""
 
     def test_navigation_hints_hit(self):
-        assert has_navigation_intent("上一节讲了什么")          # 邻接
-        assert has_navigation_intent("文档包含哪些章节")        # 大纲
-        assert has_navigation_intent("第 2 步是什么")           # 条目
-        assert has_navigation_intent("3.2.1 节的配置说明")      # 章节号
-        assert has_navigation_intent("这两节有什么区别")        # 分析
+        assert has_navigation_intent("上一节讲了什么")  # 邻接
+        assert has_navigation_intent("文档包含哪些章节")  # 大纲
+        assert has_navigation_intent("第 2 步是什么")  # 条目
+        assert has_navigation_intent("3.2.1 节的配置说明")  # 章节号
+        assert has_navigation_intent("这两节有什么区别")  # 分析
 
     def test_plain_questions_miss(self):
         assert not has_navigation_intent("你好")

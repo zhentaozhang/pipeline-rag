@@ -131,11 +131,15 @@ def install_fakes(
         "app.orchestrator.history_builder.ChatQueryRewriteService",
         lambda: FakeAssembler(),
     )
-    route_svc = route if route is not None else FakeRouteService(
-        KnowledgeRouteDecision(
-            route_status="SUCCESS",
-            confidence=Decimal("0.9"),
-            documents=[make_doc()],
+    route_svc = (
+        route
+        if route is not None
+        else FakeRouteService(
+            KnowledgeRouteDecision(
+                route_status="SUCCESS",
+                confidence=Decimal("0.9"),
+                documents=[make_doc()],
+            )
         )
     )
     monkeypatch.setattr(
@@ -179,9 +183,7 @@ class TestPrepare:
     @pytest.mark.asyncio
     async def test_chat_mode_none_raises(self):
         with pytest.raises(ValueError):
-            await orchestrator_module.prepare(
-                "q", "c1", MemoryContext(), chat_mode=None
-            )
+            await orchestrator_module.prepare("q", "c1", MemoryContext(), chat_mode=None)
 
 
 class TestAutoDocumentFlow:
@@ -203,7 +205,9 @@ class TestAutoDocumentFlow:
 
     @pytest.mark.asyncio
     async def test_intent_open_redirects(self, monkeypatch):
-        install_fakes(monkeypatch, rewrite=FakeRewriteService(rewritten="改写后问题", intent="open"))
+        install_fakes(
+            monkeypatch, rewrite=FakeRewriteService(rewritten="改写后问题", intent="open")
+        )
         plan = await orchestrator_module.prepare("聊聊生活", "c1", MemoryContext())
         assert plan.mode.value == "REACT_AGENT"
         assert plan.chat_mode == ChatQueryMode.OPEN_CHAT
@@ -238,14 +242,18 @@ class TestAutoDocumentFlow:
     @pytest.mark.asyncio
     async def test_open_chat_shortcut(self, monkeypatch):
         install_fakes(monkeypatch)
-        plan = await orchestrator_module.prepare("随便聊聊", "c1", MemoryContext(), chat_mode="open_chat")
+        plan = await orchestrator_module.prepare(
+            "随便聊聊", "c1", MemoryContext(), chat_mode="open_chat"
+        )
         assert plan.mode.value == "REACT_AGENT"
         assert plan.chat_mode == ChatQueryMode.OPEN_CHAT
 
     @pytest.mark.asyncio
     async def test_document_mode_shadow_route(self, monkeypatch):
         route_svc = FakeRouteService(
-            KnowledgeRouteDecision(route_status="SUCCESS", confidence=Decimal("0.9"), documents=[make_doc("5")])
+            KnowledgeRouteDecision(
+                route_status="SUCCESS", confidence=Decimal("0.9"), documents=[make_doc("5")]
+            )
         )
         install_fakes(monkeypatch, route=route_svc)
         plan = await orchestrator_module.prepare(
@@ -261,7 +269,9 @@ class TestAutoDocumentFlow:
     async def test_document_mode_missing_doc_ids_raises(self, monkeypatch):
         install_fakes(monkeypatch)
         with pytest.raises(ValueError):
-            await orchestrator_module.prepare("文档里的配置", "c1", MemoryContext(), chat_mode="document")
+            await orchestrator_module.prepare(
+                "文档里的配置", "c1", MemoryContext(), chat_mode="document"
+            )
 
     @pytest.mark.asyncio
     async def test_navigation_mode_flows_through(self, monkeypatch):

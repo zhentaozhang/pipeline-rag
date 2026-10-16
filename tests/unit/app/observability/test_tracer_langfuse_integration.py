@@ -43,12 +43,8 @@ class FakeClient:
 def _make_tracer(monkeypatch):
     client = FakeClient()
     monkeypatch.setattr(lfc, "get_langfuse", lambda: client)
-    tracer = Tracer(
-        db=None, trace_id="t1", conversation_id="c1", exchange_id=1, sample_rate=1.0
-    )
-    tracer._trace = Trace(
-        trace_id="t1", conversation_id="c1", exchange_id=1, session_id="s1"
-    )
+    tracer = Tracer(db=None, trace_id="t1", conversation_id="c1", exchange_id=1, sample_rate=1.0)
+    tracer._trace = Trace(trace_id="t1", conversation_id="c1", exchange_id=1, session_id="s1")
     return client, tracer
 
 
@@ -119,9 +115,7 @@ def test_tracer_langfuse_enabled_flag_true_when_client_present(monkeypatch):
 
 def test_tracer_langfuse_enabled_flag_false_when_disabled(monkeypatch):
     monkeypatch.setattr(lfc, "get_langfuse", lambda: None)
-    tracer = Tracer(
-        db=None, trace_id="t1", conversation_id="c1", exchange_id=1, sample_rate=1.0
-    )
+    tracer = Tracer(db=None, trace_id="t1", conversation_id="c1", exchange_id=1, sample_rate=1.0)
     assert tracer.langfuse_enabled is False
 
 

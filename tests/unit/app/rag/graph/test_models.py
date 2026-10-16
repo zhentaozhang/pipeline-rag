@@ -49,11 +49,18 @@ class TestGraphItem:
         assert item.item_index is None
 
     def test_display_text_priority(self):
-        item = GraphItem(nodeId=1, documentId=2, content_text="正文", anchor_text="锚", title="标题")
+        item = GraphItem(
+            nodeId=1, documentId=2, content_text="正文", anchor_text="锚", title="标题"
+        )
         assert item.display_text() == "正文"
 
     def test_display_text_fallback(self):
-        assert GraphItem(nodeId=1, documentId=2, content_text=None, anchor_text="锚", title="标题").display_text() == "锚"
+        assert (
+            GraphItem(
+                nodeId=1, documentId=2, content_text=None, anchor_text="锚", title="标题"
+            ).display_text()
+            == "锚"
+        )
         assert GraphItem(nodeId=1, documentId=2, title="标题").display_text() == "标题"
         assert GraphItem(nodeId=1, documentId=2).display_text() == ""
 
@@ -117,7 +124,9 @@ class TestWrappers:
 
     def test_query_result_alias(self):
         item = GraphItem(nodeId=1, documentId=2)
-        r = GraphQueryResult(targetSection=GraphSection(nodeId=9, documentId=2), targetItem=item, allItems=[item])
+        r = GraphQueryResult(
+            targetSection=GraphSection(nodeId=9, documentId=2), targetItem=item, allItems=[item]
+        )
         assert r.target_section.node_id == 9
         assert r.target_item is item
         assert r.all_items == [item]

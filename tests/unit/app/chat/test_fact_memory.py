@@ -46,9 +46,7 @@ def test_system_prompt_includes_user_memory(monkeypatch):
     )
     monkeypatch.setattr("app.rag.assembly.settings", fake_settings)
     svc = PromptAssemblyService()
-    plan = SimpleNamespace(
-        user_memory_context=["用户是后端工程师", "用户偏好简洁回答"]
-    )
+    plan = SimpleNamespace(user_memory_context=["用户是后端工程师", "用户偏好简洁回答"])
     out = svc._build_system_prompt(plan)
     assert "用户是后端工程师" in out
     assert "跨轮记忆" in out

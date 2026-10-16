@@ -90,9 +90,7 @@ class RouteRepository:
             if query_embedding:
                 try:
                     redis = get_redis()
-                    await redis.set(
-                        key, ",".join(str(f) for f in query_embedding), ex=86400
-                    )
+                    await redis.set(key, ",".join(str(f) for f in query_embedding), ex=86400)
                 except Exception:
                     pass
             return query_embedding

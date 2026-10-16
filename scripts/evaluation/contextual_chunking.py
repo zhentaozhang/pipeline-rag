@@ -13,6 +13,7 @@
     # 4. 回滚
     uv run python -m scripts.evaluation.contextual_chunking --restore
 """
+
 from __future__ import annotations
 
 import argparse
@@ -159,7 +160,9 @@ async def apply(chunks: list[dict], descriptions: list[str]) -> None:
             f"[{','.join(str(f) for f in vec)}]",
             c["id"],
         )
-    print(f"已应用 Contextual Chunking：{len(chunks)} 条（{sum(1 for d in descriptions if d)} 条带描述）")
+    print(
+        f"已应用 Contextual Chunking：{len(chunks)} 条（{sum(1 for d in descriptions if d)} 条带描述）"
+    )
 
 
 async def main() -> None:

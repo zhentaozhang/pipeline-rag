@@ -95,7 +95,9 @@ class TestHooks:
 
     def test_hook_error_does_not_break_transition(self):
         sm = ConversationStateMachine()
-        sm.on_enter(ConversationState.PREPARED, lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
+        sm.on_enter(
+            ConversationState.PREPARED, lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("boom"))
+        )
         sm.transition(ConversationState.PREPARED)
         assert sm.state == ConversationState.PREPARED
 

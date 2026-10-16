@@ -143,5 +143,6 @@ class TestPipelineStage:
 
         def cond(ctx):
             return True
+
         assert wrapper.when(cond) is wrapper
         assert wrapper.condition is cond

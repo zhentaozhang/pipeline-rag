@@ -21,9 +21,7 @@ def _nonempty_context(question: str) -> RagRetrievalContext:
         score=0.9,
         original_score=0.9,
     )
-    se = SubQuestionEvidence(
-        sub_question=SubQuestion(index=0, text=question), evidences=[ev]
-    )
+    se = SubQuestionEvidence(sub_question=SubQuestion(index=0, text=question), evidences=[ev])
     return RagRetrievalContext(
         retrieval_question=question,
         sub_question_evidence_list=[se],
@@ -44,7 +42,9 @@ async def test_rag_search_uses_corrective_retrieval(fake_llm, monkeypatch):
     async def fake_plain_retrieve(self, plan, tracer=None):
         raise AssertionError("应使用 retrieve_with_correction，而不是直接 retrieve")
 
-    monkeypatch.setattr(RagRetrievalEngine, "retrieve_with_correction", fake_retrieve_with_correction)
+    monkeypatch.setattr(
+        RagRetrievalEngine, "retrieve_with_correction", fake_retrieve_with_correction
+    )
     monkeypatch.setattr(RagRetrievalEngine, "retrieve", fake_plain_retrieve)
 
     result = await rag_search.ainvoke({"query": "FastMCP Depends 用法", "top_k": 5})
@@ -60,7 +60,9 @@ async def test_rag_search_empty_after_correction_returns_none_message(fake_llm, 
     async def fake_retrieve_with_correction(self, plan, tracer=None):
         return _empty_context(plan.original_question)
 
-    monkeypatch.setattr(RagRetrievalEngine, "retrieve_with_correction", fake_retrieve_with_correction)
+    monkeypatch.setattr(
+        RagRetrievalEngine, "retrieve_with_correction", fake_retrieve_with_correction
+    )
 
     result = await rag_search.ainvoke({"query": "找不到的问题", "top_k": 5})
     assert result == "未找到相关文档内容。"

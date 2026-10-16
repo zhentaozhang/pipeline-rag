@@ -107,7 +107,9 @@ class TestResolve:
 
     @pytest.mark.asyncio
     async def test_confidence_filtered(self, resolver):
-        resolver.properties = make_properties(ambiguity_confidence_floor=0.5, ambiguity_confidence_ceil=0.7)
+        resolver.properties = make_properties(
+            ambiguity_confidence_floor=0.5, ambiguity_confidence_ceil=0.7
+        )
         low = amb_sig(1, confidence=0.3)
         mid = amb_sig(2, confidence=0.6)
         high = amb_sig(3, confidence=0.9)
@@ -196,7 +198,9 @@ class TestBuildCandidateBlocks:
     def test_blocks_joined(self, resolver):
         resolver.properties = make_properties(context_window_lines=0)
         all_lines = ["a", "b"]
-        out = resolver._build_candidate_blocks([amb_sig(1, title="一"), amb_sig(2, title="二")], all_lines)
+        out = resolver._build_candidate_blocks(
+            [amb_sig(1, title="一"), amb_sig(2, title="二")], all_lines
+        )
         assert "候选行 1" in out
         assert "候选行 2" in out
 

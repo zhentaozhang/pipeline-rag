@@ -94,8 +94,7 @@ def test_get_trace_url_rebases_to_public_url(monkeypatch):
     monkeypatch.setattr(langfuse_client, "get_settings", lambda: FakeSettings())
 
     assert (
-        langfuse_client.get_trace_url("t1")
-        == "https://langfuse.example.com/project/p1/traces/t1"
+        langfuse_client.get_trace_url("t1") == "https://langfuse.example.com/project/p1/traces/t1"
     )
 
 

@@ -38,8 +38,7 @@ def integration_env():
     unreachable = [name for name, h, p in required if not _probe(h, p)]
     if unreachable:
         pytest.skip(
-            f"集成测试需要基础设施可达（缺失: {', '.join(unreachable)}）。"
-            "请先 docker compose up -d"
+            f"集成测试需要基础设施可达（缺失: {', '.join(unreachable)}）。请先 docker compose up -d"
         )
     return settings
 

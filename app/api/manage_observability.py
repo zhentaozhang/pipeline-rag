@@ -282,7 +282,9 @@ async def _query_traces(
     where_sql = " AND ".join(where)
 
     total = (
-        await db.execute(text(f"SELECT COUNT(*) FROM trace_observability t WHERE {where_sql}"), params)
+        await db.execute(
+            text(f"SELECT COUNT(*) FROM trace_observability t WHERE {where_sql}"), params
+        )
     ).scalar() or 0
 
     rows = (
@@ -346,9 +348,10 @@ async def list_traces(
 
     # 关键指标卡片
     stats_row_mapping = (
-        await db.execute(
-            text(
-                """
+        (
+            await db.execute(
+                text(
+                    """
                 SELECT
                   (SELECT COUNT(*) FROM trace_observability) AS total_traces,
                   (SELECT COUNT(*) FROM trace_observability
@@ -358,9 +361,12 @@ async def list_traces(
                   (SELECT ROUND(AVG(duration_ms), 1) FROM trace_observability_span
                     WHERE parent_span_id IS NULL) AS avg_root_duration_ms
                 """
+                )
             )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     stats_row: dict[str, Any] = dict(stats_row_mapping) if stats_row_mapping else {}
 
     stats = {
@@ -393,17 +399,21 @@ async def get_trace_detail(
     from sqlalchemy import text
 
     trace_row = (
-        await db.execute(
-            text(
-                """
+        (
+            await db.execute(
+                text(
+                    """
                 SELECT trace_id, conversation_id, exchange_id, session_id, root_span_id,
                        input, output, metadata, tags, created_at, flushed_at
                 FROM trace_observability WHERE trace_id = :trace_id
                 """
-            ),
-            {"trace_id": trace_id},
+                ),
+                {"trace_id": trace_id},
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if not trace_row:
         return ApiResponse.ok(data=None, message="trace 不存在")
 

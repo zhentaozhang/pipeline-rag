@@ -1,4 +1,3 @@
-
 from app.chat.memory import MemoryContext
 from app.common.enums import ChatQueryMode
 from app.orchestrator.context import PrepareContext
@@ -34,7 +33,9 @@ class TestPrepareContext:
         assert ctx.tenant_id == "t9"
 
     def test_time_sensitive_fields(self):
-        ctx = make_ctx(requires_fresh_search=True, is_time_sensitive=True, current_date_text="2026-08-08")
+        ctx = make_ctx(
+            requires_fresh_search=True, is_time_sensitive=True, current_date_text="2026-08-08"
+        )
         assert ctx.requires_fresh_search is True
         assert ctx.is_time_sensitive is True
         assert ctx.current_date_text == "2026-08-08"

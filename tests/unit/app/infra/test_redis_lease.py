@@ -46,10 +46,13 @@ def fake_redis(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_acquire_release_roundtrip(fake_redis, monkeypatch):
-    monkeypatch.setattr("app.infra.redis_lease.get_settings", lambda: SimpleNamespace(
-        redis=SimpleNamespace(lease_ttl_seconds=30, renew_interval_seconds=10),
-        circuit_breaker=SimpleNamespace(default_timeout=30),
-    ))
+    monkeypatch.setattr(
+        "app.infra.redis_lease.get_settings",
+        lambda: SimpleNamespace(
+            redis=SimpleNamespace(lease_ttl_seconds=30, renew_interval_seconds=10),
+            circuit_breaker=SimpleNamespace(default_timeout=30),
+        ),
+    )
     mgr = RedisLeaseManager("conv-1")
     assert await mgr.acquire() is True
     assert await mgr.is_owned() is True
@@ -59,10 +62,13 @@ async def test_acquire_release_roundtrip(fake_redis, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_acquire_conflict_returns_false(fake_redis, monkeypatch):
-    monkeypatch.setattr("app.infra.redis_lease.get_settings", lambda: SimpleNamespace(
-        redis=SimpleNamespace(lease_ttl_seconds=30, renew_interval_seconds=10),
-        circuit_breaker=SimpleNamespace(default_timeout=30),
-    ))
+    monkeypatch.setattr(
+        "app.infra.redis_lease.get_settings",
+        lambda: SimpleNamespace(
+            redis=SimpleNamespace(lease_ttl_seconds=30, renew_interval_seconds=10),
+            circuit_breaker=SimpleNamespace(default_timeout=30),
+        ),
+    )
     mgr1 = RedisLeaseManager("conv-1")
     mgr2 = RedisLeaseManager("conv-1")
     assert await mgr1.acquire() is True
@@ -71,10 +77,13 @@ async def test_acquire_conflict_returns_false(fake_redis, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_release_owner_mismatch_does_not_clear(fake_redis, monkeypatch):
-    monkeypatch.setattr("app.infra.redis_lease.get_settings", lambda: SimpleNamespace(
-        redis=SimpleNamespace(lease_ttl_seconds=30, renew_interval_seconds=10),
-        circuit_breaker=SimpleNamespace(default_timeout=30),
-    ))
+    monkeypatch.setattr(
+        "app.infra.redis_lease.get_settings",
+        lambda: SimpleNamespace(
+            redis=SimpleNamespace(lease_ttl_seconds=30, renew_interval_seconds=10),
+            circuit_breaker=SimpleNamespace(default_timeout=30),
+        ),
+    )
     mgr1 = RedisLeaseManager("conv-1")
     assert await mgr1.acquire() is True
     # 另一个实例尝试释放（token 不同）→ 锁不被清除
@@ -94,10 +103,13 @@ async def test_is_owned_false_after_renew_give_up(monkeypatch):
 @pytest.mark.asyncio
 async def test_renew_loop_sets_give_up_on_owner_mismatch(fake_redis, monkeypatch):
     """续期时锁已被他人抢占（owner mismatch）→ 置 give-up 标志"""
-    monkeypatch.setattr("app.infra.redis_lease.get_settings", lambda: SimpleNamespace(
-        redis=SimpleNamespace(lease_ttl_seconds=30, renew_interval_seconds=10),
-        circuit_breaker=SimpleNamespace(default_timeout=30),
-    ))
+    monkeypatch.setattr(
+        "app.infra.redis_lease.get_settings",
+        lambda: SimpleNamespace(
+            redis=SimpleNamespace(lease_ttl_seconds=30, renew_interval_seconds=10),
+            circuit_breaker=SimpleNamespace(default_timeout=30),
+        ),
+    )
     mgr = RedisLeaseManager("conv-1")
     assert await mgr.acquire() is True
     # 模拟锁被他人拿走：直接改 fake 的持有者

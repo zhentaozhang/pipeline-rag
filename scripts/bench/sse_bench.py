@@ -63,7 +63,7 @@ async def _one_stream(
             async for line in resp.aiter_lines():
                 if not line.startswith("data:"):
                     continue
-                payload = line[len("data:"):].strip()
+                payload = line[len("data:") :].strip()
                 if not payload:
                     continue
                 try:
@@ -99,9 +99,7 @@ async def main() -> int:
 
     async def _worker(i: int) -> None:
         async with sem, httpx.AsyncClient() as client:
-            results.append(
-                await _one_stream(client, args.base, args.question, "bench", i)
-            )
+            results.append(await _one_stream(client, args.base, args.question, "bench", i))
 
     started = time.perf_counter()
     await asyncio.gather(*[_worker(i) for i in range(args.requests)])
@@ -122,9 +120,13 @@ async def main() -> int:
             print(f"  失败原因 [{cnt}] {reason}")
     if ok:
         print(f"QPS(成功) {len(ok) / wall:.1f}")
-        print(f"端到端延迟 ms: P50={_percentile(elapsed, 0.5):.0f} P90={_percentile(elapsed, 0.9):.0f} P99={_percentile(elapsed, 0.99):.0f} mean={statistics.mean(elapsed):.0f}")
+        print(
+            f"端到端延迟 ms: P50={_percentile(elapsed, 0.5):.0f} P90={_percentile(elapsed, 0.9):.0f} P99={_percentile(elapsed, 0.99):.0f} mean={statistics.mean(elapsed):.0f}"
+        )
         if first:
-            print(f"首token ms:  P50={_percentile(first, 0.5):.0f} P90={_percentile(first, 0.9):.0f} P99={_percentile(first, 0.99):.0f}")
+            print(
+                f"首token ms:  P50={_percentile(first, 0.5):.0f} P90={_percentile(first, 0.9):.0f} P99={_percentile(first, 0.99):.0f}"
+            )
     print("=" * 56)
     return 1 if failed and len(failed) > len(ok) * 0.5 else 0
 

@@ -1,4 +1,3 @@
-
 from app.chat.schema import (
     AnswerHistoryContext,
     Evidence,
@@ -138,8 +137,13 @@ class TestEstimateTokens:
 class TestRenderReferenceBlock:
     def test_web_format(self):
         ev = make_ev(
-            chunk_id="", title="网页标题", ref_id=3, source_type="web", url="http://u",
-            content="c" * 50, section_title=None,
+            chunk_id="",
+            title="网页标题",
+            ref_id=3,
+            source_type="web",
+            url="http://u",
+            content="c" * 50,
+            section_title=None,
         )
         block = PromptAssemblyService()._render_web_reference(ev)
         assert block == "[3] 网页：网页标题；链接：http://u\n摘要：" + "c" * 50 + "\n"
@@ -150,9 +154,7 @@ class TestRenderReferenceBlock:
         assert "[1] 文档：文档A；章节：2.3\n内容：" in block
 
     def test_web_snippet_truncated_to_900(self):
-        ev = make_ev(
-            chunk_id="", ref_id=1, source_type="web", url="http://u", content="a" * 1200
-        )
+        ev = make_ev(chunk_id="", ref_id=1, source_type="web", url="http://u", content="a" * 1200)
         block = PromptAssemblyService()._render_web_reference(ev)
         assert "a" * 900 + "..." in block
 
@@ -229,7 +231,9 @@ class TestAppendReferences:
     def test_reuse_line(self):
         svc = PromptAssemblyService()
         keys = {"DOCUMENT:c1"}
-        out = svc._append_references([make_ev(chunk_id="c1", ref_id=1)], keys, PromptBudget(1000, 1000))
+        out = svc._append_references(
+            [make_ev(chunk_id="c1", ref_id=1)], keys, PromptBudget(1000, 1000)
+        )
         assert out == "- 复用证据 [1]"
 
     def test_budget_exhausted_omits_rest(self):
@@ -302,9 +306,7 @@ class TestBuildUserPrompt:
 
     def test_retrieval_question_shown_when_different(self):
         svc = PromptAssemblyService()
-        plan = make_plan(
-            original_question="如何配置", retrieval_question="如何配置日志并重启服务"
-        )
+        plan = make_plan(original_question="如何配置", retrieval_question="如何配置日志并重启服务")
         out = svc._build_user_prompt(plan, [make_sq(1)], PromptBudget(1000, 1000), set())
         assert "如何配置日志并重启服务" in out
 

@@ -106,7 +106,12 @@ class TestFallbackEsDocuments:
             ]
         )
         monkeypatch.setattr(repo_module, "ElasticsearchKnowledgeRouteIndexService", lambda: es_svc)
-        ctx = RouteQueryContext(routing_text="部署", question="部署手册怎么用", rewrite_question="部署手册怎么用", query_terms=["部署"])
+        ctx = RouteQueryContext(
+            routing_text="部署",
+            question="部署手册怎么用",
+            rewrite_question="部署手册怎么用",
+            query_terms=["部署"],
+        )
         docs = await RouteESRepository().fallback_es_documents(ctx, tenant_id="t1")
         assert len(docs) == 1
         d = docs[0]
@@ -123,14 +128,23 @@ class TestFallbackEsDocuments:
     async def test_uses_routing_text(self, monkeypatch):
         es_svc = FakeRouteService(results=[{"_source": {"documentId": 1}, "_score": 1.0}])
         monkeypatch.setattr(repo_module, "ElasticsearchKnowledgeRouteIndexService", lambda: es_svc)
-        ctx = RouteQueryContext(routing_text="路由文本", question="问题", rewrite_question="问题", query_terms=["路由文本"])
+        ctx = RouteQueryContext(
+            routing_text="路由文本",
+            question="问题",
+            rewrite_question="问题",
+            query_terms=["路由文本"],
+        )
         await RouteESRepository().fallback_es_documents(ctx)
         assert es_svc.results is not None
 
     @pytest.mark.asyncio
     async def test_empty_results(self, monkeypatch):
-        monkeypatch.setattr(repo_module, "ElasticsearchKnowledgeRouteIndexService", lambda: FakeRouteService())
-        ctx = RouteQueryContext(routing_text="部署", question="q", rewrite_question="q", query_terms=["部署"])
+        monkeypatch.setattr(
+            repo_module, "ElasticsearchKnowledgeRouteIndexService", lambda: FakeRouteService()
+        )
+        ctx = RouteQueryContext(
+            routing_text="部署", question="q", rewrite_question="q", query_terms=["部署"]
+        )
         assert await RouteESRepository().fallback_es_documents(ctx) == []
 
     @pytest.mark.asyncio
@@ -140,5 +154,7 @@ class TestFallbackEsDocuments:
             "ElasticsearchKnowledgeRouteIndexService",
             lambda: FakeRouteService(error=RuntimeError("boom")),
         )
-        ctx = RouteQueryContext(routing_text="部署", question="q", rewrite_question="q", query_terms=["部署"])
+        ctx = RouteQueryContext(
+            routing_text="部署", question="q", rewrite_question="q", query_terms=["部署"]
+        )
         assert await RouteESRepository().fallback_es_documents(ctx) == []

@@ -1,6 +1,5 @@
 """QueryRewriteStage 信号测试：无需改写时返回 SKIP，需要改写时返回 CONTINUE。"""
 
-
 from app.chat.memory import MemoryContext
 from app.common.enums import ChatQueryMode
 from app.common.pipeline import StageSignal

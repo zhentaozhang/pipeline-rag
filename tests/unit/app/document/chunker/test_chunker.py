@@ -60,9 +60,7 @@ class TestRecursiveChunker:
         def boom(text, chunk_size):
             raise RuntimeError("split fail")
 
-        monkeypatch.setattr(
-            "app.document.chunker.recursive.split_text", boom
-        )
+        monkeypatch.setattr("app.document.chunker.recursive.split_text", boom)
         chunks = await RecursiveChunker().chunk("x" * 200, "d1", ChunkConfig())
         assert chunks == []
 
@@ -77,8 +75,12 @@ class TestRecursiveChunker:
 
     @pytest.mark.asyncio
     async def test_chunk_parents_large_split(self):
-        parent = make_chunk("很长句子。" * 120, chunk_index=3, token_count=500, section_title="标题")
-        children = await RecursiveChunker().chunk_parents([parent], ChunkConfig(chunk_size=200, min_chunk_size=10))
+        parent = make_chunk(
+            "很长句子。" * 120, chunk_index=3, token_count=500, section_title="标题"
+        )
+        children = await RecursiveChunker().chunk_parents(
+            [parent], ChunkConfig(chunk_size=200, min_chunk_size=10)
+        )
         assert len(children) > 1
         assert all(c.section_title == "标题" for c in children)
 
@@ -97,7 +99,9 @@ class TestSemanticChunker:
     async def test_merges_similar(self, monkeypatch):
         monkeypatch.setattr(
             "app.config.get_settings",
-            lambda: types.SimpleNamespace(chunk=types.SimpleNamespace(semantic_similarity_threshold=0.0)),
+            lambda: types.SimpleNamespace(
+                chunk=types.SimpleNamespace(semantic_similarity_threshold=0.0)
+            ),
         )
         chunks = [
             make_chunk("配置数据库连接字符串", chunk_index=0),
@@ -111,7 +115,9 @@ class TestSemanticChunker:
     async def test_splits_dissimilar(self, monkeypatch):
         monkeypatch.setattr(
             "app.config.get_settings",
-            lambda: types.SimpleNamespace(chunk=types.SimpleNamespace(semantic_similarity_threshold=0.9)),
+            lambda: types.SimpleNamespace(
+                chunk=types.SimpleNamespace(semantic_similarity_threshold=0.9)
+            ),
         )
         chunks = [
             make_chunk("第一块内容", chunk_index=0),
@@ -125,7 +131,9 @@ class TestSemanticChunker:
     async def test_merge_respects_max_size(self, monkeypatch):
         monkeypatch.setattr(
             "app.config.get_settings",
-            lambda: types.SimpleNamespace(chunk=types.SimpleNamespace(semantic_similarity_threshold=0.0)),
+            lambda: types.SimpleNamespace(
+                chunk=types.SimpleNamespace(semantic_similarity_threshold=0.0)
+            ),
         )
         chunks = [
             make_chunk("相同词汇的文本", chunk_index=0, token_count=100),
@@ -192,9 +200,17 @@ class TestStructureChunker:
     @pytest.mark.asyncio
     async def test_builds_parent_chunks(self, monkeypatch):
         node = FakeNode(
-            node_no=1, node_type=2, depth=1, node_code="1.1", title="安装",
-            anchor_text="anchor", canonical_path="/1/1", section_path="安装",
-            content_text="内容" * 30, item_index=1, id=42,
+            node_no=1,
+            node_type=2,
+            depth=1,
+            node_code="1.1",
+            title="安装",
+            anchor_text="anchor",
+            canonical_path="/1/1",
+            section_path="安装",
+            content_text="内容" * 30,
+            item_index=1,
+            id=42,
         )
         monkeypatch.setattr(
             "app.db.session._session_factory",
@@ -212,9 +228,17 @@ class TestStructureChunker:
     @pytest.mark.asyncio
     async def test_short_content_skipped(self, monkeypatch):
         node = FakeNode(
-            node_no=1, node_type=1, depth=0, node_code="", title="",
-            anchor_text="", canonical_path="", section_path="",
-            content_text="短", item_index=0, id=1,
+            node_no=1,
+            node_type=1,
+            depth=0,
+            node_code="",
+            title="",
+            anchor_text="",
+            canonical_path="",
+            section_path="",
+            content_text="短",
+            item_index=0,
+            id=1,
         )
         monkeypatch.setattr(
             "app.db.session._session_factory",

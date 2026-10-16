@@ -59,9 +59,7 @@ class TestPersistentMemoryService:
     @pytest.mark.asyncio
     async def test_save_delegates_and_raises(self, monkeypatch):
         strategy = FakeStrategy()
-        monkeypatch.setattr(
-            memory_service_module, "create_memory_strategy", lambda: strategy
-        )
+        monkeypatch.setattr(memory_service_module, "create_memory_strategy", lambda: strategy)
         svc = PersistentConversationMemoryService(FakeSession())
         await svc.save("c1", "q", "a", 1)
         assert strategy.save_calls[0]["question"] == "q"
@@ -73,18 +71,14 @@ class TestPersistentMemoryService:
             async def save(self, **kwargs):
                 raise RuntimeError("boom")
 
-        monkeypatch.setattr(
-            memory_service_module, "create_memory_strategy", lambda: BoomStrategy()
-        )
+        monkeypatch.setattr(memory_service_module, "create_memory_strategy", lambda: BoomStrategy())
         svc = PersistentConversationMemoryService(FakeSession())
         with pytest.raises(RuntimeError):
             await svc.save("c1", "q", "a", 1)
 
     @pytest.mark.asyncio
     async def test_get_summary(self, monkeypatch):
-        monkeypatch.setattr(
-            memory_service_module, "create_memory_strategy", lambda: FakeStrategy()
-        )
+        monkeypatch.setattr(memory_service_module, "create_memory_strategy", lambda: FakeStrategy())
         db = FakeSession()
         db.memory_row = types.SimpleNamespace(summary_text="摘要")
         svc = PersistentConversationMemoryService(db)
@@ -94,9 +88,7 @@ class TestPersistentMemoryService:
 
     @pytest.mark.asyncio
     async def test_delete_memory(self, monkeypatch):
-        monkeypatch.setattr(
-            memory_service_module, "create_memory_strategy", lambda: FakeStrategy()
-        )
+        monkeypatch.setattr(memory_service_module, "create_memory_strategy", lambda: FakeStrategy())
         db = FakeSession()
         svc = PersistentConversationMemoryService(db)
         await svc.delete_memory("c1")
@@ -111,12 +103,11 @@ class TestPersistentMemoryService:
                 calls.append(conversation_id)
 
         monkeypatch.setattr(
-            memory_service_module, "create_memory_strategy",
+            memory_service_module,
+            "create_memory_strategy",
             lambda kind="default": FakeSummaryStrategy(),
         )
-        monkeypatch.setattr(
-            "app.chat.memory.SummaryCompressionStrategy", FakeSummaryStrategy
-        )
+        monkeypatch.setattr("app.chat.memory.SummaryCompressionStrategy", FakeSummaryStrategy)
         db = FakeSession()
         svc = PersistentConversationMemoryService(db)
         await svc.rebuild_summary("c1")

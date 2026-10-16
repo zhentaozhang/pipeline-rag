@@ -1,6 +1,5 @@
 """query_rewriter 纯逻辑测试：多问题检测、改写判断、规则拆分、JSON 解析与结果调解（无 LLM）。"""
 
-
 from app.orchestrator.query_rewriter import (
     ChatQueryRewriteService,
     _clip_tail,
@@ -88,7 +87,10 @@ class TestLooksLikeFollowUpQuestion:
         assert _looks_like_follow_up_question("它支持向量检索吗", True) is True
 
     def test_long_question_not_follow_up(self):
-        assert _looks_like_follow_up_question("关于向量数据库的索引构建与检索优化配置说明", True) is False
+        assert (
+            _looks_like_follow_up_question("关于向量数据库的索引构建与检索优化配置说明", True)
+            is False
+        )
 
     def test_without_context_never_follow_up(self):
         assert _looks_like_follow_up_question("刚才说的", False) is False
@@ -147,7 +149,12 @@ class TestNormalizeRewriteResult:
         assert svc._normalize_rewrite_result("q", None) is None
 
     def test_no_split_single_sub_question(self):
-        parsed = {"rewrite": "重写后", "should_split": False, "sub_questions": ["重写后"], "keywords": []}
+        parsed = {
+            "rewrite": "重写后",
+            "should_split": False,
+            "sub_questions": ["重写后"],
+            "keywords": [],
+        }
         result = svc._normalize_rewrite_result("原问题", parsed)
         assert result.rewritten == "重写后"
         assert result.sub_questions == ["重写后"]
@@ -164,12 +171,22 @@ class TestNormalizeRewriteResult:
         assert result.sub_questions == ["a", "b", "c"]
 
     def test_single_sub_question_converges_to_rewrite(self):
-        parsed = {"rewrite": "最终", "should_split": False, "sub_questions": ["旧的"], "keywords": []}
+        parsed = {
+            "rewrite": "最终",
+            "should_split": False,
+            "sub_questions": ["旧的"],
+            "keywords": [],
+        }
         result = svc._normalize_rewrite_result("原问题", parsed)
         assert result.sub_questions == ["最终"]
 
     def test_truncates_over_max_sub(self, monkeypatch):
         monkeypatch.setattr("app.orchestrator.query_rewriter.settings.rag.max_sub_questions", 2)
-        parsed = {"rewrite": "r", "should_split": True, "sub_questions": ["1", "2", "3"], "keywords": []}
+        parsed = {
+            "rewrite": "r",
+            "should_split": True,
+            "sub_questions": ["1", "2", "3"],
+            "keywords": [],
+        }
         result = svc._normalize_rewrite_result("a？b？c？d", parsed)
         assert len(result.sub_questions) == 2

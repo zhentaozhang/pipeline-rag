@@ -9,7 +9,16 @@ def validator():
     return DocumentStructureTreeValidator()
 
 
-def draft(node_no, node_type="section", parent=None, title="", code="", line_no=0, numeric_path=None, item_index=None):
+def draft(
+    node_no,
+    node_type="section",
+    parent=None,
+    title="",
+    code="",
+    line_no=0,
+    numeric_path=None,
+    item_index=None,
+):
     d = DocumentStructureNodeDraft(
         node_no=node_no,
         line_no=line_no,
@@ -37,7 +46,9 @@ class TestValidateAndBuild:
         assert [c.node_no for c in candidates] == [1, 2, 3]
 
     def test_root_is_document(self, validator):
-        candidates = validator.validate_and_build("文档", [draft(1, node_type="document", title="文档")])
+        candidates = validator.validate_and_build(
+            "文档", [draft(1, node_type="document", title="文档")]
+        )
         assert len(candidates) == 1
         assert candidates[0].node_type == "document"
         assert candidates[0].depth == 0
