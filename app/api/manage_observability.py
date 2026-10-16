@@ -1,5 +1,6 @@
 """管理 API — /manage/observe/* + /manage/evaluation/* (可观测性面板、RAG 评估)"""
 
+from datetime import datetime
 from typing import Any
 
 import structlog
@@ -347,6 +348,7 @@ async def list_traces(
     )
 
     # 关键指标卡片
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     stats_row_mapping = (
         (
             await db.execute(
@@ -355,13 +357,14 @@ async def list_traces(
                 SELECT
                   (SELECT COUNT(*) FROM trace_observability) AS total_traces,
                   (SELECT COUNT(*) FROM trace_observability
-                    WHERE created_at >= CURDATE()) AS today_traces,
+                    WHERE created_at >= :today_start) AS today_traces,
                   (SELECT COUNT(DISTINCT trace_id) FROM trace_observability_span
                     WHERE status = 'error') AS error_traces,
                   (SELECT ROUND(AVG(duration_ms), 1) FROM trace_observability_span
                     WHERE parent_span_id IS NULL) AS avg_root_duration_ms
                 """
-                )
+                ),
+                {"today_start": today_start},
             )
         )
         .mappings()
