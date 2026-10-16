@@ -20,6 +20,9 @@ class FactMemorySettings(BaseSettings):
     enabled: bool = False  # 默认关（隐私安全）；开启后抽取/检索才生效
     extract_sample_rate: float = 1.0  # 抽取采样率（每轮是否触发异步抽取）
     retrieval_top_k: int = 3  # 注入 prompt 的相关记忆条数
+    retrieval_distance_threshold: float = (
+        0.70  # 余弦距离阈值（<=此值视为相关；余弦距离 = 1 - cosine_similarity）
+    )
     update_threshold: float = 0.92  # 相似度高于此值视为已有事实（去重）
     max_facts: int = 200  # 单会话事实条数上限（超出按最旧淘汰）
     retention_days: int = 180  # 全局保留期（edit_time 早于此删除；0=不限）

@@ -110,10 +110,13 @@ class AnswerHistoryContext(BaseModel):
 
 
 class HistoryPlanningContext(BaseModel):
-    """检索历史规划上下文：目标、已确认事实、待跟进问题、检索提示"""
+    """检索历史规划上下文：摘要、目标、已确认事实、用户偏好、已解决问题、待跟进问题、检索提示"""
 
+    summary: str = ""
     goals: list[str] = Field(default_factory=list)
     facts: list[str] = Field(default_factory=list)
+    user_preferences: list[str] = Field(default_factory=list)
+    resolved_points: list[str] = Field(default_factory=list)
     pending_questions: list[str] = Field(default_factory=list)
     retrieval_hints: list[str] = Field(default_factory=list)
 

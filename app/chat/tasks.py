@@ -20,6 +20,11 @@ def task_compress_conversation_memory(
 ) -> dict:
     """异步提炼历史会话记录"""
     from app.chat.memory_compressor import ConversationMemoryCompressor
+    from app.config import get_settings
+
+    settings = get_settings()
+    if not settings.memory.enabled:
+        return {"conversation_id": conversation_id, "status": "skipped_disabled"}
 
     logger.info(
         "task compress memory started", conversation_id=conversation_id, task_id=self.request.id

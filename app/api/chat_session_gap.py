@@ -73,12 +73,12 @@ async def rebuild_summary(
 
     memory_service = PersistentConversationMemoryService(db)
     await memory_service.rebuild_summary(request.conversation_id)
-    summary_view = None
+    summary_text = await memory_service.get_summary(request.conversation_id)
 
     return ApiResponse.ok(
         data={
             "conversationId": request.conversation_id,
-            "summary": summary_view.summary_text if summary_view else "",
+            "summary": summary_text,
         }
     )
 

@@ -113,3 +113,43 @@ class TestPersistentMemoryService:
         await svc.rebuild_summary("c1")
         assert calls == ["c1"]
         assert db.commits >= 1
+
+    @pytest.mark.asyncio
+    async def test_dynamic_strategy_routing_from_session(self, monkeypatch):
+        created_strategies = []
+
+        def fake_create_strategy(name=None):
+            strat = FakeStrategy(types.SimpleNamespace(name=name or "default"))
+            created_strategies.append((name, strat))
+            return strat
+
+        monkeypatch.setattr(memory_service_module, "create_memory_strategy", fake_create_strategy)
+        db = FakeSession()
+        # 模拟 DB 查询 ConversationSession.memory_strategy 返回 "sliding_window"
+        db.memory_row = "sliding_window"
+        svc = PersistentConversationMemoryService(db)
+        ctx = await svc.load("c-custom")
+        assert ctx.name == "sliding_window"
+        assert any(name == "sliding_window" for name, _ in created_strategies)
+
+    @pytest.mark.asyncio
+    async def test_strategy_caching_avoids_redundant_query(self, monkeypatch):
+        create_count = 0
+
+        def fake_create_strategy(name=None):
+            nonlocal create_count
+            create_count += 1
+            return FakeStrategy(types.SimpleNamespace(name=name or "default"))
+
+        monkeypatch.setattr(memory_service_module, "create_memory_strategy", fake_create_strategy)
+        db = FakeSession()
+        db.memory_row = "summary_compression"
+        svc = PersistentConversationMemoryService(db)
+
+        # 第一次 load 会查 DB 并构建 strategy，放入缓存
+        await svc.load("c-cached")
+        first_executed_count = len(db.executed)
+
+        # 第二次 save 同一个 conversation_id，应直接命中缓存，不执行二次 select
+        await svc.save("c-cached", "q", "a", 1)
+        assert len(db.executed) == first_executed_count

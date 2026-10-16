@@ -10,6 +10,7 @@
 import re
 from abc import ABC, abstractmethod
 from collections import OrderedDict
+from typing import Any
 
 import structlog
 from pydantic import BaseModel, Field
@@ -102,18 +103,17 @@ class MemoryContext:
         long_term_summary: str = "",
         recent_transcript: str = "",
         answer_recent_transcript: str = "",
-        assembled_history: str = "",
         covered_exchange_id: int = 0,
         covered_exchange_count: int = 0,
         compression_count: int = 0,
         compression_applied: bool = False,
+        **kwargs: Any,
     ) -> None:
         self.summary_payload = summary_payload or ConversationSummaryPayload()
         self.recent_turns = recent_turns or []  # 最近原文窗口
         self.long_term_summary = long_term_summary
         self.recent_transcript = recent_transcript
         self.answer_recent_transcript = answer_recent_transcript
-        self.assembled_history = assembled_history
         self.covered_exchange_id = covered_exchange_id
         self.covered_exchange_count = covered_exchange_count
         self.compression_count = compression_count
@@ -219,15 +219,36 @@ class SlidingWindowStrategy(MemoryStrategy):
 
         from app.db.models.conversation import ConversationExchange
 
+        fetch_limit = max(self.window_size * 3, self.window_size + 4)
         result = await db.execute(
             select(ConversationExchange)
             .where(ConversationExchange.conversation_id == conversation_id)
             .order_by(desc(ConversationExchange.id))
-            .limit(self.window_size)
+            .limit(fetch_limit)
         )
-        exchanges = list(reversed(result.scalars().all()))
-        turns = [HistoryTurn(e.question, e.answer or "") for e in exchanges]
-        return MemoryContext(recent_turns=turns)
+        all_exchanges = list(reversed(result.scalars().all()))
+
+        renderable = [
+            e
+            for e in all_exchanges
+            if e
+            and e.turn_status is not None
+            and e.turn_status != TURN_RUNNING
+            and (e.question or e.answer)
+        ]
+        recent_turns = [
+            HistoryTurn(e.question, e.answer or "") for e in renderable[-self.window_size :]
+        ]
+
+        recent_transcript = TranscriptRenderer.render_recent_transcript(recent_turns)
+        answer_recent_transcript = TranscriptRenderer.render_answer_recent_transcript(recent_turns)
+
+        return MemoryContext(
+            recent_turns=recent_turns,
+            recent_transcript=recent_transcript,
+            answer_recent_transcript=answer_recent_transcript,
+            compression_applied=False,
+        )
 
     async def save(
         self,
@@ -289,7 +310,6 @@ class SummaryCompressionStrategy(MemoryStrategy):
                 long_term_summary="",
                 recent_transcript=recent_transcript,
                 answer_recent_transcript=answer_recent_transcript,
-                assembled_history=recent_transcript,
                 recent_turns=recent_turns,
                 compression_applied=False,
             )
@@ -354,10 +374,6 @@ class SummaryCompressionStrategy(MemoryStrategy):
         recent_transcript = TranscriptRenderer.render_recent_transcript(recent_turns)
         # Build answer recent transcript
         answer_recent_transcript = TranscriptRenderer.render_answer_recent_transcript(recent_turns)
-        # Assemble history
-        assembled_history = TranscriptRenderer.assemble_history(
-            long_term_summary, recent_transcript
-        )
 
         return MemoryContext(
             summary_payload=summary_payload,
@@ -365,7 +381,6 @@ class SummaryCompressionStrategy(MemoryStrategy):
             long_term_summary=long_term_summary,
             recent_transcript=recent_transcript,
             answer_recent_transcript=answer_recent_transcript,
-            assembled_history=assembled_history,
             covered_exchange_id=covered_exchange_id,
             covered_exchange_count=covered_exchange_count,
             compression_count=compression_count,
@@ -384,6 +399,9 @@ class SummaryCompressionStrategy(MemoryStrategy):
         保存后触发异步增量摘要（若超出 window_size 则对旧轮次做摘要压缩）。
         :param exchange_id: 最新 exchange ID，传递给 Celery 用于避免脏读
         """
+        if not settings.memory.enabled:
+            return
+
         from app.chat.tasks import task_compress_conversation_memory
 
         task_compress_conversation_memory.delay(conversation_id, exchange_id)

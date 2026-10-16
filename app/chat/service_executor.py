@@ -177,10 +177,10 @@ async def execute_stream(
             answer_history_follow_up_question=plan.answer_history_context.follow_up_question
             if plan.answer_history_context
             else False,
-            history_compression_applied=False,
-            history_covered_exchange_id=None,
-            history_covered_exchange_count=0,
-            history_compression_count=0,
+            history_compression_applied=bool(getattr(plan, "history_compression_applied", False)),
+            history_covered_exchange_id=getattr(plan, "history_covered_exchange_id", None),
+            history_covered_exchange_count=getattr(plan, "history_covered_exchange_count", 0) or 0,
+            history_compression_count=getattr(plan, "history_compression_count", 0) or 0,
             current_date_text=plan.current_date_text,
             requires_fresh_search=plan.requires_fresh_search,
             requires_current_date_anchoring=plan.requires_current_date_anchoring,

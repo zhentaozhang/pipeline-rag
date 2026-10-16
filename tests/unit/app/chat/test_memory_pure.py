@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
 
@@ -284,3 +285,76 @@ class TestCreateMemoryStrategy:
     def test_explicit_argument_overrides_settings(self, monkeypatch):
         monkeypatch.setattr("app.chat.memory.settings.memory.strategy", "summary_compression")
         assert isinstance(create_memory_strategy("none"), NoMemoryStrategy)
+
+
+class TestSlidingWindowStrategyLoad:
+    @pytest.mark.asyncio
+    async def test_sliding_window_renders_transcripts_and_filters_running(self):
+        strategy = SlidingWindowStrategy(window_size=2)
+
+        exchanges = [
+            SimpleNamespace(id=1, question="Q1", answer="A1", turn_status=2),
+            SimpleNamespace(id=2, question="Q2", answer="", turn_status=1),  # RUNNING -> filtered
+            SimpleNamespace(id=3, question="", answer="", turn_status=2),  # empty -> filtered
+            SimpleNamespace(id=4, question="Q3", answer="A3", turn_status=2),
+            SimpleNamespace(id=5, question="Q4", answer="A4", turn_status=2),
+        ]
+
+        class FakeResult:
+            def scalars(self):
+                class _Scalars:
+                    def all(self):
+                        return list(reversed(exchanges))
+
+                return _Scalars()
+
+        class FakeDB:
+            async def execute(self, stmt):
+                return FakeResult()
+
+        ctx = await strategy.load("conv-test", FakeDB())
+
+        # window_size=2 should take the last 2 valid completed turns: Q3/A3 and Q4/A4
+        assert len(ctx.recent_turns) == 2
+        assert ctx.recent_turns[0].question == "Q3"
+        assert ctx.recent_turns[1].question == "Q4"
+        assert "Q3" in ctx.recent_transcript
+        assert "A3" in ctx.recent_transcript
+        assert "Q4" in ctx.recent_transcript
+        assert "A4" in ctx.recent_transcript
+        assert "Q3" in ctx.answer_recent_transcript
+        assert "Q4" in ctx.answer_recent_transcript
+        assert ctx.compression_applied is False
+
+
+class TestSummaryCompressionSave:
+    @pytest.mark.asyncio
+    async def test_save_skips_when_memory_disabled(self, monkeypatch):
+        monkeypatch.setattr("app.chat.memory.settings.memory.enabled", False)
+        dispatched = []
+
+        class FakeTask:
+            @classmethod
+            def delay(cls, *args, **kwargs):
+                dispatched.append(args)
+
+        monkeypatch.setattr("app.chat.tasks.task_compress_conversation_memory", FakeTask)
+        strat = SummaryCompressionStrategy()
+        await strat.save("c1", "q", "a", None, exchange_id=10)
+        assert len(dispatched) == 0
+
+    @pytest.mark.asyncio
+    async def test_save_dispatches_when_memory_enabled(self, monkeypatch):
+        monkeypatch.setattr("app.chat.memory.settings.memory.enabled", True)
+        dispatched = []
+
+        class FakeTask:
+            @classmethod
+            def delay(cls, *args, **kwargs):
+                dispatched.append(args)
+
+        monkeypatch.setattr("app.chat.tasks.task_compress_conversation_memory", FakeTask)
+        strat = SummaryCompressionStrategy()
+        await strat.save("c1", "q", "a", None, exchange_id=10)
+        assert len(dispatched) == 1
+        assert dispatched[0] == ("c1", 10)
