@@ -160,3 +160,45 @@ async def test_run_task_unknown_backend_skipped():
 
     reports = await run_task(GuardrailTask(), ["does_not_exist"])
     assert reports == []
+
+
+class TestChoiceEvaluation:
+    def test_dataset_ids_unique_and_three_classes(self):
+        from scripts.evaluation.datasets.decision_data import STRUCTURE_AMBIGUITY_DATASET
+
+        ids = [s.id for s in STRUCTURE_AMBIGUITY_DATASET]
+        assert len(ids) == len(set(ids))
+        assert {s.label for s in STRUCTURE_AMBIGUITY_DATASET} == {"heading", "list_item", "body"}
+
+    async def test_evaluate_choice_backend_accuracy_and_macro(self):
+        from scripts.evaluation.datasets.base import ChoiceSample
+        from scripts.evaluation.decision_ab import ChoiceResult, evaluate_choice_backend
+
+        samples = [
+            ChoiceSample(id="a", input="x", label="heading"),
+            ChoiceSample(id="b", input="y", label="body"),
+            ChoiceSample(id="c", input="z", label="list_item"),
+        ]
+
+        async def predictor(s: ChoiceSample) -> ChoiceResult:
+            # 全判 heading
+            return ChoiceResult(verdict="heading", latency_ms=1.0)
+
+        report = await evaluate_choice_backend("fake", samples, predictor)
+        assert report.accuracy == 1 / 3
+        assert report._per_class("heading")[0] == 1 / 3  # precision
+        assert report._per_class("heading")[1] == 1.0  # recall
+        assert report.errors == 0
+
+    async def test_evaluate_choice_backend_error_counted(self):
+        from scripts.evaluation.datasets.base import ChoiceSample
+        from scripts.evaluation.decision_ab import ChoiceResult, evaluate_choice_backend
+
+        samples = [ChoiceSample(id="a", input="x", label="heading")]
+
+        async def predictor(s: ChoiceSample) -> ChoiceResult:
+            return ChoiceResult(verdict=None, latency_ms=0.0, detail="missing")
+
+        report = await evaluate_choice_backend("fake", samples, predictor)
+        assert report.errors == 1
+        assert report.pairs == []

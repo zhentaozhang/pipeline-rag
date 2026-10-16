@@ -217,3 +217,32 @@ jobs:
 
       - name: Run integration tests
         run: uv run pytest tests/integration -q
+
+  # ── JEV 决策 A/B 门禁：仅在配置了可达的 JEV_BASE_URL 时执行 ────────────────
+  # GitHub 托管 runner 无 jev-service（模型不在 CI 构建/下载），默认跳过；
+  # 自托管 runner 配置仓库变量 JEV_BASE_URL 后启用，对 JEV 判定质量做回归门禁。
+  decision-ab:
+    if: ${{ vars.JEV_BASE_URL != '' }}
+    runs-on: ubuntu-latest
+    env:
+      JEV_BASE_URL: ${{ vars.JEV_BASE_URL }}
+      LLM_API_KEY: ci-dummy-key
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Decision A/B gate (JEV)
+        run: |
+          uv run python -m scripts.evaluation.decision_ab --all --backends jev \
+            --min-recall 0.8 --min-precision 0.85 --min-f1 0.8 --require-jev
+

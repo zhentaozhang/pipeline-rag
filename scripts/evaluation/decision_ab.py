@@ -25,15 +25,17 @@ import sys
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 import structlog
 
-from scripts.evaluation.datasets.base import DecisionSample
+from scripts.evaluation.datasets.base import ChoiceSample, DecisionSample
 from scripts.evaluation.datasets.decision_data import (
     CONTEXT_RELEVANCE_DATASET,
     EVIDENCE_SUFFICIENCY_DATASET,
     GUARDRAIL_DATASET,
     QUALITY_DATASET,
+    STRUCTURE_AMBIGUITY_DATASET,
 )
 
 logger = structlog.get_logger(__name__)
@@ -466,6 +468,204 @@ async def _llm_quality_pass(sample: DecisionSample) -> BackendResult:
     return BackendResult(passed, (time.perf_counter() - t0) * 1000, f"score={score}")
 
 
+# ── 多分类（Choice）评测 ────────────────────────────────────────────────────
+
+
+@dataclass
+class ChoiceResult:
+    verdict: str | None  # 预测类别；None = 后端不可用/异常
+    latency_ms: float
+    detail: str = ""
+
+
+ChoicePredictor = Callable[[ChoiceSample], Awaitable[ChoiceResult]]
+
+
+@dataclass
+class ChoiceReport:
+    name: str
+    labels: list[str]
+    pairs: list[tuple[str, str]] = field(default_factory=list)  # (gold, pred)
+    latencies_ms: list[float] = field(default_factory=list)
+    errors: int = 0
+
+    @property
+    def accuracy(self) -> float:
+        return sum(1 for g, p in self.pairs if g == p) / len(self.pairs) if self.pairs else 0.0
+
+    def _per_class(self, label: str) -> tuple[float, float, float]:
+        tp = sum(1 for g, p in self.pairs if g == label and p == label)
+        fp = sum(1 for g, p in self.pairs if g != label and p == label)
+        fn = sum(1 for g, p in self.pairs if g == label and p != label)
+        prec = tp / (tp + fp) if (tp + fp) else 0.0
+        rec = tp / (tp + fn) if (tp + fn) else 0.0
+        f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
+        return prec, rec, f1
+
+    @property
+    def macro_precision(self) -> float:
+        vals = [self._per_class(lab)[0] for lab in self.labels]
+        return statistics.fmean(vals) if vals else 0.0
+
+    @property
+    def macro_recall(self) -> float:
+        vals = [self._per_class(lab)[1] for lab in self.labels]
+        return statistics.fmean(vals) if vals else 0.0
+
+    @property
+    def macro_f1(self) -> float:
+        vals = [self._per_class(lab)[2] for lab in self.labels]
+        return statistics.fmean(vals) if vals else 0.0
+
+    @property
+    def avg_latency_ms(self) -> float:
+        return statistics.fmean(self.latencies_ms) if self.latencies_ms else 0.0
+
+    @property
+    def p95_latency_ms(self) -> float:
+        if not self.latencies_ms:
+            return 0.0
+        ordered = sorted(self.latencies_ms)
+        idx = min(len(ordered) - 1, int(round(0.95 * (len(ordered) - 1))))
+        return ordered[idx]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "n": len(self.pairs),
+            "accuracy": round(self.accuracy, 4),
+            "macro_precision": round(self.macro_precision, 4),
+            "macro_recall": round(self.macro_recall, 4),
+            "macro_f1": round(self.macro_f1, 4),
+            "per_class": {
+                lab: dict(
+                    zip(
+                        ("precision", "recall", "f1"),
+                        (round(v, 4) for v in self._per_class(lab)),
+                        strict=True,
+                    )
+                )
+                for lab in self.labels
+            },
+            "avg_latency_ms": round(self.avg_latency_ms, 2),
+            "p95_latency_ms": round(self.p95_latency_ms, 2),
+            "errors": self.errors,
+        }
+
+
+async def evaluate_choice_backend(
+    name: str, samples: list[ChoiceSample], predictor: ChoicePredictor
+) -> ChoiceReport:
+    report = ChoiceReport(name=name, labels=sorted({s.label for s in samples}))
+    for sample in samples:
+        try:
+            result = await predictor(sample)
+        except Exception as e:  # noqa: BLE001
+            report.errors += 1
+            logger.warning(
+                "choice backend error", backend=name, sample=sample.id, error=repr(e)[:160]
+            )
+            continue
+        report.latencies_ms.append(result.latency_ms)
+        if result.verdict is None:
+            report.errors += 1
+            logger.warning(
+                "choice backend no-verdict",
+                backend=name,
+                sample=sample.id,
+                detail=result.detail[:160],
+            )
+            continue
+        report.pairs.append((sample.label, result.verdict))
+    return report
+
+
+class StructureAmbiguityTask:
+    """文档结构行归类（多分类：heading / list_item / body）"""
+
+    name = "structure_ambiguity"
+
+    def samples(self) -> list[ChoiceSample]:
+        return STRUCTURE_AMBIGUITY_DATASET
+
+    def predictors(self) -> dict[str, ChoicePredictor]:
+        return {"jev": _jev_structure_kind, "llm": _llm_structure_kind}
+
+
+CHOICE_TASKS: dict[str, type[StructureAmbiguityTask]] = {
+    "structure_ambiguity": StructureAmbiguityTask,
+}
+
+_KIND_TO_LABEL = {"HEADING": "heading", "LIST_ITEM": "list_item", "BODY": "body"}
+
+
+async def _jev_structure_kind(sample: ChoiceSample) -> ChoiceResult:
+    """复用生产路径：DocumentStructureAmbiguityResolver._resolve_via_jev。"""
+    from app.document.structure.ambiguity import DocumentStructureAmbiguityResolver
+    from app.document.structure.models import (
+        DocumentStructureSignal,
+        DocumentStructureSignalKind,
+    )
+
+    t0 = time.perf_counter()
+    resolver = DocumentStructureAmbiguityResolver()
+    sig = DocumentStructureSignal(
+        line_no=1,
+        raw_text=sample.input,
+        normalized_text=sample.input,
+        kind=DocumentStructureSignalKind.HEADING_CANDIDATE,
+        confidence=0.6,
+    )
+    merged = await resolver._resolve_via_jev([sample.input], [sig], [sig])
+    label = _KIND_TO_LABEL.get(str(merged[0].kind))
+    return ChoiceResult(label, (time.perf_counter() - t0) * 1000, f"kind={merged[0].kind}")
+
+
+async def _llm_structure_kind(sample: ChoiceSample) -> ChoiceResult:
+    from app.common.llm_client import get_eval_client
+
+    t0 = time.perf_counter()
+    client = get_eval_client()
+    prompt = (
+        "判断下面这行文本在文档结构中的类别，只输出 heading（章节标题）、"
+        "list_item（列表项/步骤项）或 body（正文段落）之一，不要输出其他内容。\n\n"
+        f"行文本：{sample.input}"
+    )
+    resp = await client.chat.completions.create(
+        model=_eval_model(),
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.0,
+        max_tokens=512,
+    )
+    content = (resp.choices[0].message.content or "").lower() if resp.choices else ""
+    label = next((lab for lab in ("list_item", "heading", "body") if lab in content), None)
+    return ChoiceResult(label, (time.perf_counter() - t0) * 1000, f"llm={content[:16]!r}")
+
+
+def render_choice_report(reports: list[ChoiceReport]) -> str:
+    lines: list[str] = []
+    lines.append("=" * 88)
+    lines.append("  Decision A/B 报告  ·  任务=structure_ambiguity  ·  多分类")
+    lines.append("=" * 88)
+    header = (
+        f"  {'backend':<10} {'n':>4} {'acc':>7} {'mP':>7} {'mR':>7} {'mF1':>7} "
+        f"{'avg_ms':>9} {'p95_ms':>9} {'err':>4}"
+    )
+    lines.append(header)
+    lines.append("  " + "-" * (len(header) - 2))
+    for r in reports:
+        lines.append(
+            f"  {r.name:<10} {len(r.pairs):>4} {r.accuracy:>7.3f} {r.macro_precision:>7.3f} "
+            f"{r.macro_recall:>7.3f} {r.macro_f1:>7.3f} {r.avg_latency_ms:>9.1f} "
+            f"{r.p95_latency_ms:>9.1f} {r.errors:>4}"
+        )
+        for lab in r.labels:
+            p, rec, f1 = r._per_class(lab)
+            lines.append(f"      {lab:<10} prec={p:.3f} rec={rec:.3f} f1={f1:.3f}")
+    lines.append("=" * 88)
+    return "\n".join(lines)
+
+
 # ── 报告与 CLI ──────────────────────────────────────────────────────────────
 
 
@@ -505,50 +705,126 @@ async def run_task(task: DecisionTask, backend_names: list[str]) -> list[Backend
     return reports
 
 
+def _jev_reachable() -> bool:
+    import httpx
+
+    from app.infra.jev_client import get_jev_client
+
+    try:
+        with httpx.Client(timeout=3.0) as c:
+            return c.get(f"{get_jev_client().base_url}/health").status_code == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _gate_binary(jev_report: BackendReport | None, args: argparse.Namespace) -> list[str]:
+    if jev_report is None:
+        return []
+    out: list[str] = []
+    cm = jev_report.confusion
+    if args.min_recall > 0 and cm.recall < args.min_recall:
+        out.append(f"recall {cm.recall:.3f} < {args.min_recall}")
+    if args.min_precision > 0 and cm.precision < args.min_precision:
+        out.append(f"precision {cm.precision:.3f} < {args.min_precision}")
+    if args.min_f1 > 0 and cm.f1 < args.min_f1:
+        out.append(f"f1 {cm.f1:.3f} < {args.min_f1}")
+    return out
+
+
+def _gate_choice(jev_report: ChoiceReport | None, args: argparse.Namespace) -> list[str]:
+    if jev_report is None or args.min_accuracy <= 0:
+        return []
+    if jev_report.accuracy < args.min_accuracy:
+        return [f"accuracy {jev_report.accuracy:.3f} < {args.min_accuracy}"]
+    return []
+
+
+def _backend_names(predictors: dict, backends_arg: str) -> list[str]:
+    if backends_arg.strip():
+        return [b.strip() for b in backends_arg.split(",") if b.strip()]
+    return list(predictors.keys())
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="JEV vs 旧方案 决策 A/B 评估")
-    parser.add_argument("--task", choices=sorted(TASKS), default="context_relevance")
+    all_tasks = sorted(TASKS) + sorted(CHOICE_TASKS)
+    parser.add_argument("--task", choices=all_tasks, default="context_relevance")
+    parser.add_argument("--all", action="store_true", help="运行全部任务并汇总门禁")
     parser.add_argument(
         "--backends", type=str, default="", help="逗号分隔，默认取任务支持的全部后端"
     )
     parser.add_argument("--samples", type=int, default=0, help="限制样本数（0=全部）")
-    parser.add_argument("--min-recall", type=float, default=0.0, help="JEV 召回率门禁")
-    parser.add_argument("--min-precision", type=float, default=0.0, help="JEV 精确率门禁")
+    parser.add_argument("--min-recall", type=float, default=0.0, help="JEV 召回率门禁（二分类）")
+    parser.add_argument("--min-precision", type=float, default=0.0, help="JEV 精确率门禁（二分类）")
+    parser.add_argument(
+        "--min-f1", type=float, default=0.0, help="JEV F1 门禁（二分类）/ 宏 F1（多分类）"
+    )
+    parser.add_argument("--min-accuracy", type=float, default=0.0, help="JEV 准确率门禁（多分类）")
     parser.add_argument("--json-report", type=str, default="", help="写出 JSON 报告路径")
+    parser.add_argument(
+        "--require-jev",
+        action="store_true",
+        help="JEV 不可达时报错退出（默认：不可达则跳过门禁并以 0 退出）",
+    )
     args = parser.parse_args()
 
-    task = TASKS[args.task]()
-    if args.samples:
-        original = task.samples()
-        task.samples = lambda: original[: args.samples]  # type: ignore[method-assign]
+    if not _jev_reachable():
+        if args.require_jev:
+            logger.error("jev-service 不可达，无法执行决策 A/B 门禁")
+            sys.exit(1)
+        logger.warning("jev-service 不可达 → 跳过决策 A/B 门禁（CI 无服务时属正常）")
+        sys.exit(0)
 
-    if args.backends.strip():
-        backend_names = [b.strip() for b in args.backends.split(",") if b.strip()]
-    else:
-        backend_names = list(task.predictors().keys())
+    binary_tasks = (
+        list(TASKS.items())
+        if args.all
+        else [(args.task, TASKS[args.task])]
+        if args.task in TASKS
+        else []
+    )
+    choice_tasks = (
+        list(CHOICE_TASKS.items())
+        if args.all
+        else [(args.task, CHOICE_TASKS[args.task])]
+        if args.task in CHOICE_TASKS
+        else []
+    )
 
-    reports = asyncio.run(run_task(task, backend_names))
-    print(render_report(task, reports))
+    result_json: dict[str, list[dict[str, Any]]] = {}
+    violations: list[str] = []
+
+    for name, cls in binary_tasks:
+        task = cls()
+        if args.samples:
+            original = task.samples()
+            task.samples = lambda original=original: original[: args.samples]  # type: ignore[method-assign]
+        reports = asyncio.run(run_task(task, _backend_names(task.predictors(), args.backends)))
+        print(render_report(task, reports))
+        result_json[name] = [r.as_dict() for r in reports]
+        jev = next((r for r in reports if r.name == "jev"), None)
+        violations += [f"{name}: {v}" for v in _gate_binary(jev, args)]
+
+    for name, cls in choice_tasks:
+        task = cls()
+        samples = task.samples()
+        if args.samples:
+            samples = samples[: args.samples]
+        predictors = task.predictors()
+        reports = [
+            asyncio.run(evaluate_choice_backend(bk, samples, predictors[bk]))
+            for bk in _backend_names(predictors, args.backends)
+            if bk in predictors
+        ]
+        print(render_choice_report(reports))
+        result_json[name] = [r.as_dict() for r in reports]
+        jev = next((r for r in reports if r.name == "jev"), None)
+        violations += [f"{name}: {v}" for v in _gate_choice(jev, args)]
 
     if args.json_report:
         with open(args.json_report, "w", encoding="utf-8") as fh:
-            json.dump(
-                {"task": task.name, "backends": [r.as_dict() for r in reports]},
-                fh,
-                ensure_ascii=False,
-                indent=2,
-            )
+            json.dump(result_json, fh, ensure_ascii=False, indent=2)
         logger.info("JSON report written", path=args.json_report)
 
-    jev_report = next((r for r in reports if r.name == "jev"), None)
-    violations: list[str] = []
-    if jev_report is not None:
-        if args.min_recall > 0 and jev_report.confusion.recall < args.min_recall:
-            violations.append(f"recall {jev_report.confusion.recall:.3f} < {args.min_recall}")
-        if args.min_precision > 0 and jev_report.confusion.precision < args.min_precision:
-            violations.append(
-                f"precision {jev_report.confusion.precision:.3f} < {args.min_precision}"
-            )
     if violations:
         for v in violations:
             logger.error("GATE FAILED (jev): %s", v)

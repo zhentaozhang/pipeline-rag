@@ -31,6 +31,16 @@ class DecisionSample(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class ChoiceSample(BaseModel):
+    """一条多分类（Choice）标注样本（label 为类别名）"""
+
+    id: str
+    input: str
+    label: str
+    context: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class EvalResult(BaseModel):
     """单条测试的评估结果"""
 
