@@ -1,4 +1,7 @@
---extra-index-url https://download.pytorch.org/whl/cpu
+# 索引源由构建参数 / 环境变量控制，避免硬编码外部主机导致容器网络不可达：
+#   PIP_INDEX_URL / PIP_EXTRA_INDEX_URL / HTTP(S)_PROXY
+# 需要 CPU 版 torch 时可显式指定：
+#   uv pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
 torch>=2.0.0
 transformers>=4.40.0
 accelerate>=0.28.0
