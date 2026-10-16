@@ -120,3 +120,40 @@ def fake_llm(monkeypatch: pytest.MonkeyPatch) -> FakeCompletions:
     instance._install(monkeypatch)
     instance.reset()
     return instance
+
+
+# 单测隔离：默认关闭 JEV 各环节。CI 无 jev-service，若单测依赖本地服务会出现
+# "本地过、CI 挂" 的不一致；需要验证 JEV 路径的测试请自行启用对应开关
+# （monkeypatch settings.jev.<flag>=True）并 patch app.infra.jev_client.get_jev_client。
+_JEV_FEATURE_FLAGS = (
+    "guardrail_enabled",
+    "intent_detection_enabled",
+    "navigation_intent_enabled",
+    "citation_verify_enabled",
+    "faithfulness_eval_enabled",
+    "answer_relevancy_enabled",
+    "answer_correctness_enabled",
+    "context_precision_enabled",
+    "context_recall_enabled",
+    "structure_ambiguity_enabled",
+    "evidence_sufficiency_enabled",
+    "quality_eval_enabled",
+    "injection_semantic_enabled",
+    "output_semantic_enabled",
+    "tool_risk_semantic_enabled",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_jev(monkeypatch: pytest.MonkeyPatch) -> None:
+    """默认关闭 JEV 各环节开关（单测确定性 / 与 CI 对齐）。"""
+    try:
+        from app.config import get_settings
+
+        jev = getattr(get_settings(), "jev", None)
+    except Exception:  # noqa: BLE001
+        jev = None
+    if jev is not None:
+        for flag in _JEV_FEATURE_FLAGS:
+            monkeypatch.setattr(jev, flag, False, raising=False)
+    yield
