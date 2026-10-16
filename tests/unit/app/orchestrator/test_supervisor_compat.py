@@ -157,6 +157,29 @@ async def test_rule_prefilter_skips_simple_question(fake_llm):
         settings.rag.supervisor_rule_prefilter = original
 
 
+async def test_rule_prefilter_skips_single_hop_institutional_questions(fake_llm):
+    """审查报告 R10：制度解释类单跳问题不得误触发 LLM 任务分解。"""
+    from app.config import get_settings
+    from app.orchestrator.supervisor import SupervisorService
+
+    settings = get_settings()
+    original = settings.rag.supervisor_rule_prefilter
+    settings.rag.supervisor_rule_prefilter = True
+    try:
+        svc = SupervisorService()
+        for q in ("为什么报销需要发票", "总结一下差旅制度", "分析一下这个流程"):
+            plan = ExecutionPlan(
+                mode=ExecutionMode.RETRIEVAL,
+                original_question=q,
+                rewritten_question=q,
+            )
+            result = await svc.decompose(plan)
+            assert result.supervisor_mode is False
+        assert fake_llm.calls == []  # 零 LLM 调用
+    finally:
+        settings.rag.supervisor_rule_prefilter = original
+
+
 async def test_rule_prefilter_allows_complex_question(fake_llm):
     """P0-1c：含分析触发词的复合问题仍然触发分解。"""
     from app.config import get_settings

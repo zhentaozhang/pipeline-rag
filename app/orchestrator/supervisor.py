@@ -18,37 +18,32 @@ from app.orchestrator.subplan import (
 
 logger = structlog.get_logger(__name__)
 
-# P0-1c: 复杂/多跳问题触发词（命中即建议分解）
+# 复杂/多实体横向对比触发词（命中即建议多任务分解）
 _COMPLEX_QUESTION_HINTS = (
     "对比",
     "比较",
     "区别",
-    "为什么",
-    "原因",
-    "关系",
+    "异同",
     "关联",
-    "影响",
     "如何影响",
-    "分析",
-    "总结",
-    "综述",
     "分别",
 )
 
 
 def _should_decompose(plan: ExecutionPlan) -> bool:
-    """规则预筛：仅复合问题/分析类/长问题需要 LLM 任务分解。"""
+    """规则预筛：仅多实体横向对比或极长复合并列问题需要多 Agent 任务分解。
+
+    消除「为什么/原因/分析/总结」等单跳制度解释词导致的严重误报，
+    避免在首 token 之前引入无收益的同步 LLM 分解调用。
+    """
     question = (plan.rewritten_question or plan.original_question or "").strip()
     if not question:
         return False
-    # 已拆分为多个子问题的复合问题
-    if len(plan.rewrite_sub_questions or []) > 1:
-        return True
-    # 分析/多跳类触发词
+    # 多主体横向对比/多任务触发词
     if any(hint in question for hint in _COMPLEX_QUESTION_HINTS):
         return True
-    # 长问题（>= 40 字）大概率是多跳
-    return len(question) >= 40
+    # 极长复合问题（>= 50 字且包含复合并列连词）
+    return len(question) >= 50 and any(conn in question for conn in ("以及", "并且", "同时", "另外"))
 
 
 class SupervisorService:

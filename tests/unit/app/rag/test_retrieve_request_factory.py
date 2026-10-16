@@ -48,6 +48,7 @@ class TestBuild:
         plan = make_plan([sub])
         await factory.build(plan)
         assert sub.text.startswith("如何配置")
+        assert sub.retrieval_query.startswith("如何配置")
 
     async def test_doc_ids_injected_from_plan(self):
         factory = DocumentRetrieveRequestFactory()

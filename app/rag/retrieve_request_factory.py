@@ -78,7 +78,8 @@ class DocumentRetrieveRequestFactory:
             retrieval_query, query_context_hints = self._build_query_augmentation(
                 normalized_question, plan, sub_q.query_context_hints
             )
-            # Store augmented query back (retrieval_query overrides original text)
+            # Store augmented query in retrieval_query (and keep text synchronized)
+            sub_q.retrieval_query = retrieval_query
             sub_q.text = retrieval_query
 
             # ── 2. Filters：年份/章节/文档名/业务分类/标签 ─────────────────
