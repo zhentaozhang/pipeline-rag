@@ -22,6 +22,7 @@ class TracerCallbackHandler(AsyncCallbackHandler):
         self._tracer = tracer
         self._name_prefix = name_prefix
         self._pending: dict[str, dict[str, Any]] = {}
+        self._tool_spans: dict[str, Any] = {}
 
     async def on_chat_model_start(
         self,
@@ -71,3 +72,72 @@ class TracerCallbackHandler(AsyncCallbackHandler):
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
         )
+
+    async def on_llm_error(
+        self,
+        error: BaseException,
+        *,
+        run_id: Any,
+        **kwargs: Any,
+    ) -> None:
+        info = self._pending.pop(str(run_id), {})
+        model = info.get("model") or "unknown"
+        from app.observability.llm_observe import record_generation
+
+        record_generation(
+            self._tracer,
+            f"{self._name_prefix}_llm",
+            model=model,
+            input=info.get("input"),
+            output=f"Error: {error}",
+            prompt_tokens=0,
+            completion_tokens=0,
+        )
+
+    async def on_tool_start(
+        self,
+        serialized: dict[str, Any],
+        input_str: str,
+        *,
+        run_id: Any,
+        parent_run_id: Any = None,
+        **kwargs: Any,
+    ) -> None:
+        if self._tracer is None:
+            return
+        from app.observability.enums import SpanKind
+
+        tool_name = (serialized or {}).get("name") or (serialized or {}).get("id") or "tool"
+        span_mgr = self._tracer.span(
+            f"{self._name_prefix}:tool:{tool_name}",
+            kind=SpanKind.TOOL,
+            input={"input": input_str},
+        )
+        span_ctx = await span_mgr.__aenter__()
+        self._tool_spans[str(run_id)] = (span_mgr, span_ctx)
+
+    async def on_tool_end(
+        self,
+        output: Any,
+        *,
+        run_id: Any,
+        **kwargs: Any,
+    ) -> None:
+        entry = self._tool_spans.pop(str(run_id), None)
+        if entry:
+            span_mgr, span_ctx = entry
+            span_ctx.output = {"output": str(output)}
+            await span_mgr.__aexit__(None, None, None)
+
+    async def on_tool_error(
+        self,
+        error: BaseException,
+        *,
+        run_id: Any,
+        **kwargs: Any,
+    ) -> None:
+        entry = self._tool_spans.pop(str(run_id), None)
+        if entry:
+            span_mgr, span_ctx = entry
+            span_ctx.output = {"error": str(error)}
+            await span_mgr.__aexit__(type(error), error, getattr(error, "__traceback__", None))

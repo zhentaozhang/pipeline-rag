@@ -28,19 +28,22 @@ _warned_models: set[str] = set()
 
 
 def estimate_cost(
-    model: str,
+    model: str | None,
     prompt_tokens: int,
     completion_tokens: int,
     cache_hit_tokens: int = 0,
     cache_hit_factor: float = 0.1,
 ) -> float:
     """成本估算（区分缓存命中/未命中单价）"""
-    prices = MODEL_PRICES.get(model)
+    effective_model = model or "unknown"
+    prices = MODEL_PRICES.get(effective_model)
+    if prices is None and "/" in effective_model:
+        prices = MODEL_PRICES.get(effective_model.split("/")[-1])
     if prices is None:
-        if model not in _warned_models:
-            _warned_models.add(model)
+        if effective_model not in _warned_models:
+            _warned_models.add(effective_model)
             logger.warning(
-                "unknown model price, using default", model=model, default=_DEFAULT_PRICES
+                "unknown model price, using default", model=effective_model, default=_DEFAULT_PRICES
             )
         prices = _DEFAULT_PRICES
     cache_miss_tokens = max(0, prompt_tokens - cache_hit_tokens)

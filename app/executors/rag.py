@@ -397,21 +397,23 @@ class RagChatExecutor(ConversationExecutor):
                 },
             )
 
-            if (
-                settings.rag.evaluation_enabled
-                and not _answer_blocked
-                and random.random() < settings.rag.evaluation_sample_rate
-            ):
-                try:
-                    contexts_list: list[str] = []
-                    for sq in sub_question_list:
-                        for ev in sq.evidences:
-                            if ev.content:
-                                contexts_list.append(ev.content)
-                    self.task._pending_eval = {
-                        "question": plan.original_question,
-                        "answer": _reviewable_answer,
-                        "contexts": contexts_list,
-                    }
-                except Exception:
-                    logger.exception("rag_eval_params_failed")
+        final_answer = "".join(self.task.answer_buffer)
+        if (
+            settings.rag.evaluation_enabled
+            and not _answer_blocked
+            and bool(final_answer.strip())
+            and random.random() < settings.rag.evaluation_sample_rate
+        ):
+            try:
+                contexts_list: list[str] = []
+                for sq in sub_question_list:
+                    for ev in sq.evidences:
+                        if ev.content:
+                            contexts_list.append(ev.content)
+                self.task._pending_eval = {
+                    "question": plan.original_question,
+                    "answer": final_answer,
+                    "contexts": contexts_list,
+                }
+            except Exception:
+                logger.exception("rag_eval_params_failed")

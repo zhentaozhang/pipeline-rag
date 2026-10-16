@@ -1,7 +1,6 @@
 """事后诸葛亮推荐追问机制 — 利用 LLM 推测用户可能的下一步追问。"""
 
 import asyncio
-import json
 
 import structlog
 
@@ -61,8 +60,30 @@ class RecommendationService:
             if not content:
                 return []
 
-            data = json.loads(content)
-            recommendations: list[str] = data.get("recommendations", [])
+            from app.observability import get_active_tracer
+            from app.observability.llm_observe import record_generation
+
+            active_tracer = get_active_tracer()
+            if active_tracer:
+                usage = getattr(response, "usage", None)
+                p_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+                c_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+                record_generation(
+                    active_tracer,
+                    "recommendation_llm",
+                    model=getattr(response, "model", None) or settings.llm.model,
+                    input=prompt,
+                    output=content,
+                    prompt_tokens=p_tokens,
+                    completion_tokens=c_tokens,
+                )
+
+            from app.observability.metrics.base import parse_json_safe
+
+            data = parse_json_safe(content, default={}) or {}
+            recommendations: list[str] = (
+                data.get("recommendations", []) if isinstance(data, dict) else []
+            )
             return recommendations[:3]
         except Exception as e:
             logger.warning("failed to generate recommendations", error=str(e))

@@ -172,9 +172,14 @@ async def finalize_stream(
             cache_hit_tokens=0,
             cache_hit_factor=_gs().llm.cache_hit_price_factor,
         )
+        effective_trace_id = (
+            (task.tracer.trace_id if task.tracer else None)
+            or task.trace_id
+            or str(temp_exchange_id)
+        )
         db.add(
             ChatModelUsageTrace(
-                trace_id=str(temp_exchange_id),
+                trace_id=effective_trace_id,
                 exchange_id=temp_exchange_id,
                 session_id=conversation_id,
                 model_name=task.model_name,
