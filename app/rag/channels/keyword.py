@@ -5,6 +5,8 @@
 IK 分词器处理中文，相对阈值过滤弱命中（score < top_score * keyword_relative_score_floor）
 """
 
+from typing import Any
+
 import structlog
 
 from app.chat.schema import Evidence, SubQuestion
@@ -46,7 +48,8 @@ class KeywordRetrievalChannel:
             },
         ]
 
-        filter_clauses = []
+        # 过滤条件值类型混杂（str / int / list），显式标注避免被首个子句收敛成 str
+        filter_clauses: list[dict[str, Any]] = []
         if sub_q.tenant_id:
             filter_clauses.append({"term": {"tenantId": sub_q.tenant_id}})
         if sub_q.doc_ids:
@@ -107,7 +110,7 @@ class KeywordRetrievalChannel:
             if not hits:
                 return await self._fallback_pgvector(query_text, sub_q, limit)
 
-            evidences = []
+            evidences: list[Evidence] = []
             for hit in hits:
                 score = hit["_score"] or 0.0
                 source = hit.get("_source", {})
@@ -138,7 +141,8 @@ class KeywordRetrievalChannel:
     def _build_fallback_sql(terms: list[str], sub_q: SubQuestion, limit: int) -> tuple[str, list]:
         sql = "SELECT id as chunk_id, document_id, section_path, chunk_text, metadata_json->>'documentName' AS document_name, ("
         score_parts = []
-        args = []
+        # args 混装 str / int / list，显式标注为 list[Any]
+        args: list[Any] = []
         idx = 1
         for i, term in enumerate(terms):
             weight = max(1.0, 6.0 - i)
@@ -219,7 +223,7 @@ class KeywordRetrievalChannel:
 
         sql, args = self._build_fallback_sql(terms, sub_q, limit)
 
-        evidences = []
+        evidences: list[Evidence] = []
         try:
             rows = await _pg_fetch(sql, *args)
         except Exception as e:

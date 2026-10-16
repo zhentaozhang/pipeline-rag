@@ -36,6 +36,10 @@ _redis_breaker = CircuitBreakerRegistry.get_or_register(
 
 LOCK_KEY_PREFIX = "pipeline_rag:lock:conversation:"
 
+# SCAN 上限：避免在大 keyspace 上做无界遍历（锁键自带 TTL，过期自动消失）
+_SCAN_COUNT = 500
+_SCAN_MAX_KEYS = 20_000
+
 # Lua 脚本保证安全释放和续期
 ACQUIRE_SCRIPT = """
 if redis.call('exists', KEYS[1]) == 0 then
@@ -85,6 +89,49 @@ def get_redis() -> aioredis.Redis:
     if _redis is None:
         raise RuntimeError("Redis not initialized. Call init_redis() first.")
     return _redis
+
+
+async def conversation_lease_exists(conversation_id: str) -> bool:
+    """会话租约键是否存在——跨 worker 判断「该会话是否正在被执行」。
+
+    租约由 ``BusinessChatService`` 在整段生成期间持有（含 SSE 推流），
+    因此它是比进程内注册表更权威的集群级运行信号。
+    失败时返回 False（降级为「未知即未运行」，由调用方决定是否再用本地状态兜底）。
+    """
+    try:
+        r = get_redis()
+        async with _redis_breaker:
+            return bool(await r.exists(f"{LOCK_KEY_PREFIX}{conversation_id}"))
+    except Exception:
+        logger.warning(
+            "conversation lease exists check failed", conversation_id=conversation_id, exc_info=True
+        )
+        return False
+
+
+async def active_conversation_ids() -> set[str]:
+    """集群内所有活跃会话 ID（基于锁键 SCAN）。
+
+    锁键带 TTL，进程崩溃后自动过期，因此无需额外清理逻辑。
+    """
+    ids: set[str] = set()
+    try:
+        r = get_redis()
+        scanned = 0
+        async with _redis_breaker:
+            async for key in r.scan_iter(match=f"{LOCK_KEY_PREFIX}*", count=_SCAN_COUNT):
+                scanned += 1
+                ids.add(str(key)[len(LOCK_KEY_PREFIX) :])
+                if scanned >= _SCAN_MAX_KEYS:
+                    logger.warning(
+                        "active_conversation_ids scan truncated",
+                        scanned=scanned,
+                        limit=_SCAN_MAX_KEYS,
+                    )
+                    break
+    except Exception:
+        logger.warning("active_conversation_ids scan failed", exc_info=True)
+    return ids
 
 
 class RedisLeaseManager:

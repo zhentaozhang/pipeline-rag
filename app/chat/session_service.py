@@ -117,8 +117,10 @@ async def get_session_detail(db: AsyncSession, cid: str) -> dict[str, Any] | Non
         )
     ).scalar_one_or_none()
 
-    is_running = ChatRuntimeRegistry.is_running(cid)
-    task = ChatRuntimeRegistry.get(cid) if is_running else None
+    # 跨 worker 判定：请求可能落在非执行该会话的 worker 上，需查集群租约
+    is_running = await ChatRuntimeRegistry.is_running_cluster(cid)
+    # 实时答案缓冲只能读本进程任务；跨 worker 时退化为已落库的最新回答
+    task = ChatRuntimeRegistry.get(cid)
 
     latest_user_msg = latest_ex.question if latest_ex and latest_ex.question else ""
     latest_assistant_msg = latest_ex.answer if latest_ex and latest_ex.answer else ""
@@ -270,6 +272,8 @@ async def list_sessions(db: AsyncSession, req: SessionListRequest) -> dict[str, 
     )
 
     cids = [s.conversation_id for s in sessions]
+    # 一次取回集群内运行中的会话集合，避免在循环里逐条查 Redis
+    running_ids = await ChatRuntimeRegistry.running_ids_cluster()
     exchange_counts: dict[str, int] = {}
     memory_map: dict[str, str] = {}
     latest_questions: dict[str, str] = {}
@@ -342,7 +346,7 @@ async def list_sessions(db: AsyncSession, req: SessionListRequest) -> dict[str, 
             chat_mode=s.chat_mode or "auto",
             exchange_count=exchange_counts.get(cid, 0),
             memory_summary=memory_map.get(cid, ""),
-            running=ChatRuntimeRegistry.is_running(cid),
+            running=cid in running_ids,
             message_count=exchange_counts.get(cid, 0) * 2,
             latest_user_message=latest_questions.get(cid, ""),
             latest_assistant_message=latest_answers.get(cid, ""),

@@ -1,6 +1,5 @@
 """C1 Corrective Retrieval：检索证据不足时改写重查。"""
 
-
 from app.chat.schema import Evidence, ExecutionPlan, SubQuestion, SubQuestionEvidence
 from app.common.enums import ExecutionMode
 from app.rag.engine import RagRetrievalContext, RagRetrievalEngine
@@ -32,9 +31,7 @@ def _nonempty_context(question: str) -> RagRetrievalContext:
         score=0.9,
         original_score=0.9,
     )
-    se = SubQuestionEvidence(
-        sub_question=SubQuestion(index=0, text=question), evidences=[ev]
-    )
+    se = SubQuestionEvidence(sub_question=SubQuestion(index=0, text=question), evidences=[ev])
     return RagRetrievalContext(
         retrieval_question=question,
         sub_question_evidence_list=[se],
@@ -72,7 +69,9 @@ async def test_empty_evidence_triggers_rewrite(fake_llm, monkeypatch):
         return _nonempty_context(q)
 
     monkeypatch.setattr(engine, "retrieve", fake_retrieve)
-    fake_llm.queue_json({"rewrite": "API key 的 Depends 用法", "should_split": False, "sub_questions": []})
+    fake_llm.queue_json(
+        {"rewrite": "API key 的 Depends 用法", "should_split": False, "sub_questions": []}
+    )
 
     ctx = await engine.retrieve_with_correction(plan)
     assert len(calls) == 2, "应触发一次重查"
@@ -124,20 +123,30 @@ async def test_max_rounds_limits_rewrites(fake_llm, monkeypatch):
 
     plan = _make_plan()
     engine = RagRetrievalEngine()
-    calls = []
+    calls: list[str] = []
 
     async def fake_retrieve(plan, tracer=None):
-        calls.append(plan.original_question)
+        calls.append(plan.retrieval_question or plan.original_question)
         return _empty_context(plan.original_question)
 
     monkeypatch.setattr(engine, "retrieve", fake_retrieve)
+
+    # 每轮必须返回"不同"的改写结果：实现里带有
+    # "改写结果 == 当前查询则不重查" 的防抖（见 test_rewrite_same_query_no_retry），
+    # 若桩函数恒返回同一串，第二轮会被防抖提前终止，从而无法验证轮数上限。
+    rewrites = iter(["改写查询B", "改写查询C", "改写查询D"])
     fake_llm.set_fallback(
-        lambda kwargs: '{"rewrite": "改写查询B", "should_split": false, "sub_questions": []}'
+        lambda kwargs: (
+            '{"rewrite": "' + next(rewrites) + '", "should_split": false, "sub_questions": []}'
+        )
     )
 
     ctx = await engine.retrieve_with_correction(plan)
     assert ctx.is_empty is True
     assert len(calls) == 3, "初始 1 次 + 最多 2 轮改写重查"
+    assert calls[0] == "什么是 FastMCP 的 Depends 用法？"
+    assert calls[1] == "改写查询B"
+    assert calls[2] == "改写查询C"
 
 
 async def test_rewrite_same_query_no_retry(fake_llm, monkeypatch):
@@ -151,9 +160,7 @@ async def test_rewrite_same_query_no_retry(fake_llm, monkeypatch):
         return _empty_context(plan.original_question)
 
     monkeypatch.setattr(engine, "retrieve", fake_retrieve)
-    fake_llm.queue_json(
-        {"rewrite": "已完整清晰的问题", "should_split": False, "sub_questions": []}
-    )
+    fake_llm.queue_json({"rewrite": "已完整清晰的问题", "should_split": False, "sub_questions": []})
 
     ctx = await engine.retrieve_with_correction(plan)
     assert ctx.is_empty is True

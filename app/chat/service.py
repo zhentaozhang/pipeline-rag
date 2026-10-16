@@ -28,6 +28,7 @@ from app.chat.service_utils import (
 )
 from app.chat.state_machine import ConversationState
 from app.chat.task_info import ChatRuntimeRegistry, ChatTaskInfo
+from app.common.enums import chat_mode_label
 from app.common.sse import SSEEventType, sse_event
 from app.config import get_settings
 from app.eventbus.bus import bus
@@ -134,7 +135,9 @@ class BusinessChatService:
         # 2. 查找或创建 Session (短事务获取并释放)
         async with self._get_session() as bootstrap_db:
             bootstrap_archive_store = ConversationArchiveStore(bootstrap_db)
-            session, _ = await bootstrap_archive_store.find_or_create_session(conversation_id, question)
+            session, _ = await bootstrap_archive_store.find_or_create_session(
+                conversation_id, question
+            )
 
         # ── 3. 集群级 Redis 锁（先获取锁再注册任务）───────────────────────
         lease_mgr = RedisLeaseManager(conversation_id)
@@ -185,7 +188,10 @@ class BusinessChatService:
         await bus.emit(
             Event(
                 name="conversation.started",
-                payload=ConversationStartedPayload(question=question, chat_mode=chat_mode),
+                # chat_mode 为 IntEnum，进入 SSE 载荷前必须归一为字符串标签
+                payload=ConversationStartedPayload(
+                    question=question, chat_mode=chat_mode_label(chat_mode)
+                ),
                 conversation_id=conversation_id,
                 exchange_id=temp_exchange_id,
             )
@@ -201,7 +207,11 @@ class BusinessChatService:
 
             async with self._get_session() as cache_lookup_db:
                 cached_hit = await cache_lookup(
-                    cache_lookup_db, conversation_id, question, chat_mode, request.doc_ids
+                    cache_lookup_db,
+                    conversation_id,
+                    question,
+                    chat_mode_label(chat_mode),
+                    request.doc_ids,
                 )
 
         try:
@@ -226,7 +236,7 @@ class BusinessChatService:
                 for raw in cached_hit.events:
                     line = raw.strip()
                     if line.startswith("data:"):
-                        payload_str = line[len("data:"):].strip()
+                        payload_str = line[len("data:") :].strip()
                         try:
                             payload = _json.loads(payload_str)
                             if payload.get("exchangeId") is not None:
@@ -249,7 +259,7 @@ class BusinessChatService:
                         temp_exchange_id=temp_exchange_id,
                         question=question,
                         request=request,
-                        chat_mode=chat_mode,
+                        chat_mode=chat_mode_label(chat_mode),
                         current_date_text=current_date_text,
                         memory_service=None,
                         archive_store=None,
@@ -288,7 +298,7 @@ class BusinessChatService:
                         cache_store_db,
                         conversation_id,
                         question,
-                        chat_mode,
+                        chat_mode_label(chat_mode),
                         request.doc_ids,
                         cacheable_events,
                         "".join(state.full_answer),

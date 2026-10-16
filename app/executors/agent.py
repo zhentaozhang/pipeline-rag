@@ -88,7 +88,9 @@ class ReactAgentExecutor(ConversationExecutor):
             # 改用无 checkpointer 编译，终态从最后一次节点更新累积。
             graph = workflow.compile()
 
-            agent_config: dict = {}
+            from langchain_core.runnables import RunnableConfig
+
+            agent_config: RunnableConfig = {}
             if tracer is not None and getattr(tracer, "langfuse_enabled", False):
                 from app.observability.langchain_callback import TracerCallbackHandler
 

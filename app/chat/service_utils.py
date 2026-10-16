@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import uuid as uuid_mod
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import date
 from typing import TYPE_CHECKING
 
 import structlog
@@ -38,7 +38,8 @@ def _estimate_tokens(text: str) -> int:
     return int(cjk / 1.5 + ascii / 4 + other / 2)
 
 
-def _format_current_date(d: datetime) -> str:
+def _format_current_date(d: date) -> str:
+    # 形参放宽到 date：调用方传的是 date.today()，strftime/weekday 两者皆可
     return f"{d.strftime('%Y-%m-%d')}（{_CHINESE_WEEKDAY[d.weekday()]}）"
 
 
@@ -95,6 +96,4 @@ async def _async_generator_with_timeout(
         return
     except TimeoutError as e:
         logger.warning("generator chunk timed out, aborting stream")
-        raise StreamChunkTimeoutError(
-            f"流式生成超时（{timeout}s 内无输出），已中断"
-        ) from e
+        raise StreamChunkTimeoutError(f"流式生成超时（{timeout}s 内无输出），已中断") from e

@@ -65,8 +65,12 @@ async def generate_profile(db: AsyncSession, doc_id: str, parsed_text: str) -> N
         )
         db.add(profile)
     else:
+        assert profile is not None
         profile.profile_version = (profile.profile_version or 0) + 1
 
+    # scalar_one_or_none 返回 optional；创建分支已创建并赋值，更新分支经过 else
+    # 已确认非 None。显式 assert 让后续属性写入保持严格类型安全。
+    assert profile is not None
     profile.document_summary = summary
     profile.document_type = document_type
     profile.core_topics = json.dumps(core_topics, ensure_ascii=False)

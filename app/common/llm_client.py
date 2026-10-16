@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -26,8 +27,6 @@ _llm_breaker = CircuitBreakerRegistry.get_or_register(
 )
 
 
-import asyncio
-
 _llm_semaphore: asyncio.Semaphore | None = None
 
 
@@ -41,9 +40,8 @@ def get_llm_semaphore() -> asyncio.Semaphore:
 
 @asynccontextmanager
 async def llm_breaker() -> AsyncIterator[None]:
-    async with get_llm_semaphore():
-        async with _llm_breaker:
-            yield
+    async with get_llm_semaphore(), _llm_breaker:
+        yield
 
 
 # ── 共享客户端单例 ──────────────────────────────────────────────────────────

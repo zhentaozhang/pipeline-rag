@@ -86,13 +86,19 @@ class TestRagRetrievalContext:
 
 class TestResolveScore:
     def test_original_score_priority(self):
-        assert RagRetrievalEngine()._resolve_score(make_evidence(score=0.1, original_score=0.9)) == 0.9
+        assert (
+            RagRetrievalEngine()._resolve_score(make_evidence(score=0.1, original_score=0.9)) == 0.9
+        )
 
     def test_score_fallback_when_original_zero(self):
-        assert RagRetrievalEngine()._resolve_score(make_evidence(original_score=0.0, score=0.5)) == 0.0
+        assert (
+            RagRetrievalEngine()._resolve_score(make_evidence(original_score=0.0, score=0.5)) == 0.0
+        )
 
     def test_zero_when_both_zero(self):
-        assert RagRetrievalEngine()._resolve_score(make_evidence(original_score=0.0, score=0.0)) == 0.0
+        assert (
+            RagRetrievalEngine()._resolve_score(make_evidence(original_score=0.0, score=0.0)) == 0.0
+        )
 
 
 class TestApplyEvidenceGate:
@@ -134,7 +140,9 @@ class TestApplyEvidenceGate:
         assert [e.chunk_id for e in out.documents] == ["a"]
 
     def test_keyword_floor_zero_keeps_all(self, monkeypatch):
-        monkeypatch.setattr(engine_module, "settings", make_settings(rag=dict(keyword_score_ratio=0.0)))
+        monkeypatch.setattr(
+            engine_module, "settings", make_settings(rag=dict(keyword_score_ratio=0.0))
+        )
         result = RetrievalChannelResult(
             channel_name="keyword",
             documents=[
@@ -174,7 +182,9 @@ class TestApplyRerankFilterAndTopk:
         assert [e.chunk_id for e in out] == ["0", "1"]
 
     def test_min_rerank_filters_low(self, monkeypatch):
-        monkeypatch.setattr(engine_module, "settings", make_settings(rag=dict(rerank_min_score=0.5, final_top_k=10)))
+        monkeypatch.setattr(
+            engine_module, "settings", make_settings(rag=dict(rerank_min_score=0.5, final_top_k=10))
+        )
         docs = [
             make_evidence(chunk_id="a", rerank_score=0.8),
             make_evidence(chunk_id="b", rerank_score=0.3),
@@ -183,13 +193,17 @@ class TestApplyRerankFilterAndTopk:
         assert [e.chunk_id for e in out] == ["a"]
 
     def test_missing_rerank_score_passes_with_default_one(self, monkeypatch):
-        monkeypatch.setattr(engine_module, "settings", make_settings(rag=dict(rerank_min_score=0.5, final_top_k=10)))
+        monkeypatch.setattr(
+            engine_module, "settings", make_settings(rag=dict(rerank_min_score=0.5, final_top_k=10))
+        )
         docs = [make_evidence(chunk_id="a")]  # rerank_score 默认 0.0 -> (e.rerank_score or 1.0)=1.0
         out = RagRetrievalEngine()._apply_rerank_filter_and_topk(docs)
         assert [e.chunk_id for e in out] == ["a"]
 
     def test_no_rerank_scores_skips_filter(self, monkeypatch):
-        monkeypatch.setattr(engine_module, "settings", make_settings(rag=dict(rerank_min_score=0.9)))
+        monkeypatch.setattr(
+            engine_module, "settings", make_settings(rag=dict(rerank_min_score=0.9))
+        )
         docs = [make_evidence(chunk_id="a", rerank_score=0.0)]
         out = RagRetrievalEngine()._apply_rerank_filter_and_topk(docs)
         assert [e.chunk_id for e in out] == ["a"]
@@ -197,7 +211,9 @@ class TestApplyRerankFilterAndTopk:
     def test_all_below_threshold_keeps_top1_not_empty(self, monkeypatch):
         """阈值语义失效（整查询低分区间）时保留最高分 top-1，避免空证据拒答"""
         monkeypatch.setattr(
-            engine_module, "settings", make_settings(rag=dict(rerank_min_score=0.35, final_top_k=10))
+            engine_module,
+            "settings",
+            make_settings(rag=dict(rerank_min_score=0.35, final_top_k=10)),
         )
         docs = [
             make_evidence(chunk_id="high", rerank_score=0.17),
@@ -315,7 +331,9 @@ class TestRewriteQuery:
             async def rewrite(self, question, force=False):
                 return types.SimpleNamespace(rewritten="改写后的问题")
 
-        monkeypatch.setattr("app.orchestrator.query_rewriter.ChatQueryRewriteService", FakeRewriteService)
+        monkeypatch.setattr(
+            "app.orchestrator.query_rewriter.ChatQueryRewriteService", FakeRewriteService
+        )
         assert await RagRetrievalEngine()._rewrite_query("原问题") == "改写后的问题"
 
     @pytest.mark.asyncio
@@ -324,7 +342,9 @@ class TestRewriteQuery:
             async def rewrite(self, question, force=False):
                 raise RuntimeError("down")
 
-        monkeypatch.setattr("app.orchestrator.query_rewriter.ChatQueryRewriteService", BrokenService)
+        monkeypatch.setattr(
+            "app.orchestrator.query_rewriter.ChatQueryRewriteService", BrokenService
+        )
         assert await RagRetrievalEngine()._rewrite_query("原问题") == ""
 
 
@@ -350,7 +370,9 @@ def mock_engine_deps(monkeypatch):
         async def build(self, plan):
             return plan
 
-    def install(vector_docs=None, keyword_docs=None, vector_error=None, keyword_error=None, settings=None):
+    def install(
+        vector_docs=None, keyword_docs=None, vector_error=None, keyword_error=None, settings=None
+    ):
         monkeypatch.setattr(
             "app.rag.retrieve_request_factory.DocumentRetrieveRequestFactory",
             FakeFactory,
@@ -480,7 +502,9 @@ class TestRetrieveWithCorrection:
             async def elevate(self, docs, session=None):
                 return docs
 
-        monkeypatch.setattr("app.rag.retrieve_request_factory.DocumentRetrieveRequestFactory", FakeFactory)
+        monkeypatch.setattr(
+            "app.rag.retrieve_request_factory.DocumentRetrieveRequestFactory", FakeFactory
+        )
         monkeypatch.setattr(
             engine_module,
             "settings",
@@ -489,7 +513,9 @@ class TestRetrieveWithCorrection:
         monkeypatch.setattr(engine_module, "ParentBlockElevator", FakeElevator2)
         channel = SecondRoundVector()
         monkeypatch.setattr("app.rag.channels.vector.VectorRetrievalChannel", lambda: channel)
-        monkeypatch.setattr("app.rag.channels.keyword.KeywordRetrievalChannel", lambda: AlwaysEmptyVector())
+        monkeypatch.setattr(
+            "app.rag.channels.keyword.KeywordRetrievalChannel", lambda: AlwaysEmptyVector()
+        )
 
         engine = RagRetrievalEngine()
         plan = make_plan()
@@ -532,9 +558,9 @@ class TestRetrieveWithCorrection:
             retrieval_sub_questions=["原始问题"],
         )
 
-        ctx = await engine.retrieve(plan)
+        # 仅需触发检索以捕获传给 channel 的子问题，返回值本身不参与断言
+        await engine.retrieve(plan)
         assert len(captured_sub_qs) > 0
         # Check that the sub_question received by channel has tenant_id and doc_ids preserved
         assert captured_sub_qs[0].tenant_id == "tenant_x"
         assert "999" in captured_sub_qs[0].doc_ids
-

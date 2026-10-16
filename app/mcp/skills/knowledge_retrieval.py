@@ -50,9 +50,12 @@ async def search_knowledge_base(query: str, scope_code: str = "") -> str:
 @tool
 async def rag_search(query: str, doc_ids: list[str] | None = None, top_k: int = 5) -> str:
     """从企业内部知识库中检索相关文档内容。支持基于文档 ID 的定向检索，返回最匹配的原文片段。适用于回答关于内部文档、政策流程、专业知识、技术手册等方面的问题。"""
-    from app.agent.tools.rag_search import rag_search as _rag_search_fn
+    from app.agent.tools.rag_search import rag_search as _rag_search_tool
 
-    return await _rag_search_fn(query, doc_ids=doc_ids, top_k=top_k)
+    # 注意：_rag_search_tool 是 @tool 装饰后的 BaseTool 实例，实例本身不可直接调用
+    # （会抛 TypeError: 'StructuredTool' object is not callable），必须走 ainvoke。
+    result = await _rag_search_tool.ainvoke({"query": query, "doc_ids": doc_ids, "top_k": top_k})
+    return str(result)
 
 
 class KnowledgeRetrievalSkill(BaseSkill):

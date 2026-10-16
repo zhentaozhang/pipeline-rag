@@ -37,6 +37,7 @@ async def init_pg() -> None:
     global _pool, _engine, async_session_maker
     if _pool is not None:
         return  # 已初始化，避免泄漏旧连接池
+
     async def _init_pg_connection(conn: asyncpg.Connection) -> None:
         with contextlib.suppress(Exception):
             await conn.execute("SET hnsw.iterative_scan = 'relaxed'")
@@ -73,7 +74,8 @@ async def init_pg() -> None:
 
 async def _ensure_pg_tables() -> None:
     """自动创建 PGVector 所需的表（幂等，容错）"""
-    async with _pool.acquire() as conn:
+    pool = get_pg_pool()
+    async with pool.acquire() as conn:
         with contextlib.suppress(Exception):
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
@@ -93,7 +95,8 @@ async def _ensure_pg_tables() -> None:
                 section_title VARCHAR(512),
                 PRIMARY KEY (chunk_id)
             )
-        """)
+        """
+        )
         with contextlib.suppress(Exception):
             await conn.execute(
                 "ALTER TABLE public.document_chunk ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(64) DEFAULT 'default' NOT NULL"
@@ -134,8 +137,7 @@ async def _ensure_pg_tables() -> None:
                 status SMALLINT DEFAULT 1,
                 PRIMARY KEY (id)
             )
-            """
-            .replace("__EMB_DIM__", str(_embed_dim))
+            """.replace("__EMB_DIM__", str(_embed_dim))
         )
         with contextlib.suppress(Exception):
             await conn.execute(
@@ -210,23 +212,27 @@ async def _acquire() -> AsyncIterator[asyncpg.Connection]:
     Celery worker 进程不会走 FastAPI lifespan，首次使用自动建池）"""
     if _pool is None:
         await init_pg()
-    conn = await _pool.acquire()
+    # get_pg_pool() 在池仍为空时抛 RuntimeError，同时把类型收窄为非可选 Pool
+    pool = get_pg_pool()
+    conn = await pool.acquire()
     try:
         yield conn
     finally:
-        await _pool.release(conn)
+        await pool.release(conn)
 
 
 async def fetch(sql: str, *args: object) -> list[asyncpg.Record]:
     """带熔断保护的查询"""
     async with _pg_breaker, _acquire() as conn:
-        return await conn.fetch(sql, *args)
+        rows: list[asyncpg.Record] = await conn.fetch(sql, *args)
+        return rows
 
 
 async def execute(sql: str, *args: object) -> str:
     """带熔断保护的写入"""
     async with _pg_breaker, _acquire() as conn:
-        return await conn.execute(sql, *args)
+        result: str = await conn.execute(sql, *args)
+        return result
 
 
 async def fetchval(sql: str, *args: object) -> object:

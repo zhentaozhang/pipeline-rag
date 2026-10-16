@@ -88,7 +88,7 @@ def task_extract_user_facts(
             "不要抽取一次性的查询内容或系统知识。\n"
             "2. 每条事实用一句话陈述，第三人称（如『用户是后端工程师』）。\n"
             "3. 没有可记忆信息时返回空数组。\n"
-            "4. 只输出 JSON 数组，格式：[{\"content\": \"...\", \"category\": \"preference|fact|identity|goal\"}]\n\n"
+            '4. 只输出 JSON 数组，格式：[{"content": "...", "category": "preference|fact|identity|goal"}]\n\n'
             f"用户问题：{question[:500]}\n系统回答：{answer[:800]}"
         )
         resp = await client.chat.completions.create(
@@ -208,9 +208,9 @@ def task_generate_session_title(self, conversation_id: str, question: str, answe
                 max_tokens=64,
                 temperature=0.3,
             )
-            title = (
-                title_resp.choices[0].message.content.strip().strip('"').strip("'")
-            )[:256]
+            # content 可能为 None（如思考模式吞掉 max_tokens），先兜底再清洗
+            title_content = title_resp.choices[0].message.content or ""
+            title = title_content.strip().strip('"').strip("'")[:256]
 
             # 离线任务：为本次标题生成开独立 Langfuse trace
             from app.observability.langfuse_client import record_standalone_generation
@@ -231,7 +231,9 @@ def task_generate_session_title(self, conversation_id: str, question: str, answe
 
     try:
         result = run_async(_do())
-        logger.info("task generate session title completed", conversation_id=conversation_id, title=result)
+        logger.info(
+            "task generate session title completed", conversation_id=conversation_id, title=result
+        )
         return {"conversation_id": conversation_id, "title": result}
     except Exception as e:
         logger.warning("session title generation failed", error=str(e), exc_info=True)
@@ -245,10 +247,16 @@ def task_generate_session_title(self, conversation_id: str, question: str, answe
     default_retry_delay=5,
 )
 def task_evaluate_dataset_item(self, dataset_id: int) -> dict:
-    """
-    异步评估 Golden Dataset 数据项（回归测试环节）。
-    这是一个 Mock 实现，模拟重放问题并对生成答案与 Ground Truth 进行相似度/正确性评分。
-    真实场景下将调用 LLM 重新生成 answer 和 contexts，并调用 ragas 计算包含 Answer Correctness 在内的指标。
+    """异步评估 Golden Dataset 数据项（离线回归）。
+
+    评分走真实链路 ``EvaluationPipeline.with_ground_truth()``——与
+    ``scripts/evaluation/runner.py`` 同一实现。
+
+    历史问题：本任务此前调用 ``app.rag.evaluation.RAGEvaluationService``，
+    而该服务已退化为 stub（``evaluate_dataset`` 恒返回 ``{}``），并且其
+    ``_join_contexts`` / ``_llm_complete`` 私有方法根本不存在。结果是
+    ①未提供 generated_answer 时必然 AttributeError；②即使走到评分也只会
+    把 5 个分数列全部写成 NULL（静默失效）。
     """
     from datetime import UTC, datetime
 
@@ -259,6 +267,30 @@ def task_evaluate_dataset_item(self, dataset_id: int) -> dict:
     logger.info(
         "task evaluate dataset item started", dataset_id=dataset_id, task_id=self.request.id
     )
+
+    async def _generate_answer(question: str, contexts: list[str]) -> str:
+        """数据集未提供 generated_answer 时，基于 contexts 现场生成一个答案。"""
+        from app.common.llm_client import get_chat_client
+        from app.config import get_settings
+
+        context_text = "\n\n---\n\n".join(c for c in contexts if c)
+        client = get_chat_client()
+        resp = await client.chat.completions.create(
+            model=get_settings().llm.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "请根据提供的上下文回答用户的问题。"
+                        "如果上下文中没有包含足够的信息，请声明无法完全解答。"
+                        "请保持回答清晰且直接。"
+                    ),
+                },
+                {"role": "user", "content": f"问题：{question}\n\n上下文：\n{context_text}"},
+            ],
+            temperature=0.2,
+        )
+        return resp.choices[0].message.content or ""
 
     async def _do_eval():
         from app.db.session import get_session_factory
@@ -277,56 +309,37 @@ def task_evaluate_dataset_item(self, dataset_id: int) -> dict:
             import json
             from decimal import Decimal
 
-            from app.rag.evaluation import RAGEvaluationService
-
-            contexts = json.loads(dataset.contexts) if dataset.contexts else []
-            eval_svc = RAGEvaluationService()
+            contexts: list[str] = json.loads(dataset.contexts) if dataset.contexts else []
 
             # 2. 如果之前没有生成的答案，利用 LLM 根据上下文生成一个临时答案
             generated_answer = dataset.generated_answer
             if not generated_answer:
-                context_text = eval_svc._join_contexts(contexts)
-                generated_answer = await eval_svc._llm_complete(
-                    system="请根据提供的上下文回答用户的问题。如果上下文中没有包含足够的信息，请声明无法完全解答。请保持回答清晰且直接。",
-                    user=f"问题：{dataset.question}\n\n上下文：\n{context_text}",
-                )
+                generated_answer = await _generate_answer(dataset.question, contexts)
                 dataset.generated_answer = generated_answer
 
-            # 3. 调用真实的 RAGEvaluationService
-            logger.info("开始执行真实的 Ragas 评估", dataset_id=dataset_id)
-            scores = await eval_svc.evaluate_dataset(
+            # 3. 真实评分（与离线脚本同源，避免再次依赖已废弃的 stub 服务）
+            from app.observability.metrics.pipeline import EvaluationPipeline
+
+            logger.info("开始执行 RAG 指标评估", dataset_id=dataset_id)
+            metric_results = await EvaluationPipeline.with_ground_truth().run(
                 question=dataset.question,
                 answer=generated_answer,
-                ground_truth=dataset.ground_truth,
                 contexts=contexts,
+                ground_truth=dataset.ground_truth,
             )
+            score_map = {r.metric_name: r.value for r in metric_results}
+            scores = {f"{name}_score": value for name, value in score_map.items()}
 
             # 4. 写入真实分数
-            dataset.faithfulness_score = (
-                Decimal(str(scores.get("faithfulness_score")))
-                if scores.get("faithfulness_score") is not None
-                else None
-            )
-            dataset.answer_relevancy_score = (
-                Decimal(str(scores.get("answer_relevancy_score")))
-                if scores.get("answer_relevancy_score") is not None
-                else None
-            )
-            dataset.context_precision_score = (
-                Decimal(str(scores.get("context_precision_score")))
-                if scores.get("context_precision_score") is not None
-                else None
-            )
-            dataset.context_recall_score = (
-                Decimal(str(scores.get("context_recall_score")))
-                if scores.get("context_recall_score") is not None
-                else None
-            )
-            dataset.answer_correctness_score = (
-                Decimal(str(scores.get("answer_correctness_score")))
-                if scores.get("answer_correctness_score") is not None
-                else None
-            )
+            def _dec(metric: str) -> Decimal | None:
+                value = score_map.get(metric)
+                return Decimal(str(value)) if value is not None else None
+
+            dataset.faithfulness_score = _dec("faithfulness")
+            dataset.answer_relevancy_score = _dec("answer_relevancy")
+            dataset.context_precision_score = _dec("context_precision")
+            dataset.context_recall_score = _dec("context_recall")
+            dataset.answer_correctness_score = _dec("answer_correctness")
 
             dataset.status = 2  # 已评估
             dataset.eval_message = "Eval completed successfully via LLM Judge."
@@ -336,7 +349,7 @@ def task_evaluate_dataset_item(self, dataset_id: int) -> dict:
             return {"dataset_id": dataset_id, "scores": scores, "status": "completed"}
 
     try:
-        result = run_async(_do_eval())
+        result: dict = run_async(_do_eval())
         logger.info("task evaluate dataset item completed", result=result)
         return result
     except Exception as e:
@@ -400,7 +413,7 @@ def task_run_golden_experiment(
         }
 
     try:
-        out = run_async(_do())
+        out: dict = run_async(_do())
         logger.info("task run golden experiment completed", result=out)
         return out
     except Exception as e:

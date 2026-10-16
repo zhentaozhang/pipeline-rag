@@ -41,8 +41,8 @@
 | **数据源接入** | 手动上传 + S3 / 网页爬虫连接器自动导入（飞书/网页多渠道） |
 | **引用溯源** | 回答附来源引用（chunk_id / 章节 / 原文），前端可展开查看 |
 | **响应缓存** | 无历史上下文的确定性问答走 Redis 缓存，命中省全链路 LLM |
-| **MCP 插件** | 基于 FastMCP 的 Skills 插件系统，工具自动发现与注册 |
-| **安全控制** | PII 检测、输入/输出过滤、风险分级审批、沙箱执行 |
+| **MCP 插件** | SkillRegistry 自动发现并注册 Skill 工具（Agent 工具来源）；FastMCP Server 作为独立对外集成入口 |
+| **安全控制** | PII 检测、输入/输出过滤、四级风险分级与高风险工具阻断、受限子进程沙箱执行 |
 | **可观测性** | 自研 Trace 链路（span 瀑布 + 评估分数）+ Prometheus 指标 + LLM-as-Judge 质量评估 |
 
 ---
@@ -112,7 +112,7 @@ flowchart TB
 
 - **PGVector** — 稠密向量语义检索（BGE-M3 Embedding）
 - **Elasticsearch** — IK 分词器中文关键词检索
-- **RRF 融合** — 将 Top-K 召回准确率从纯向量的 72% 提升至 91%
+- **RRF 融合** — 双通道结果按 Reciprocal Rank Fusion 合并，缓解单一通道的召回盲区（效果以 `scripts/evaluation` 离线评测为准）
 - **Reranker** — 可配置 BGE Reranker V2 重排序
 - **Parent-Child** — Chunk 级别上下文补全，解决分块断裂问题
 - **Contextual Chunking** — 分块时注入文档级上下文窗口（可开关，需重索引生效）
@@ -199,25 +199,35 @@ Summary Compression 长期摘要包含：会话目标、已确认事实、用户
 
 ### MCP Skills 插件系统
 
-基于 FastMCP 构建的 Skills 插件系统，支持工具自动发现与注册：
+工具层由两个职责分离的部件组成，请勿混为一谈：
+
+**1. SkillRegistry（Agent 实际使用的工具来源）**
+
+`app/mcp/skill_registry.py` 基于 `pkgutil` 扫描 `app/mcp/skills/` 自动发现 `BaseSkill`
+子类并注册其工具，同时联动 `app/safety/tool_registry.py` 完成风险分级。
+ReAct Agent 通过 `SkillRegistry.resolve(tool_name)` 取用工具。
 
 | 内置 Skill | 功能 |
 |------------|------|
-| **Knowledge Retrieval** | 知识库检索与文档导航 |
+| **Knowledge Retrieval** | 知识库检索（`search_knowledge_base` / `rag_search`） |
 | **Document Navigation** | 文档结构图谱导航（章节/条目/搜索） |
 | **Web Research** | Tavily 网络搜索集成 |
 
-Skills 可在运行时热插拔，通过 MCP 协议与 Agent 交互，支持外部工具扩展。
+**2. FastMCP Server（对外集成入口，独立进程）**
+
+`app/mcp/server.py` 是一个独立的 FastMCP 服务进程（`run_mcp_server()`），
+面向外部 MCP 客户端暴露知识库能力。它**不参与**主应用内的 Agent 工具注册，
+需单独启动后由外部客户端连接使用。
 
 ### 安全与合规
 
 | 层 | 能力 |
 |----|------|
-| **输入过滤** | 关键词 + LLM 双通道风险检测，Presidio PII 检测 |
+| **输入过滤** | 关键词风险检测（默认启用）+ Presidio PII 检测；LLM 深度护栏为可选兜底通道（`SAFETY_INPUT_LLM_GUARDRAIL_ENABLED`，默认关闭以节省 LLM 调用） |
 | **输出过滤** | 敏感信息脱敏，策略合规检查 |
-| **风险分级** | 三级风险定级，高风险需要审批确认 |
-| **工具审批** | 危险操作需显式用户授权 |
-| **沙箱执行** | Code Executor 在隔离沙箱中运行 Python 代码 |
+| **风险分级** | 四级风险定级（LOW / MEDIUM / HIGH / CRITICAL），CRITICAL 与命中危险关键词的 HIGH 工具调用被拦截 |
+| **工具审批** | 当前为 **fail-close 阻断**：高风险工具调用被拒绝并向模型返回说明，尚无人工确认（HITL）交互闭环 |
+| **沙箱执行** | Code Executor 在受限子进程中运行 Python 代码：AST 白名单审查 + POSIX `setrlimit`（内存 256MB / CPU 8s / 文件 10MB）+ 进程组 SIGKILL；属进程级隔离，非容器级隔离 |
 
 ### 可观测性
 
@@ -503,11 +513,14 @@ alembic upgrade head
 #   alembic stamp 0001_baseline
 
 # 启动 API 服务
-# ⚠️ 必须单 worker 运行：SSE 会话状态为进程内实现（ChatRuntimeRegistry），
-#    多 worker / 多副本会导致「停止会话 / 状态查询」失效；启动时会自动检测并告警。
+# 多 worker 说明：跨实例状态已收敛到 Redis，可安全使用多 worker / 多副本。
+#   - 会话排他执行：Redis 分布式租约（pipeline_rag:lock:conversation:{id}）
+#   - 停止会话：Redis 取消键 + Pub/Sub 跨实例广播（main.py 订阅端）
+#   - 运行状态查询：ChatRuntimeRegistry.is_running_cluster() 以「本地注册表 ∪ 租约键」判定
+#   - 实时答案缓冲仍为进程内（跨 worker 时退化为已落库的最新回答）
 fastapi dev app/main.py --port 8080        # 开发
 # 生产部署（Docker 默认）：uvicorn app.main:app --host 0.0.0.0 --port 8080 \
-#   --timeout-graceful-shutdown 60   # SSE 长连接优雅停机
+#   --workers 4 --timeout-graceful-shutdown 60   # SSE 长连接优雅停机
 
 # 启动 Celery Worker（新终端）
 # 两种等价入口：`python worker.py` 或 `celery -A app.celery_app worker`

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from sqlalchemy import select, update
@@ -13,6 +14,15 @@ if TYPE_CHECKING:
     from app.db.models.knowledge import KnowledgeScope, KnowledgeTopic
 
 logger = structlog.get_logger(__name__)
+
+
+def _affected_rows(result: Any) -> int:
+    """取 DML 受影响行数。
+
+    ``AsyncSession.execute`` 的静态返回类型是 ``Result[Any]``，但 UPDATE/DELETE
+    实际返回带 ``rowcount`` 的 ``CursorResult``；用 getattr 取值并兜底 0。
+    """
+    return int(getattr(result, "rowcount", 0) or 0)
 
 
 async def list_scopes(db: AsyncSession) -> list[KnowledgeScope]:
@@ -84,7 +94,7 @@ async def delete_scope(db: AsyncSession, scope_code: str) -> bool:
         .values(status=BusinessStatus.NO.value)
     )
     await db.commit()
-    return result.rowcount > 0
+    return _affected_rows(result) > 0
 
 
 async def save_topic(
@@ -163,7 +173,7 @@ async def delete_topic(db: AsyncSession, topic_code: str) -> bool:
         .values(status=BusinessStatus.NO.value)
     )
     await db.commit()
-    return result.rowcount > 0
+    return _affected_rows(result) > 0
 
 
 async def bind_topic_to_scope(db: AsyncSession, scope_code: str, topic_code: str) -> bool:
@@ -279,7 +289,7 @@ async def save_topic_document(
         )
         db.add(rel)
     else:
-        rel.relation_score = relation_score
+        rel.relation_score = Decimal(str(relation_score))
         rel.relation_source = relation_source
         rel.reason = reason
     await db.commit()
@@ -308,4 +318,4 @@ async def remove_topic_document(db: AsyncSession, topic_code: str, doc_id: str) 
         .values(status=BusinessStatus.NO.value)
     )
     await db.commit()
-    return result.rowcount > 0
+    return _affected_rows(result) > 0

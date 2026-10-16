@@ -35,9 +35,10 @@ class DocumentIndexer:
 
         # 清理该文档的旧 ES 索引，避免 pipeline 重跑后累积重复
         doc_id = (
-            getattr(chunks[0], "document_id", None)
-            or safe_int(chunks[0].doc_id, default=None)
-        ) if chunks else None
+            (getattr(chunks[0], "document_id", None) or safe_int(chunks[0].doc_id, default=None))
+            if chunks
+            else None
+        )
         if doc_id:
             await es.delete_by_query(
                 index=CHUNK_INDEX,
@@ -54,7 +55,8 @@ class DocumentIndexer:
                 {
                     "chunkId": chunk.chunk_id,
                     "tenantId": tenant_id,
-                    "documentId": getattr(chunk, "document_id", None) or safe_int(chunk.doc_id, default=0),
+                    "documentId": getattr(chunk, "document_id", None)
+                    or safe_int(chunk.doc_id, default=0),
                     "taskId": safe_int(task_id),
                     "chunkNo": chunk.chunk_index,
                     "documentName": doc_title,
@@ -91,6 +93,7 @@ class DocumentIndexer:
             return 0
 
         import re
+
         from sqlalchemy import select
 
         from app.db.models.document import Document, DocumentStructureNode

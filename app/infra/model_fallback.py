@@ -67,11 +67,15 @@ class ModelFallbackManager:
         model: str | None = None,
         max_retries_per_model: int = 2,
         **kwargs: Any,
-    ) -> object:
+    ) -> Any:
         """带模型回退的 LLM 调用
 
-        返回 OpenAI chat.completions.create() 响应的 choices[0]
-        所有模型耗尽时抛出 RuntimeError
+        返回底层 ``chat.completions.create()`` 的完整响应对象
+        （``ChatCompletion``；调用方自行取 ``choices[0]``）。
+        所有模型耗尽时抛出 RuntimeError。
+
+        返回类型标注为 ``Any``：``**kwargs`` 可能携带 ``stream=True``，
+        静态无法收敛到单一响应类型。
         """
         model = model or self._chain[self._current_index]
 

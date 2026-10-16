@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -85,23 +85,27 @@ async def stream_llm_with_tools(
         },
     }
 
+    # 注意：stream=True 不能放进 base_kwargs 再 ** 展开——那样 mypy 无法选中
+    # AsyncCompletions.create 的流式重载（会把返回类型判成 ChatCompletion 而非
+    # AsyncStream），因此每个调用点显式传 stream=True。
     base_kwargs: dict = {
         "model": settings.llm.model,
         "temperature": settings.llm.temperature,
         "max_tokens": settings.llm.max_tokens,
         "timeout": settings.llm.timeout_seconds,
-        "stream": True,
     }
     if not is_dashscope_provider(resolve_provider(settings.llm.base_url)):
         base_kwargs["stream_options"] = {"include_usage": True}
 
     stream = await openai.chat.completions.create(
         **base_kwargs,
+        stream=True,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        tools=[tool_def],
+        # tool_def 是运行时构造的 dict，无法静态匹配 SDK 的 TypedDict 联合
+        tools=cast("Any", [tool_def]),
     )
     task.model_call_count += 1
 
@@ -227,7 +231,9 @@ async def stream_llm_with_tools(
 
     stream2 = await openai.chat.completions.create(
         **base_kwargs,
-        messages=messages,
+        stream=True,
+        # messages 为运行期累积的 dict 列表（含 tool 角色），无法静态匹配 SDK 联合类型
+        messages=cast("Any", messages),
     )
     task.model_call_count += 1
     prompt_tokens = 0

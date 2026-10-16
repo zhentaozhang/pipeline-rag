@@ -125,6 +125,8 @@ class StreamLaunchPlan(BaseModel):
     question: str
     conversation_id: str
     chat_mode: ChatQueryMode
+    # 本次请求选定的文档范围（与 ChatRequest.doc_ids 一致，供启动链路自描述）
+    doc_ids: list[str] = Field(default_factory=list)
     selected_document_id: int | None = None
     selected_document_name: str | None = None
     selected_task_id: int | None = None

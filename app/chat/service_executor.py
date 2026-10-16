@@ -8,7 +8,7 @@ import structlog
 from app.chat.schema import ExecutionPlan
 from app.chat.state_machine import ConversationState
 from app.chat.task_info import ChatTaskInfo
-from app.common.enums import ExecutionMode
+from app.common.enums import ExecutionMode, chat_mode_label
 from app.common.sse import SSEEventType, sse_event
 from app.observability.metrics import ACTIVE_EXCHANGES, EXCHANGE_TOTAL, EXECUTION_MODE_TOTAL
 from app.observability.trace_models import ChatDebugTrace
@@ -18,7 +18,7 @@ logger = structlog.get_logger(__name__)
 
 async def execute_stream(
     db=None,
-    task: ChatTaskInfo = None,
+    task: ChatTaskInfo | None = None,
     conversation_id: str = "",
     temp_exchange_id: int = 0,
     question: str = "",
@@ -33,6 +33,10 @@ async def execute_stream(
     trace_id: str | None = None,
     get_session: Any = None,
 ) -> AsyncIterator[str]:
+    if task is None:
+        # task 承载会话运行时状态（状态机 / tracer / 计数器），缺失时后续逻辑无意义。
+        # 在此显式收窄，既是运行期契约，也让类型检查在下方全程按 ChatTaskInfo 推断。
+        raise ValueError("execute_stream 必须显式传入 task")
     plan: ExecutionPlan | None = None
 
     from app.config import get_settings as _get_settings
@@ -89,7 +93,9 @@ async def execute_stream(
         else:
             from app.chat.memory import MemoryContext
 
-            memory_ctx = MemoryContext(conversation_id=conversation_id)
+            # MemoryContext 不接受 conversation_id（会话归属由 task.conversation_id 承载），
+            # 早前误传该关键字会在无 get_session / memory_service 的兜底路径抛 TypeError。
+            memory_ctx = MemoryContext()
 
     logger.info(
         "memory loaded",
@@ -124,7 +130,9 @@ async def execute_stream(
                 from app.infra.embedding import get_embedding_provider
 
                 q_embedding = (
-                    await get_embedding_provider().embed_batch([question or plan.original_question or ""])
+                    await get_embedding_provider().embed_batch(
+                        [question or plan.original_question or ""]
+                    )
                 )[0]
                 facts = await FactMemoryStore().retrieve(
                     conversation_id,
@@ -149,7 +157,7 @@ async def execute_stream(
         plan.agent_question = plan.original_question or ""
         task.debug_trace = ChatDebugTrace(
             execution_mode=plan.mode.value,
-            chat_mode=plan.chat_mode.name if plan.chat_mode else request.chat_mode,
+            chat_mode=chat_mode_label(plan.chat_mode) if plan.chat_mode else request.chat_mode,
             original_question=request.question,
             rewrite_question=plan.rewritten_question,
             rewrite_sub_questions=plan.rewrite_sub_questions,
@@ -440,7 +448,7 @@ async def execute_stream(
                     reason=f"verify {_vmeta.get('status')}",
                 )
                 if _bad_refs and _verified != _base_answer:
-                    state.full_answer.append(_verified[len(_base_answer):])
+                    state.full_answer.append(_verified[len(_base_answer) :])
                     # 回答正文已流式发出，追加说明对用户不可见——
                     # 通过独立 SSE 事件提示（用户可见），并落库修正
                     yield sse_event(

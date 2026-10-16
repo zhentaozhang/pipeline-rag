@@ -38,19 +38,26 @@ def _extract_fallback_query(messages: list[BaseMessage]) -> str:
 
 def _normalise_tool_args(args: dict | str, fallback_query: str) -> dict:
     """规范化工具入参：缺失 query 时用原始问题兜底"""
-    if not isinstance(args, dict):
-        if isinstance(args, str) and args.strip():
-            try:
-                args = _json.loads(args)
-            except Exception:
-                logger.debug("tool args json parse failed, using raw string: %s", args[:80])
-                args = {"query": args.strip()}
-        else:
-            args = {}
-    if (not args.get("query") or not str(args.get("query", "")).strip()) and fallback_query:
-        args = dict(args)
-        args["query"] = fallback_query
-    return args
+    normalised: dict
+    if isinstance(args, dict):
+        normalised = args
+    elif args.strip():
+        parsed: Any = None
+        try:
+            parsed = _json.loads(args)
+        except Exception:
+            logger.debug("tool args json parse failed, using raw string: %s", args[:80])
+        # JSON 解析成功但不是对象（list / number / null）时同样退回原始字符串，
+        # 否则下方的 .get() 会抛 AttributeError。
+        normalised = parsed if isinstance(parsed, dict) else {"query": args.strip()}
+    else:
+        normalised = {}
+    if (
+        not normalised.get("query") or not str(normalised.get("query", "")).strip()
+    ) and fallback_query:
+        normalised = dict(normalised)
+        normalised["query"] = fallback_query
+    return normalised
 
 
 # ── 工具重试拦截器 ───────────────────────────────────────────────────────────
@@ -91,8 +98,12 @@ async def _call_with_retry(tool_fn: Any, args: dict, max_retries: int = 2) -> st
 
 async def _tavily_fallback(
     query: str, topic: str | None = None, max_results: int | None = None
-) -> str:
-    """Tavily 回退：主调用失败后的备用搜索"""
+) -> dict[str, Any] | str:
+    """Tavily 回退：主调用失败后的备用搜索。
+
+    返回类型与底层 ``tavily_search`` 一致：成功时为结果 dict，异常路径为提示字符串
+    （调用方 ``tavily_search`` 工具两者都会处理）。
+    """
     try:
         return await _tavily_search_api(query, topic=topic, max_results=max_results)
     except Exception as e:
