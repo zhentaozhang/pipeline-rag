@@ -6,6 +6,7 @@ JEV 单 Pass 判别器核心实现
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any
 
@@ -97,6 +98,12 @@ class LocalJEVJudger:
             self.label_tokens[ch] = [
                 tid for tid in [t_upper, t_lower, t_upper_sp, t_lower_sp] if tid >= 0
             ]
+
+        # 单次前向可容纳的问题数（noul/choice/score 统一批处理）。过大会增加显存/内存峰值
+        try:
+            self._batch_chunk = max(1, int(os.getenv("JEV_BATCH_CHUNK", "8") or 8))
+        except ValueError:
+            self._batch_chunk = 8
 
     def _truncate_state(self, state: str, max_chars: int = 4000) -> str:
         """保护性截断待评估上下文，双端保留首尾核心信息，确保提示词长度平稳且不截断关键线索"""
@@ -231,6 +238,40 @@ class LocalJEVJudger:
             "_latency_ms": round(latency_ms, 2),
         }
 
+    def _score_noul_row(self, next_logits: torch.Tensor) -> dict[str, Any]:
+        """对单个(行)末位 logits 计算 Noul 结论（供批量复用）。"""
+        logit_yes = _pool_token_logits(next_logits, self.yes_token_ids)
+        logit_no = _pool_token_logits(next_logits, self.no_token_ids)
+        pair = torch.tensor([logit_yes.item(), logit_no.item()])
+        probs = F.softmax(pair, dim=-1)
+        if torch.isnan(probs).any():
+            probs = torch.tensor([0.5, 0.5])
+        p_true = probs[0].item()
+        p_false = probs[1].item()
+        return {
+            "noul": round(p_true, 4),
+            "is_true": p_true >= 0.5,
+            "confidence": round(max(p_true, p_false), 4),
+        }
+
+    def _score_choice_row(self, next_logits: torch.Tensor, keys: list[str]) -> dict[str, Any]:
+        """对单个(行)末位 logits 计算 Choice 结论（供批量复用）。"""
+        num_options = min(len(keys), len(self.labels))
+        cand_logits = []
+        for i in range(num_options):
+            token_variants = self.label_tokens[self.labels[i]]
+            cand_logits.append(_pool_token_logits(next_logits, token_variants).item())
+        tensor_logits = torch.tensor(cand_logits)
+        probs = F.softmax(tensor_logits, dim=-1)
+        if torch.isnan(probs).any():
+            probs = torch.full_like(tensor_logits, 1.0 / max(1, num_options))
+        best_idx = int(probs.argmax().item())
+        return {
+            "choice": keys[best_idx],
+            "confidence": round(probs[best_idx].item(), 4),
+            "distribution": {keys[i]: round(probs[i].item(), 4) for i in range(num_options)},
+        }
+
     def judge_noul_batch(
         self, state: str, items: list[tuple[str, str]]
     ) -> dict[str, dict[str, Any]]:
@@ -304,41 +345,49 @@ class LocalJEVJudger:
             "_latency_ms": choice_res.get("_latency_ms", 0.0),
         }
 
+    def _forward_last_logits(self, inputs: Any) -> torch.Tensor:
+        """只取每个序列末位的 logits。
+
+        优化：若模型暴露 transformer 主体 + lm_head，则仅对**最后位置**应用 lm_head，
+        避免对整个序列长度做 vocab 维度投影（对分类式判定无意义且耗时）。
+        """
+        with torch.inference_mode():
+            base = getattr(self.model, "model", None)
+            lm_head = None
+            if hasattr(self.model, "get_output_embeddings"):
+                try:
+                    lm_head = self.model.get_output_embeddings()
+                except Exception:
+                    lm_head = None
+            if base is not None and base is not self.model and lm_head is not None:
+                out = base(**inputs, use_cache=False)
+                hidden = out.last_hidden_state[:, -1, :]
+                logits = lm_head(hidden)
+            else:
+                out = self.model(**inputs, use_cache=False)
+                logits = out.logits[:, -1, :]
+            return logits.to(dtype=torch.float32, device="cpu")
+
     def judge_batch(self, state: str, questions: dict[str, Any]) -> dict[str, Any]:
         """
-        批量计算请求中的决策问题（支持同一请求中多 Noul 的批处理矩阵并行加速）
+        批量计算请求中的全部决策问题。
+
+        关键优化：把同一请求内的所有 Noul / Choice / Score 问题统一左填充为一个
+        批次，仅做**一次模型前向**，再逐行抽取对应 logits —— 相比"每个问题各跑一次
+        前向"，N 个问题的耗时由 O(N) 降为 O(1) 次前向。
         """
         if not questions:
             return {}
 
-        safe_state = state or ""
-        answers = {}
-        noul_items: list[tuple[str, str]] = []
-        other_items: list[tuple[str, Any]] = []
+        safe_state = _sanitize_chatml(self._truncate_state(state))
+        self.tokenizer.padding_side = "left"
 
+        # 构建每个问题的 prompt 与其候选键（同一批次共享一次前向）
+        entries: list[tuple[str, str, str | None, list[str] | None]] = []
+        answers: dict[str, Any] = {}
         for q_name, q_item in questions.items():
             if not q_item:
                 continue
-            q_type = getattr(q_item, "type", None) or (
-                q_item.get("type") if isinstance(q_item, dict) else None
-            )
-            if q_type == "noul":
-                q_inst = (
-                    getattr(q_item, "instructions", None)
-                    or (q_item.get("instructions") if isinstance(q_item, dict) else "")
-                    or ""
-                )
-                noul_items.append((q_name, str(q_inst)))
-            else:
-                other_items.append((q_name, q_item))
-
-        # 批处理并行计算全部 Noul 问题
-        if noul_items:
-            noul_answers = self.judge_noul_batch(safe_state, noul_items)
-            answers.update(noul_answers)
-
-        # 顺序计算 Choice / Score 问题
-        for q_name, q_item in other_items:
             q_type = getattr(q_item, "type", None) or (
                 q_item.get("type") if isinstance(q_item, dict) else None
             )
@@ -347,21 +396,84 @@ class LocalJEVJudger:
                 or (q_item.get("instructions") if isinstance(q_item, dict) else "")
                 or ""
             )
-            if q_type == "choice":
+            if q_type == "noul":
+                entries.append(
+                    (q_name, "noul", self._build_noul_prompt(safe_state, str(q_inst)), None)
+                )
+            elif q_type == "choice":
                 opts = (
                     getattr(q_item, "options", None)
                     or (q_item.get("options") if isinstance(q_item, dict) else {})
                     or {}
                 )
-                answers[q_name] = self.judge_choice(safe_state, str(q_inst), opts)
+                if not opts:
+                    answers[q_name] = {"choice": "", "confidence": 0.0, "distribution": {}}
+                    continue
+                keys = list(opts.keys())[: len(self.labels)]
+                entries.append(
+                    (
+                        q_name,
+                        "choice",
+                        self._build_choice_prompt(safe_state, str(q_inst), opts),
+                        keys,
+                    )
+                )
             elif q_type == "score":
                 levels = (
                     getattr(q_item, "levels", None)
                     or (q_item.get("levels") if isinstance(q_item, dict) else [])
                     or []
                 )
-                answers[q_name] = self.judge_score(safe_state, str(q_inst), levels)
+                if not levels:
+                    answers[q_name] = {"score": "", "confidence": 0.0, "distribution": {}}
+                    continue
+                options = {lv: f"判定为【{lv}】等级" for lv in levels}
+                keys = list(options.keys())[: len(self.labels)]
+                entries.append(
+                    (
+                        q_name,
+                        "score",
+                        self._build_choice_prompt(safe_state, str(q_inst), options),
+                        keys,
+                    )
+                )
             else:
                 logger.warning("Unsupported JEV primitive type: %s", q_type)
+
+        # 分批前向（每批内所有问题共享一次模型调用）
+        for start in range(0, len(entries), self._batch_chunk):
+            group = entries[start : start + self._batch_chunk]
+            prompts = [e[2] for e in group]
+            inputs = self.tokenizer(
+                prompts,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=4096,
+            ).to(self.device)
+
+            t0 = time.perf_counter()
+            # 左填充保证每行的 [-1] 均为 prompt 结尾位置
+            batch_logits = self._forward_last_logits(inputs)
+            del inputs
+            latency_ms = (time.perf_counter() - t0) * 1000
+            per_question_ms = round(latency_ms / len(group), 2)
+
+            for idx, (q_name, kind, _prompt, keys) in enumerate(group):
+                next_logits = batch_logits[idx]
+                if kind == "noul":
+                    res = self._score_noul_row(next_logits)
+                else:
+                    choice_res = self._score_choice_row(next_logits, keys or [])
+                    if kind == "score":
+                        res = {
+                            "score": choice_res["choice"],
+                            "confidence": choice_res["confidence"],
+                            "distribution": choice_res["distribution"],
+                        }
+                    else:
+                        res = choice_res
+                res["_latency_ms"] = per_question_ms
+                answers[q_name] = res
 
         return answers
