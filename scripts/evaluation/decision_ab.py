@@ -144,11 +144,20 @@ async def evaluate_backend(
             result = await predictor(sample)
         except Exception as e:  # 后端不可用/异常：计入 errors，不污染 P/R
             errors += 1
-            logger.warning("decision backend error", backend=name, sample=sample.id, error=str(e))
+            detail = str(e).strip() or repr(e)
+            logger.warning(
+                "decision backend error", backend=name, sample=sample.id, error=detail[:160]
+            )
             continue
         latencies.append(result.latency_ms)
         if result.verdict is None:
             errors += 1
+            logger.warning(
+                "decision backend no-verdict",
+                backend=name,
+                sample=sample.id,
+                detail=result.detail[:160],
+            )
             continue
         pairs.append((sample.label, result.verdict))
     return BackendReport(
@@ -205,6 +214,14 @@ TASKS: dict[str, type[DecisionTask]] = {
 }
 
 
+def _eval_model() -> str:
+    """解析评估用模型名（禁止传 None 给 OpenAI 兼容接口，否则 422）。"""
+    from app.config import get_settings
+
+    settings = get_settings()
+    return settings.rag.evaluation_model or settings.llm.model
+
+
 # ── context_relevance 后端 ─────────────────────────────────────────────────
 
 
@@ -244,10 +261,10 @@ async def _llm_context_relevance(sample: DecisionSample) -> BackendResult:
         f"问题：{sample.input}\n\n片段内容：{(sample.context or '')[:800]}"
     )
     resp = await client.chat.completions.create(
-        model=None,  # type: ignore[arg-type]
+        model=_eval_model(),
         messages=[{"role": "user", "content": prompt}],
         temperature=0.0,
-        max_tokens=8,
+        max_tokens=512,
     )
     content = (resp.choices[0].message.content or "").strip() if resp.choices else ""
     import re
@@ -327,7 +344,7 @@ async def _llm_guardrail(sample: DecisionSample) -> BackendResult:
         '{"action": "pass" 或 "block"}'
     )
     resp = await client.chat.completions.create(
-        model=None,  # type: ignore[arg-type]
+        model=_eval_model(),
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": f"【用户提问】\n{sample.input}"},
