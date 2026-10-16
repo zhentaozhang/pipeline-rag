@@ -24,7 +24,9 @@ class FactMemorySettings(BaseSettings):
     max_facts: int = 200  # 单会话事实条数上限（超出按最旧淘汰）
     retention_days: int = 180  # 全局保留期（edit_time 早于此删除；0=不限）
 
-    model_config = SettingsConfigDict(env_prefix="RAG_USER_MEMORY_", env_file=_ENV_FILE, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="RAG_USER_MEMORY_", env_file=_ENV_FILE, extra="ignore"
+    )
 
 
 class AdaptiveKSettings(BaseSettings):
@@ -35,7 +37,9 @@ class AdaptiveKSettings(BaseSettings):
     max_k: int = 20  # 单通道候选上限（成本控制）
     ratio_threshold: float = 0.4  # 得分低于最高分×ratio 且已超 min_k 即截断
 
-    model_config = SettingsConfigDict(env_prefix="RAG_ADAPTIVE_K_", env_file=_ENV_FILE, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="RAG_ADAPTIVE_K_", env_file=_ENV_FILE, extra="ignore"
+    )
 
 
 class RAGSettings(BaseSettings):
@@ -62,8 +66,12 @@ class RAGSettings(BaseSettings):
     stream_timeout_seconds: int = 600
     answer_system_prompt: str = ""
     answer_max_chars: int = 0  # 回答长度上限（0=不限；>0 时 prompt 注入简明约束，D 项 A/B）
-    citation_verify_enabled: bool = True  # 017 生成侧：引用验证器（每轮 1 次轻量 LLM 自检引用-证据对应）
-    citation_verify_parallel_enabled: bool = True  # P1-c：引用校验与质量自审并发预跑（False 回退串行）
+    citation_verify_enabled: bool = (
+        True  # 017 生成侧：引用验证器（每轮 1 次轻量 LLM 自检引用-证据对应）
+    )
+    citation_verify_parallel_enabled: bool = (
+        True  # P1-c：引用校验与质量自审并发预跑（False 回退串行）
+    )
     route_candidate_embed_cache_enabled: bool = True  # P2：路由候选 route_text 嵌入内容哈希缓存
     rewrite_enabled: bool = True
     rewrite_history_turns: int = 4
@@ -201,7 +209,9 @@ class S3ConnectorSettings(BaseSettings):
     batch_size: int = 10
     temp_dir: str = "/tmp/rag-connector-s3"
 
-    model_config = SettingsConfigDict(env_prefix="CONNECTOR_S3_", env_file=_ENV_FILE, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="CONNECTOR_S3_", env_file=_ENV_FILE, extra="ignore"
+    )
 
 
 class WebConnectorSettings(BaseSettings):
@@ -217,7 +227,9 @@ class WebConnectorSettings(BaseSettings):
     respect_robots: bool = True
     user_agent: str = ""
 
-    model_config = SettingsConfigDict(env_prefix="CONNECTOR_WEB_", env_file=_ENV_FILE, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="CONNECTOR_WEB_", env_file=_ENV_FILE, extra="ignore"
+    )
 
 
 class MinerUSettings(BaseSettings):

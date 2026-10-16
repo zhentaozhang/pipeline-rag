@@ -80,7 +80,9 @@ class TestClarificationExecutor:
 
     @pytest.mark.asyncio
     async def test_plan_without_reply_falls_back_to_default(self):
-        plan = ExecutionPlan(mode=ExecutionMode.CLARIFICATION, original_question="q", rewritten_question="q")
+        plan = ExecutionPlan(
+            mode=ExecutionMode.CLARIFICATION, original_question="q", rewritten_question="q"
+        )
         chunks = [c async for c in ClarificationExecutor(_task()).execute(plan)]
         events = _parse_events(chunks)
         assert "无法稳定判断" in events[-1]["content"]
@@ -128,7 +130,9 @@ class TestRefusalExecutor:
 
     @pytest.mark.asyncio
     async def test_plan_without_reply_falls_back(self):
-        plan = ExecutionPlan(mode=ExecutionMode.REFUSAL, original_question="q", rewritten_question="q")
+        plan = ExecutionPlan(
+            mode=ExecutionMode.REFUSAL, original_question="q", rewritten_question="q"
+        )
         chunks = [c async for c in RefusalExecutor(_task()).execute(plan)]
         events = _parse_events(chunks)
         assert events[-1]["content"] == "根据企业安全规范，我无法回答该问题。"

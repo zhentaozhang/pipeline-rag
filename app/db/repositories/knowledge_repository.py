@@ -9,9 +9,7 @@ from app.db.models.knowledge import KnowledgeScope, TopicDocumentRelation
 class KnowledgeRepository:
     @staticmethod
     async def get_scope_by_code(db: AsyncSession, scope_code: str) -> KnowledgeScope | None:
-        row = await db.scalar(
-            select(KnowledgeScope).where(KnowledgeScope.scope_code == scope_code)
-        )
+        row = await db.scalar(select(KnowledgeScope).where(KnowledgeScope.scope_code == scope_code))
         return row if isinstance(row, KnowledgeScope) else None
 
     @staticmethod

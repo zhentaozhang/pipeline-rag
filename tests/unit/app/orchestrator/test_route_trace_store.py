@@ -67,9 +67,7 @@ class TestResolveRouteStatus:
 
     def test_success(self):
         assert (
-            RouteTraceStore()._resolve_route_status(
-                KnowledgeRouteDecision(route_status="SUCCESS")
-            )
+            RouteTraceStore()._resolve_route_status(KnowledgeRouteDecision(route_status="SUCCESS"))
             == ROUTE_STATUS_SUCCESS
         )
 
@@ -83,9 +81,7 @@ class TestResolveRouteStatus:
 
     def test_unknown_failed(self):
         assert (
-            RouteTraceStore()._resolve_route_status(
-                KnowledgeRouteDecision(route_status="OTHER")
-            )
+            RouteTraceStore()._resolve_route_status(KnowledgeRouteDecision(route_status="OTHER"))
             == ROUTE_STATUS_FAILED
         )
 
@@ -99,7 +95,8 @@ class TestResolveHitSelectedDocument:
     def test_hit_in_top3(self):
         store = RouteTraceStore()
         decision = KnowledgeRouteDecision(
-            route_status="SUCCESS", documents=[make_doc("1"), make_doc("2"), make_doc("3"), make_doc("4")]
+            route_status="SUCCESS",
+            documents=[make_doc("1"), make_doc("2"), make_doc("3"), make_doc("4")],
         )
         assert store._resolve_hit_selected_document(3, decision) == 1
 

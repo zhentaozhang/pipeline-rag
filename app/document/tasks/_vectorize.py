@@ -46,7 +46,8 @@ def _save_mysql_document_chunks(doc_id: str, chunks: list, task_id: str) -> None
                 cid = c.chunk_id
                 chunk_id_int = (
                     int(cid)
-                    if cid is not None and (isinstance(cid, int) or (isinstance(cid, str) and str(cid).isdigit()))
+                    if cid is not None
+                    and (isinstance(cid, int) or (isinstance(cid, str) and str(cid).isdigit()))
                     else next_id()
                 )
                 pid = c.parent_chunk_id
@@ -139,7 +140,9 @@ def task_vectorize_document(self, chunk_result: dict, doc_id: str) -> dict:
                 )
         return "default", "", "", "", ""
 
-    tenant_id, document_name, scope_code, business_category, document_tags = run_async(_get_doc_meta())
+    tenant_id, document_name, scope_code, business_category, document_tags = run_async(
+        _get_doc_meta()
+    )
     for chunk in chunks:
         chunk.tenant_id = tenant_id  # type: ignore[attr-defined]
         chunk.scope_code = scope_code  # type: ignore[attr-defined]

@@ -20,6 +20,7 @@ async def test_circuit_breaker_context_manager_blocks_body_on_fallback():
     )
     cb = CircuitBreaker(config)
     import time
+
     cb._state = CircuitState.OPEN
     cb._last_failure_time = time.monotonic()
 
@@ -48,6 +49,7 @@ async def test_circuit_breaker_call_substitutes_body_with_fallback():
     )
     cb = CircuitBreaker(config)
     import time
+
     cb._state = CircuitState.OPEN
     cb._last_failure_time = time.monotonic()
 

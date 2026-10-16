@@ -65,9 +65,7 @@ async def test_group_message_without_mention_ignored(monkeypatch):
     async def fake_reply(chat_id, text):
         replied.append(text)
 
-    monkeypatch.setattr(
-        "app.chat.channels.feishu_event_handler._reply_text_only", fake_reply
-    )
+    monkeypatch.setattr("app.chat.channels.feishu_event_handler._reply_text_only", fake_reply)
 
     event = SimpleNamespace(
         message=_message("group", mentions=None),
@@ -86,9 +84,7 @@ async def test_p2p_message_answered(monkeypatch):
     async def fake_answer(chat_id, open_id, question):
         answered.append((chat_id, open_id, question))
 
-    monkeypatch.setattr(
-        "app.chat.channels.feishu_event_handler._answer_question", fake_answer
-    )
+    monkeypatch.setattr("app.chat.channels.feishu_event_handler._answer_question", fake_answer)
 
     event = SimpleNamespace(
         message=_message("p2p", mentions=[]),
@@ -109,9 +105,7 @@ async def test_group_mention_answered_with_bot_id(monkeypatch):
     async def fake_answer(chat_id, open_id, question):
         answered.append(question)
 
-    monkeypatch.setattr(
-        "app.chat.channels.feishu_event_handler._answer_question", fake_answer
-    )
+    monkeypatch.setattr("app.chat.channels.feishu_event_handler._answer_question", fake_answer)
     settings = get_settings()
     original = settings.feishu.bot_open_id
     settings.feishu.bot_open_id = "ou_bot"
@@ -134,9 +128,7 @@ async def test_non_text_message_prompts(monkeypatch):
     async def fake_reply(chat_id, text):
         replied.append(text)
 
-    monkeypatch.setattr(
-        "app.chat.channels.feishu_event_handler._reply_text_only", fake_reply
-    )
+    monkeypatch.setattr("app.chat.channels.feishu_event_handler._reply_text_only", fake_reply)
     msg = _message("p2p")
     msg.message_type = "image"
     event = SimpleNamespace(

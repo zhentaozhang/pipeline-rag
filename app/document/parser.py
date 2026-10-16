@@ -188,9 +188,7 @@ class DocumentParser:
                 result = await MineruParser().parse_pdf(path)
                 if result.markdown and result.markdown.strip():
                     metadata = dict(result.metadata or {})
-                    logger.info(
-                        "pdf parsed via mineru", file=str(path), chars=len(result.markdown)
-                    )
+                    logger.info("pdf parsed via mineru", file=str(path), chars=len(result.markdown))
                     return ParseResult(
                         text=result.markdown.strip(),
                         metadata=metadata,

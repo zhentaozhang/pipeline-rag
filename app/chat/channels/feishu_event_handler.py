@@ -29,9 +29,7 @@ def parse_text_content(content: str | None) -> str:
         return content.strip()
 
 
-async def resolve_conversation_id(
-    db: AsyncSession, chat_id: str, open_id: str
-) -> tuple[str, bool]:
+async def resolve_conversation_id(db: AsyncSession, chat_id: str, open_id: str) -> tuple[str, bool]:
     """(chat_id, open_id) ↔ conversation_id 映射；不存在则新建。返回 (conversation_id, created)"""
     from app.db.models.conversation import FeishuBinding
     from app.infra.id_generator import next_id
@@ -184,7 +182,7 @@ def _parse_sse(raw: str) -> dict[str, Any] | None:
     line = raw.strip()
     if not line.startswith("data:"):
         return None
-    payload = line[len("data:"):].strip()
+    payload = line[len("data:") :].strip()
     try:
         parsed = json.loads(payload)
         return parsed if isinstance(parsed, dict) else None

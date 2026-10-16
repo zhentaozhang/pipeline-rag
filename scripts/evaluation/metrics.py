@@ -74,8 +74,7 @@ def compute_recall_at_k(
         if not rel_bigrams:
             continue
         matched = any(
-            len(rel_bigrams & _char_bigrams(ret)) / len(rel_bigrams) >= 0.5
-            for ret in top_k
+            len(rel_bigrams & _char_bigrams(ret)) / len(rel_bigrams) >= 0.5 for ret in top_k
         )
         if matched:
             recalled += 1

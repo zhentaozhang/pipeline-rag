@@ -1,4 +1,3 @@
-
 import pytest
 
 from app.rag.graph.graph_engine import StructureGraphQueryEngine
@@ -61,7 +60,9 @@ class FakeGraphService:
 
 
 def make_section(node_id=1, **overrides):
-    defaults = dict(node_id=node_id, document_id=5, title=f"标题{node_id}", section_path=f"{node_id}.x")
+    defaults = dict(
+        node_id=node_id, document_id=5, title=f"标题{node_id}", section_path=f"{node_id}.x"
+    )
     defaults.update(overrides)
     return GraphSection(**defaults)
 
@@ -268,7 +269,9 @@ class TestBuildGraphResult:
         engine.graph_service.items = {"2": [item]}
         engine.graph_service.item_by_index = {("2", 1): item}
         engine.graph_service.parents = {"2": make_section(node_id=1)}
-        out = await engine.build_graph_result("doc1", target_section_node_id="2", target_item_index=1)
+        out = await engine.build_graph_result(
+            "doc1", target_section_node_id="2", target_item_index=1
+        )
         assert out.target_section.node_id == 2
         assert out.target_item is item
         assert [c.node_id for c in out.children] == [3]
@@ -283,7 +286,9 @@ class TestBuildGraphResult:
         engine.graph_service.section_by_id = {"2": sec, "3": owner}
         engine.graph_service.children = {"2": []}
         engine.graph_service.search = {("2", "安装"): [item]}
-        out = await engine.build_graph_result("doc1", target_section_node_id="2", item_keyword="安装")
+        out = await engine.build_graph_result(
+            "doc1", target_section_node_id="2", item_keyword="安装"
+        )
         assert out.target_section.node_id == 3
         assert out.target_item is item
         assert out.matched_items == [item]

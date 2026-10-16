@@ -63,9 +63,7 @@ def _clean_registry():
 
 
 def _session(conversation_id: str = "c1", title: str = "t") -> ConversationSession:
-    return ConversationSession(
-        id=1, conversation_id=conversation_id, title=title, created_at=None
-    )
+    return ConversationSession(id=1, conversation_id=conversation_id, title=title, created_at=None)
 
 
 def _exchange(eid: int = 1, conversation_id: str = "c1") -> ConversationExchange:
@@ -138,8 +136,13 @@ class TestCompleteExchange:
         db = FakeDB(scalar_results=[_exchange(1, "c1")])
         store = ConversationArchiveStore(db)
         await store.complete_exchange(
-            1, "c1", "最终答案", tokens_used=42, turn_status=2,
-            first_response_time_ms=100, total_response_time_ms=500,
+            1,
+            "c1",
+            "最终答案",
+            tokens_used=42,
+            turn_status=2,
+            first_response_time_ms=100,
+            total_response_time_ms=500,
         )
         assert db.committed == 1
         assert len(db.executed) == 3

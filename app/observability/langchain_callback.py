@@ -35,9 +35,7 @@ class TracerCallbackHandler(AsyncCallbackHandler):
         model = kwargs_serialized.get("model_name") or kwargs_serialized.get("model")
         try:
             first_batch = messages[0] if messages else []
-            input_text = "\n".join(
-                str(getattr(m, "content", m)) for m in first_batch
-            )
+            input_text = "\n".join(str(getattr(m, "content", m)) for m in first_batch)
         except Exception:
             input_text = str(messages)
         self._pending[str(run_id)] = {"model": model, "input": input_text}

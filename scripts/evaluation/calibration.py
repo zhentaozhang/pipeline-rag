@@ -59,13 +59,17 @@ _BUILTIN_SAMPLES: list[CalibrationSample] = [
     CalibrationSample(
         question="pipeline-rag 支持哪两种检索通道？",
         answer="支持 PGVector 向量检索与 Elasticsearch 关键词检索双通道，通过 RRF 融合后经 Reranker 精排。[1][2]",
-        contexts=["系统采用 PGVector 稠密向量与 Elasticsearch 关键词双通道召回，RRF 融合后由 BGE Reranker 重排序。"],
+        contexts=[
+            "系统采用 PGVector 稠密向量与 Elasticsearch 关键词双通道召回，RRF 融合后由 BGE Reranker 重排序。"
+        ],
         ground_truth="PGVector 向量检索 + Elasticsearch 关键词检索，RRF 融合 + Reranker 精排。",
     ),
     CalibrationSample(
         question="Contextual Chunking 解决什么问题？",
         answer="解决分块嵌入时丢失文档上下文的问题：分块时注入文档级上下文窗口，提升跨块实体的检索召回。[1]",
-        contexts=["Contextual Chunking 在分块时注入文档级上下文窗口，缓解 chunk 脱离文档语义的问题。"],
+        contexts=[
+            "Contextual Chunking 在分块时注入文档级上下文窗口，缓解 chunk 脱离文档语义的问题。"
+        ],
         ground_truth="缓解分块丢失文档上下文导致的跨块实体召回差。",
     ),
     CalibrationSample(

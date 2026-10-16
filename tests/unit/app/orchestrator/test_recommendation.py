@@ -50,7 +50,9 @@ class TestGenerateRecommendations:
 
     @pytest.mark.asyncio
     async def test_success(self, monkeypatch):
-        client = FakeClient(content=json.dumps({"recommendations": ["追问1", "追问2", "追问3", "追问4"]}))
+        client = FakeClient(
+            content=json.dumps({"recommendations": ["追问1", "追问2", "追问3", "追问4"]})
+        )
         monkeypatch.setattr(recommendation_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(recommendation_module, "settings", make_settings())
         out = await RecommendationService().generate_recommendations("q", "a", MemoryContext())
@@ -62,18 +64,24 @@ class TestGenerateRecommendations:
         client = FakeClient(content=None)
         monkeypatch.setattr(recommendation_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(recommendation_module, "settings", make_settings())
-        assert await RecommendationService().generate_recommendations("q", "a", MemoryContext()) == []
+        assert (
+            await RecommendationService().generate_recommendations("q", "a", MemoryContext()) == []
+        )
 
     @pytest.mark.asyncio
     async def test_invalid_json_returns_empty(self, monkeypatch):
         client = FakeClient(content="oops")
         monkeypatch.setattr(recommendation_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(recommendation_module, "settings", make_settings())
-        assert await RecommendationService().generate_recommendations("q", "a", MemoryContext()) == []
+        assert (
+            await RecommendationService().generate_recommendations("q", "a", MemoryContext()) == []
+        )
 
     @pytest.mark.asyncio
     async def test_llm_error_returns_empty(self, monkeypatch):
         client = FakeClient(error=RuntimeError("down"))
         monkeypatch.setattr(recommendation_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(recommendation_module, "settings", make_settings())
-        assert await RecommendationService().generate_recommendations("q", "a", MemoryContext()) == []
+        assert (
+            await RecommendationService().generate_recommendations("q", "a", MemoryContext()) == []
+        )

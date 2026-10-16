@@ -22,7 +22,6 @@ def _install_mocks(monkeypatch):
 
     monkeypatch.setattr("app.orchestrator.orchestrator.prepare", fake_prepare)
 
-
     class FakeRegistry:
         def __init__(self, db, task):
             self.task = task

@@ -53,13 +53,14 @@ class KnowledgeRouteService:
         self, question: str, rewrite_question: str, tenant_id: str
     ) -> KnowledgeRouteDecision | None:
         try:
-
             import json
 
             from app.infra.redis_lease import get_redis
 
             redis = get_redis()
-            raw = await redis.get(await self._decision_cache_key(question, rewrite_question, tenant_id))
+            raw = await redis.get(
+                await self._decision_cache_key(question, rewrite_question, tenant_id)
+            )
             if not raw:
                 return None
             if isinstance(raw, bytes):

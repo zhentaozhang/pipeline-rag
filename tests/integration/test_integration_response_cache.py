@@ -12,6 +12,7 @@ async def test_cache_roundtrip_real_redis(integration_env):
     redis = get_redis()
     await redis.flushdb()
     try:
+
         async def _no_history(db, cid):
             return False
 

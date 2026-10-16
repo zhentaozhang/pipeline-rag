@@ -57,6 +57,7 @@ class DocumentRetrieveRequestFactory:
         """
         if not plan.sub_questions and plan.retrieval_sub_questions:
             from app.chat.schema import SubQuestion
+
             plan.sub_questions = [
                 SubQuestion(
                     index=i,

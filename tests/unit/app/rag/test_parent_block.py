@@ -8,7 +8,9 @@ from app.rag.parent_block import ParentBlockElevator
 
 
 def make_rag_settings(parent_evidence_max_chars=0):
-    return types.SimpleNamespace(rag=types.SimpleNamespace(parent_evidence_max_chars=parent_evidence_max_chars))
+    return types.SimpleNamespace(
+        rag=types.SimpleNamespace(parent_evidence_max_chars=parent_evidence_max_chars)
+    )
 
 
 class FakeSession:
@@ -57,9 +59,7 @@ def _reset_parent_cache():
 
 @pytest.fixture
 def elevator(monkeypatch):
-    monkeypatch.setattr(
-        parent_block_module, "settings", make_rag_settings()
-    )
+    monkeypatch.setattr(parent_block_module, "settings", make_rag_settings())
     return ParentBlockElevator()
 
 
@@ -149,7 +149,9 @@ class TestElevate:
             [child_row("c1", "p1"), child_row("c2", "p1"), child_row("c3", "p2")],
             [parent_row("p1", "父块一"), parent_row("p2", "父块二")],
         )
-        result = await elevator.elevate([ev("c1", score=0.5), ev("c2", score=0.9), ev("c3", score=0.7)], session)
+        result = await elevator.elevate(
+            [ev("c1", score=0.5), ev("c2", score=0.9), ev("c3", score=0.7)], session
+        )
         assert len(result) == 2
         by_id = {e.chunk_id: e for e in result}
         assert set(by_id) == {"c2", "c3"}
@@ -182,9 +184,7 @@ class TestElevate:
             [child_row("c1", "p1"), child_row("c3", "p2")],
             [parent_row("p1", "父块一"), parent_row("p2", "父块二")],
         )
-        result = await elevator.elevate(
-            [ev("c1", score=0.3), ev("c3", score=0.8)], session
-        )
+        result = await elevator.elevate([ev("c1", score=0.3), ev("c3", score=0.8)], session)
         assert result[0].chunk_id == "c3"
         assert result[1].chunk_id == "c1"
 

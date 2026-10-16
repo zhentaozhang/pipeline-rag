@@ -103,7 +103,7 @@ def _contains_done(events: list[str]) -> bool:
     for raw in events:
         line = raw.strip()
         if line.startswith("data:"):
-            line = line[len("data:"):].strip()
+            line = line[len("data:") :].strip()
         try:
             payload = json.loads(line)
         except ValueError:
@@ -128,7 +128,9 @@ async def chat_stream(
     fastapi_req: Request,
     # 并发优化：移除请求级全程占用 DB 连接的 Depends(get_db)，由 BusinessChatService 内部走短事务生命周期管理
     db: AsyncSession | None = Depends(get_optional_db),
-    resume: int = Query(default=0, ge=0, le=_BUFFER_MAX_EVENTS, description="已消费事件数（断线续传）"),
+    resume: int = Query(
+        default=0, ge=0, le=_BUFFER_MAX_EVENTS, description="已消费事件数（断线续传）"
+    ),
 ) -> StreamingResponse:
     """
     POST /api/chat/stream?resume=N
@@ -145,7 +147,9 @@ async def chat_stream(
             for raw in replayed:
                 yield raw
             if _contains_done(replayed):
-                logger.info("sse resumed from buffer", conversation_id=conversation_id, count=len(replayed))
+                logger.info(
+                    "sse resumed from buffer", conversation_id=conversation_id, count=len(replayed)
+                )
                 return
 
         # 正常流式执行（事件同步写缓冲，内部短事务解耦连接池）

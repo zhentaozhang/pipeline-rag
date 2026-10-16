@@ -66,9 +66,7 @@ async def test_run_calibration_uses_pipeline(monkeypatch):
         def with_ground_truth(cls):
             return _FakePipeline()
 
-    monkeypatch.setattr(
-        _pipeline_mod, "EvaluationPipeline", _FakeEvaluationPipeline
-    )
+    monkeypatch.setattr(_pipeline_mod, "EvaluationPipeline", _FakeEvaluationPipeline)
 
     samples = [
         CalibrationSample(question="q", answer="答案 A。[1]", contexts=["ctx"], ground_truth="gt")

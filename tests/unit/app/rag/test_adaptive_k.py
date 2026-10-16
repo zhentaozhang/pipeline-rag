@@ -1,6 +1,5 @@
 """调研 P2：查询自适应 Top-k 截断——陡降截断 / 平坦保留 / 上下限"""
 
-
 from app.rag.adaptive_k import adaptive_truncate
 
 

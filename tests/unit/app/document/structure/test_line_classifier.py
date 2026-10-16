@@ -1,4 +1,3 @@
-
 from app.document.structure.line_classifier import DocumentLineClassifier
 
 C = DocumentLineClassifier

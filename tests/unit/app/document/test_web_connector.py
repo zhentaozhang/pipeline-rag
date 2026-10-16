@@ -47,7 +47,9 @@ def test_extract_links_resolves_relative_and_filters_noise():
     links = _extract_links(html, "https://example.com/help/")
     assert "https://example.com/docs/a" in links
     assert "https://example.com/docs/b" in links
-    assert not any("mailto" in link or link.endswith("#anchor") or "javascript" in link for link in links)
+    assert not any(
+        "mailto" in link or link.endswith("#anchor") or "javascript" in link for link in links
+    )
 
 
 @pytest.mark.asyncio

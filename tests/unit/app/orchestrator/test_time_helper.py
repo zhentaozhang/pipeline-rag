@@ -89,7 +89,10 @@ class TestBuildEffectiveSearchQuery:
         assert H.build_effective_search_query("如何配置", "2026-08-08") == "如何配置"
 
     def test_explicit_date_kept(self):
-        assert H.build_effective_search_query("2024年5月1日发生了什么", "2026-08-08") == "2024年5月1日发生了什么"
+        assert (
+            H.build_effective_search_query("2024年5月1日发生了什么", "2026-08-08")
+            == "2024年5月1日发生了什么"
+        )
 
     def test_date_already_in_query(self):
         q = "2026-08-08的新闻"

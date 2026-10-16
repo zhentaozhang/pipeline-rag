@@ -7,8 +7,7 @@ class TestSSEEvent:
     def test_basic_shape(self):
         out = sse_event(SSEEventType.TEXT, "你好", _now=datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC))
         assert out == (
-            'data: {"type": "text", "content": "你好", "timestamp": '
-            '"2026-01-01T12:00:00Z"}\n\n'
+            'data: {"type": "text", "content": "你好", "timestamp": "2026-01-01T12:00:00Z"}\n\n'
         )
 
     def test_none_content(self):

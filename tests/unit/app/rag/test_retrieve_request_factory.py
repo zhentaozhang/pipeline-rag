@@ -140,7 +140,9 @@ class TestQueryAugmentation:
 
     async def test_context_hints_capped_at_eight(self):
         factory = DocumentRetrieveRequestFactory()
-        sub = make_sub_question(text="如何配置数据库连接池大小和超时时间", query_context_hints=["a", "b", "c", "d"])
+        sub = make_sub_question(
+            text="如何配置数据库连接池大小和超时时间", query_context_hints=["a", "b", "c", "d"]
+        )
         plan = make_plan([sub])
         await factory.build(plan)
         assert len(sub.query_context_hints) <= 8

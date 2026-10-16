@@ -52,7 +52,12 @@ class TestBuildCommonKwargs:
         assert kw["history_planning_context"] is ctx.history_planning_ctx
 
     def test_falls_back_to_question(self):
-        ctx = make_ctx(rewrite_sub_questions=[], retrieval_sub_questions=[], rewritten_question="", retrieval_question="")
+        ctx = make_ctx(
+            rewrite_sub_questions=[],
+            retrieval_sub_questions=[],
+            rewritten_question="",
+            retrieval_question="",
+        )
         kw = PlanBuilder.build_common_kwargs(ctx)
         assert kw["rewritten_question"] == "原始问题"
         assert kw["retrieval_sub_questions"] == ["原始问题"]
@@ -131,7 +136,12 @@ class TestBuildClarificationReply:
 
 class TestBuildClarificationOptions:
     def test_options(self):
-        docs = [make_doc("1", "手册A"), make_doc("2", "手册B"), make_doc("3", "手册C"), make_doc("4", "手册D")]
+        docs = [
+            make_doc("1", "手册A"),
+            make_doc("2", "手册B"),
+            make_doc("3", "手册C"),
+            make_doc("4", "手册D"),
+        ]
         out = PlanBuilder.build_clarification_options(docs)
         assert out == ["我想问《手册A》", "我想问《手册B》", "我想问《手册C》"]
 
@@ -167,14 +177,19 @@ class TestShouldAskClarification:
         assert PlanBuilder.should_ask_clarification(decision, [make_doc()]) is True
 
     def test_low_confidence_but_keyword_match(self):
-        decision = KnowledgeRouteDecision(confidence=Decimal("0.3"), documents=[make_doc("1", "部署手册")])
-        assert PlanBuilder.should_ask_clarification(decision, [make_doc("1", "部署手册")], question="部署手册怎么用") is False
+        decision = KnowledgeRouteDecision(
+            confidence=Decimal("0.3"), documents=[make_doc("1", "部署手册")]
+        )
+        assert (
+            PlanBuilder.should_ask_clarification(
+                decision, [make_doc("1", "部署手册")], question="部署手册怎么用"
+            )
+            is False
+        )
 
     def test_close_scores_cross_scope_asks(self):
         docs = [make_doc("1", score="0.9"), make_doc("2", score="0.8")]
-        docs[1] = types.SimpleNamespace(
-            **{**docs[1].__dict__, "scope_code": "B"}
-        )
+        docs[1] = types.SimpleNamespace(**{**docs[1].__dict__, "scope_code": "B"})
         decision = KnowledgeRouteDecision(confidence=Decimal("0.9"), documents=docs)
         assert PlanBuilder.should_ask_clarification(decision, docs) is True
 

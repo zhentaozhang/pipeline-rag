@@ -6,7 +6,9 @@ from app.orchestrator.fallback_router import FallbackRouter
 from app.orchestrator.models import DocumentRouteCandidate, KnowledgeRouteDecision
 
 
-def make_doc(document_id="1", name="部署手册", task_id="t1", score="0.9", category="cat", tags="tag"):
+def make_doc(
+    document_id="1", name="部署手册", task_id="t1", score="0.9", category="cat", tags="tag"
+):
     return DocumentRouteCandidate(
         document_id=document_id,
         document_name=name,

@@ -65,7 +65,9 @@ class TestBuildPlanningHistory:
     def test_no_recent_uses_structured(self, monkeypatch):
         monkeypatch.setattr(
             "app.orchestrator.history_builder.get_settings",
-            lambda: types.SimpleNamespace(rag=types.SimpleNamespace(planning_history_max_chars=1000)),
+            lambda: types.SimpleNamespace(
+                rag=types.SimpleNamespace(planning_history_max_chars=1000)
+            ),
         )
         ctx = HistoryPlanningContext(goals=["目标A"])
         out = HistoryBuilder.build_planning_history(FakeMemory(recent_transcript=""), ctx)
@@ -74,7 +76,9 @@ class TestBuildPlanningHistory:
     def test_recent_budget_split(self, monkeypatch):
         monkeypatch.setattr(
             "app.orchestrator.history_builder.get_settings",
-            lambda: types.SimpleNamespace(rag=types.SimpleNamespace(planning_history_max_chars=100)),
+            lambda: types.SimpleNamespace(
+                rag=types.SimpleNamespace(planning_history_max_chars=100)
+            ),
         )
         ctx = HistoryPlanningContext(goals=["很长的目标" * 20])
         recent = "recent" * 30
@@ -86,7 +90,9 @@ class TestBuildPlanningHistory:
             "app.orchestrator.history_builder.get_settings",
             lambda: types.SimpleNamespace(rag=types.SimpleNamespace(planning_history_max_chars=0)),
         )
-        out = HistoryBuilder.build_planning_history(FakeMemory(recent_transcript="x"), HistoryPlanningContext(goals=["g"]))
+        out = HistoryBuilder.build_planning_history(
+            FakeMemory(recent_transcript="x"), HistoryPlanningContext(goals=["g"])
+        )
         assert isinstance(out, str)
 
 

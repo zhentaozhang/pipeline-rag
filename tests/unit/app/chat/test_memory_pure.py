@@ -181,7 +181,7 @@ class TestBuildErrorMessage:
             def __init__(self):
                 super().__init__("raw")
                 self.status_code = 500
-                self.response_body = "{\"error\": \"bad\"}"
+                self.response_body = '{"error": "bad"}'
                 self.request_method = "POST"
                 self.request_url = "http://x/api"
 
@@ -210,6 +210,7 @@ class TestAsyncGeneratorWithTimeout:
 
     async def test_timeout_raises_stream_chunk_timeout(self):
         """单块超时不再静默截断，而是抛出 StreamChunkTimeoutError 触发失败收尾"""
+
         async def gen():
             yield "a"
             await asyncio.sleep(10)
@@ -236,7 +237,18 @@ class TestMemoryContextToPromptText:
             retrieval_hints=["h1"],
         )
         text = MemoryContext(summary_payload=payload).to_prompt_text()
-        order = [text.index(t) for t in ("【长期会话摘要】", "【会话目标】", "【已确认事实】", "【用户偏好与约束】", "【已解决问题】", "【待跟进问题】", "【检索提示】")]
+        order = [
+            text.index(t)
+            for t in (
+                "【长期会话摘要】",
+                "【会话目标】",
+                "【已确认事实】",
+                "【用户偏好与约束】",
+                "【已解决问题】",
+                "【待跟进问题】",
+                "【检索提示】",
+            )
+        ]
         assert order == sorted(order)
         assert "- f1" in text and "- f2" in text
 

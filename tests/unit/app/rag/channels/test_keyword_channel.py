@@ -90,14 +90,18 @@ class TestBuildEsQuery:
 
 class TestBuildFallbackSql:
     def test_basic_structure(self):
-        sql, args = KeywordRetrievalChannel._build_fallback_sql(["配置", "连接"], make_sub_question(), 10)
+        sql, args = KeywordRetrievalChannel._build_fallback_sql(
+            ["配置", "连接"], make_sub_question(), 10
+        )
         assert "pipeline_rag_document_embedding" in sql
         assert "AS similarity" in sql
         assert args[:2] == ["%配置%", "%连接%"]
         assert sql.endswith("LIMIT $4")
 
     def test_weight_decay(self):
-        sql, _ = KeywordRetrievalChannel._build_fallback_sql(["a", "b", "c", "d", "e", "f", "g"], make_sub_question(), 10)
+        sql, _ = KeywordRetrievalChannel._build_fallback_sql(
+            ["a", "b", "c", "d", "e", "f", "g"], make_sub_question(), 10
+        )
         assert "* 6.0" in sql
         assert "* 5.0" in sql
         assert "* 4.0" in sql
@@ -177,7 +181,11 @@ class TestRetrieve:
                     }
                 }
 
-        monkeypatch.setattr(keyword_module, "settings", types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=20)))
+        monkeypatch.setattr(
+            keyword_module,
+            "settings",
+            types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=20)),
+        )
         monkeypatch.setattr(keyword_module, "get_es", lambda: FakeEs())
         channel = KeywordRetrievalChannel()
         results = await channel.retrieve(make_sub_question())
@@ -200,9 +208,17 @@ class TestRetrieve:
                 captured["limit"] = body["size"]
                 return {"hits": {"hits": []}}
 
-        monkeypatch.setattr(keyword_module, "settings", types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=1000)))
+        monkeypatch.setattr(
+            keyword_module,
+            "settings",
+            types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=1000)),
+        )
         monkeypatch.setattr(keyword_module, "get_es", lambda: FakeEs())
-        monkeypatch.setattr(keyword_module, "settings", types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=1000)))
+        monkeypatch.setattr(
+            keyword_module,
+            "settings",
+            types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=1000)),
+        )
         channel = KeywordRetrievalChannel()
         await channel.retrieve(make_sub_question())
         assert captured["limit"] == 50
@@ -216,7 +232,11 @@ class TestRetrieve:
                 captured["limit"] = body["size"]
                 return {"hits": {"hits": []}}
 
-        monkeypatch.setattr(keyword_module, "settings", types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=0)))
+        monkeypatch.setattr(
+            keyword_module,
+            "settings",
+            types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=0)),
+        )
         monkeypatch.setattr(keyword_module, "get_es", lambda: FakeEs())
         channel = KeywordRetrievalChannel()
         await channel.retrieve(make_sub_question())
@@ -234,10 +254,21 @@ class TestRetrieve:
             calls["sql"] = sql
             calls["args"] = args
             return [
-                {"chunk_id": 1, "chunk_text": "正文", "section_path": "第一章", "document_id": 5, "document_name": "手册", "similarity": 0.8}
+                {
+                    "chunk_id": 1,
+                    "chunk_text": "正文",
+                    "section_path": "第一章",
+                    "document_id": 5,
+                    "document_name": "手册",
+                    "similarity": 0.8,
+                }
             ]
 
-        monkeypatch.setattr(keyword_module, "settings", types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=20)))
+        monkeypatch.setattr(
+            keyword_module,
+            "settings",
+            types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=20)),
+        )
         monkeypatch.setattr(keyword_module, "get_es", lambda: FakeEs())
         monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
         channel = KeywordRetrievalChannel()
@@ -257,7 +288,11 @@ class TestRetrieve:
         async def fake_fetch(sql, *args):
             return []
 
-        monkeypatch.setattr(keyword_module, "settings", types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=20)))
+        monkeypatch.setattr(
+            keyword_module,
+            "settings",
+            types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=20)),
+        )
         monkeypatch.setattr(keyword_module, "get_es", lambda: FakeEs())
         monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
         channel = KeywordRetrievalChannel()
@@ -270,7 +305,11 @@ class TestRetrieve:
             async def search(self, index=None, body=None):
                 return {"hits": {"hits": []}}
 
-        monkeypatch.setattr(keyword_module, "settings", types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=20)))
+        monkeypatch.setattr(
+            keyword_module,
+            "settings",
+            types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=20)),
+        )
         monkeypatch.setattr(keyword_module, "get_es", lambda: FakeEs())
         monkeypatch.setattr("app.infra.pg.fetch", lambda sql, *args: [])
         channel = KeywordRetrievalChannel()
@@ -285,7 +324,11 @@ class TestRetrieve:
         async def fake_fetch(sql, *args):
             raise RuntimeError("pg down")
 
-        monkeypatch.setattr(keyword_module, "settings", types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=20)))
+        monkeypatch.setattr(
+            keyword_module,
+            "settings",
+            types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=20)),
+        )
         monkeypatch.setattr(keyword_module, "get_es", lambda: FakeEs())
         monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
         channel = KeywordRetrievalChannel()

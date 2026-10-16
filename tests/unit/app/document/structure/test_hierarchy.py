@@ -134,9 +134,7 @@ class TestResolveBasics:
 
 class TestListHandling:
     def test_list_item_created(self, resolver):
-        drafts = resolver.resolve(
-            "文档", [sig(1, LIST, title="条目A", indent_level=0)]
-        )
+        drafts = resolver.resolve("文档", [sig(1, LIST, title="条目A", indent_level=0)])
         item = drafts[1]
         assert item.node_type == DocumentStructureNodeType.LIST_ITEM.value
         assert item.parent_node_no == 1
@@ -223,19 +221,25 @@ class TestResolveListParent:
         section = DocumentStructureNodeDraft(node_no=5, title="节")
         top = DocumentStructureNodeDraft(node_no=6, title="顶")
         stack = deque([ListContext(node=top, indent_level=0)])
-        parent = resolver._resolve_list_parent(sig(1, LIST, indent_level=1), section, stack, section)
+        parent = resolver._resolve_list_parent(
+            sig(1, LIST, indent_level=1), section, stack, section
+        )
         assert parent == top
 
     def test_same_indent_pops_and_returns_section(self, resolver):
         section = DocumentStructureNodeDraft(node_no=5, title="节")
         top = DocumentStructureNodeDraft(node_no=6, title="顶")
         stack = deque([ListContext(node=top, indent_level=0)])
-        parent = resolver._resolve_list_parent(sig(1, LIST, indent_level=0), section, stack, section)
+        parent = resolver._resolve_list_parent(
+            sig(1, LIST, indent_level=0), section, stack, section
+        )
         assert parent == section
 
     def test_negative_indent_safe(self, resolver):
         section = DocumentStructureNodeDraft(node_no=5, title="节")
-        parent = resolver._resolve_list_parent(sig(1, LIST, indent_level=-3), section, deque(), section)
+        parent = resolver._resolve_list_parent(
+            sig(1, LIST, indent_level=-3), section, deque(), section
+        )
         assert parent == section
 
 

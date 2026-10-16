@@ -73,7 +73,9 @@ class TestEvaluate:
     @pytest.mark.asyncio
     async def test_l1_pass_llm_block(self, monkeypatch):
         client = FakeClient(content=json.dumps({"action": "block", "reason": "越权"}))
-        monkeypatch.setattr(guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter())
+        monkeypatch.setattr(
+            guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter()
+        )
         monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(guardrails_module, "settings", make_settings())
         svc = IntentGuardrailService()
@@ -82,7 +84,9 @@ class TestEvaluate:
     @pytest.mark.asyncio
     async def test_llm_pass(self, monkeypatch):
         client = FakeClient(content=json.dumps({"action": "pass", "reason": ""}))
-        monkeypatch.setattr(guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter())
+        monkeypatch.setattr(
+            guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter()
+        )
         monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(guardrails_module, "settings", make_settings())
         svc = IntentGuardrailService()
@@ -91,7 +95,9 @@ class TestEvaluate:
     @pytest.mark.asyncio
     async def test_llm_empty_content_safe(self, monkeypatch):
         client = FakeClient(content=None)
-        monkeypatch.setattr(guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter())
+        monkeypatch.setattr(
+            guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter()
+        )
         monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(guardrails_module, "settings", make_settings())
         svc = IntentGuardrailService()
@@ -100,16 +106,26 @@ class TestEvaluate:
     @pytest.mark.asyncio
     async def test_llm_error_fail_close(self, monkeypatch):
         client = FakeClient(error=RuntimeError("down"))
-        monkeypatch.setattr(guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter())
+        monkeypatch.setattr(
+            guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter()
+        )
         monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
-        monkeypatch.setattr(guardrails_module, "settings", make_settings(mode=SafetyMode.FAIL_CLOSE))
+        monkeypatch.setattr(
+            guardrails_module, "settings", make_settings(mode=SafetyMode.FAIL_CLOSE)
+        )
         svc = IntentGuardrailService()
-        assert await svc.evaluate("如何配置") == (False, "安全检测服务异常，已拒绝该请求。", "sanitized")
+        assert await svc.evaluate("如何配置") == (
+            False,
+            "安全检测服务异常，已拒绝该请求。",
+            "sanitized",
+        )
 
     @pytest.mark.asyncio
     async def test_llm_error_monitor_allows(self, monkeypatch):
         client = FakeClient(error=RuntimeError("down"))
-        monkeypatch.setattr(guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter())
+        monkeypatch.setattr(
+            guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter()
+        )
         monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(guardrails_module, "settings", make_settings(mode=SafetyMode.MONITOR))
         svc = IntentGuardrailService()
@@ -123,7 +139,9 @@ class TestEvaluateRuleOnly:
     async def test_rule_pass_without_llm(self, monkeypatch):
         # LLM 客户端即使会抛错也不应被调用（开关关闭）
         client = FakeClient(error=RuntimeError("should not be called"))
-        monkeypatch.setattr(guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter())
+        monkeypatch.setattr(
+            guardrails_module, "SafetyInputFilter", lambda settings: FakeInputFilter()
+        )
         monkeypatch.setattr(guardrails_module, "get_chat_client", lambda: client)
         monkeypatch.setattr(guardrails_module, "settings", make_settings_rule_only())
         svc = IntentGuardrailService()

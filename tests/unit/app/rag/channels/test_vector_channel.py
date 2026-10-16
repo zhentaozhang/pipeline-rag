@@ -141,7 +141,14 @@ class TestRetrieve:
             captured["sql"] = sql
             captured["args"] = args
             return [
-                {"chunk_id": 1, "content": "正文", "section_path": "第一章", "document_id": 5, "document_name": "手册", "similarity": 0.9}
+                {
+                    "chunk_id": 1,
+                    "content": "正文",
+                    "section_path": "第一章",
+                    "document_id": 5,
+                    "document_name": "手册",
+                    "similarity": 0.9,
+                }
             ]
 
         monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
@@ -161,7 +168,14 @@ class TestRetrieve:
 
         async def fake_fetch(sql, *args):
             return [
-                {"chunk_id": 1, "content": "正文", "section_path": "", "document_id": 5, "document_name": "部署手册", "similarity": 0.5}
+                {
+                    "chunk_id": 1,
+                    "content": "正文",
+                    "section_path": "",
+                    "document_id": 5,
+                    "document_name": "部署手册",
+                    "similarity": 0.5,
+                }
             ]
 
         monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
@@ -174,7 +188,14 @@ class TestRetrieve:
 
         async def fake_fetch(sql, *args):
             return [
-                {"chunk_id": 1, "content": "正文", "section_path": "", "document_id": 5, "document_name": "", "similarity": 0.5}
+                {
+                    "chunk_id": 1,
+                    "content": "正文",
+                    "section_path": "",
+                    "document_id": 5,
+                    "document_name": "",
+                    "similarity": 0.5,
+                }
             ]
 
         monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)

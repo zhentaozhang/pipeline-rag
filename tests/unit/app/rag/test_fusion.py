@@ -1,4 +1,3 @@
-
 from app.chat.schema import Evidence
 from app.rag.fusion import rrf_fusion
 
@@ -79,14 +78,16 @@ class TestRrfFusion:
         assert result[0].rrf_score == rrf(10, 0)
 
     def test_original_score_preserved(self):
-        vector = [Evidence(
-            chunk_id="a",
-            doc_id="doc-1",
-            title="t",
-            content="内容a",
-            score=0.9,
-            original_score=0.7,
-        )]
+        vector = [
+            Evidence(
+                chunk_id="a",
+                doc_id="doc-1",
+                title="t",
+                content="内容a",
+                score=0.9,
+                original_score=0.7,
+            )
+        ]
         result = rrf_fusion(vector, [])
         assert result[0].score == rrf(60, 0)
         assert result[0].original_score == 0.7

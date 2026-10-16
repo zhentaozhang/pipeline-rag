@@ -212,9 +212,7 @@ class RagRetrievalEngine:
                 )
             ]
             context = await self.retrieve(plan, tracer=tracer)
-            context.retrieval_notes.append(
-                f"检索证据不足，已按改写查询重查：{rewritten[:80]}"
-            )
+            context.retrieval_notes.append(f"检索证据不足，已按改写查询重查：{rewritten[:80]}")
 
         if corrected:
             logger.info(
@@ -512,9 +510,7 @@ class RagRetrievalEngine:
             filtered = [e for e in docs if (e.rerank_score or 1.0) >= min_rerank]
             # 兜底：阈值语义失效（该查询整体低分区间）时保留最高分 top-1，
             # 避免空证据导致拒答（实证："请假"类查询相关块仅 0.05-0.17）
-            docs = filtered or sorted(
-                docs, key=lambda e: e.rerank_score or 0.0, reverse=True
-            )[:1]
+            docs = filtered or sorted(docs, key=lambda e: e.rerank_score or 0.0, reverse=True)[:1]
         return docs[: settings.rag.final_top_k]
 
     def _mark_selection(

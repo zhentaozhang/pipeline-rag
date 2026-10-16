@@ -48,9 +48,7 @@ class TestFallbackMerge:
 
     def test_appends_pending_questions_deduplicated(self, compressor):
         payload = ConversationSummaryPayload(pending_questions=["已有"])
-        merged = compressor._fallback_merge(
-            payload, [_exchange("q1"), _exchange("已有")]
-        )
+        merged = compressor._fallback_merge(payload, [_exchange("q1"), _exchange("已有")])
         assert merged.pending_questions == ["已有", "q1"]
 
     def test_extracts_retrieval_hints_from_last_question(self, compressor):
@@ -122,7 +120,15 @@ class TestBuildLongTermSummaryText:
                 retrieval_hints=["h1"],
             )
         )
-        for title in ("长期会话摘要", "会话目标", "已确认事实", "用户偏好与约束", "已解决问题", "待跟进问题", "检索提示"):
+        for title in (
+            "长期会话摘要",
+            "会话目标",
+            "已确认事实",
+            "用户偏好与约束",
+            "已解决问题",
+            "待跟进问题",
+            "检索提示",
+        ):
             assert f"【{title}】" in text
         assert "- f1" in text
 

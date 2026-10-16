@@ -24,9 +24,7 @@ from app.config.security import JWTSettings
 
 class TestDBSettings:
     def test_mysql_urls(self):
-        s = MySQLSettings(
-            user="u", password="p", host="h", port=1234, db="d"
-        )
+        s = MySQLSettings(user="u", password="p", host="h", port=1234, db="d")
         assert s.url == "mysql+aiomysql://u:p@h:1234/d"
         assert s.sync_url == "mysql+pymysql://u:p@h:1234/d"
 

@@ -13,9 +13,7 @@ class _FakeMetric:
         self.calls: list[dict] = []
 
     async def ascore(self, *, question, answer, contexts, ground_truth=None, tracer=None):
-        self.calls.append(
-            {"question": question, "answer": answer, "contexts": contexts}
-        )
+        self.calls.append({"question": question, "answer": answer, "contexts": contexts})
         return MetricResult(metric_name="faithfulness", value=0.8, reason="ok")
 
 

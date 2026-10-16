@@ -77,9 +77,7 @@ class TestRoute:
     async def test_no_query_terms_returns_failed(self, monkeypatch):
         repo = FakeRepo(query_terms=[])
         scorer = FakeScorer()
-        monkeypatch.setattr(
-            route_service_module, "RouteRepository", lambda: repo
-        )
+        monkeypatch.setattr(route_service_module, "RouteRepository", lambda: repo)
         monkeypatch.setattr(route_service_module, "RouteScorer", lambda: scorer)
         svc = KnowledgeRouteService()
         decision = await svc.route("q", "rq")

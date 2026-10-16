@@ -18,7 +18,10 @@ EMPLOYEE_DATASET: list[EvalQuestion] = [
             "合同期限3个月以上不满1年试用期1个月；1年以上不满3年为2个月；"
             "3年以上或无固定期限为6个月。"
         ),
-        relevant_contexts=["合同期限3个月以上不满1年：试用期1个月", "合同期限3年以上或无固定期限：试用期6个月"],
+        relevant_contexts=[
+            "合同期限3个月以上不满1年：试用期1个月",
+            "合同期限3年以上或无固定期限：试用期6个月",
+        ],
     ),
     EvalQuestion(
         id="emp002",
@@ -106,7 +109,11 @@ EMPLOYEE_DATASET: list[EvalQuestion] = [
         id="emp015",
         question="信息安全管理规范依据哪些法律法规制定？",
         ground_truth_answer="网络安全法、数据安全法、个人信息保护法及 GB/T 相关标准。",
-        relevant_contexts=["《中华人民共和国网络安全法》", "《中华人民共和国数据安全法》", "《中华人民共和国个人信息保护法》"],
+        relevant_contexts=[
+            "《中华人民共和国网络安全法》",
+            "《中华人民共和国数据安全法》",
+            "《中华人民共和国个人信息保护法》",
+        ],
     ),
     # ═══ 04 商务招待 ═══
     EvalQuestion(
@@ -139,7 +146,6 @@ EMPLOYEE_DATASET: list[EvalQuestion] = [
         ground_truth_answer="礼品须符合制度标准并有事前审批，禁止赠送现金或超出规定的贵重礼品。",
         relevant_contexts=["礼品赠送"],
     ),
-
     # ═══ 21-30 复杂问题补盲（016 轮 E 项：比较/否定/多跳/数值/流程）═══
     EvalQuestion(
         id="emp021",

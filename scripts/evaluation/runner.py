@@ -255,6 +255,7 @@ async def run_evaluation(
 
 def _print_report(results: list[EvalResult], run_tag: str) -> dict[str, float]:
     """打印报告并返回各指标平均分（P1-3：供门禁判断）"""
+
     def _avg(vals: list[float]) -> float:
         if not vals:
             return 0.0
@@ -284,14 +285,24 @@ def _print_report(results: list[EvalResult], run_tag: str) -> dict[str, float]:
 
     logger.info("=" * 60)
     logger.info("  Offline RAG Evaluation Report — round %s", run_tag)
-    logger.info("  Completed: %d / %d (partial=%d, failed=%d)", len(completed), len(results), len(partial), len(failed))
+    logger.info(
+        "  Completed: %d / %d (partial=%d, failed=%d)",
+        len(completed),
+        len(results),
+        len(partial),
+        len(failed),
+    )
     logger.info("  ├──────────────────────┬──────────┤")
     logger.info("  │ Faithfulness         │ %.3f    │", avg["faithfulness"])
     logger.info("  │ Answer Relevancy     │ %.3f    │", avg["answer_relevancy"])
     logger.info("  │ Context Precision    │ %.3f    │", avg["context_precision"])
     logger.info("  │ Answer Correctness   │ %.3f    │", avg["answer_correctness"])
     logger.info("  │ Context Recall       │ %.3f    │", avg["context_recall"])
-    logger.info("  │ Recall@5 / Recall@10 │ %.3f / %.3f │", avg.get("recall_at_5", 0.0), avg.get("recall_at_10", 0.0))
+    logger.info(
+        "  │ Recall@5 / Recall@10 │ %.3f / %.3f │",
+        avg.get("recall_at_5", 0.0),
+        avg.get("recall_at_10", 0.0),
+    )
     logger.info("  └──────────────────────┴──────────┘")
 
     logger.info("\n  Per-question breakdown:")
