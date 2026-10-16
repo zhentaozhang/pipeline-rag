@@ -7,6 +7,7 @@ import app.orchestrator.orchestrator as orchestrator_module
 from app.chat.memory import MemoryContext
 from app.chat.schema import DocumentNavigationDecision
 from app.common.enums import ChatQueryMode
+from app.orchestrator.guardrails import GuardrailVerdict
 from app.orchestrator.models import DocumentRouteCandidate, KnowledgeRouteDecision
 
 
@@ -43,7 +44,11 @@ class FakeGuardrailService:
         self.reason = reason
 
     async def evaluate(self, question):
-        return (self.is_safe, self.reason, question)
+        return GuardrailVerdict(
+            is_safe=self.is_safe,
+            block_reason=self.reason,
+            sanitized_question=question,
+        )
 
 
 class FakeRewriteService:
