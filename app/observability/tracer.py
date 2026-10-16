@@ -133,6 +133,9 @@ class _DummyTracer:
     def root(self, **kwargs):
         return _DUMMY_SPAN
 
+    def span(self, *args, **kwargs):
+        return _DUMMY_SPAN
+
     async def flush(self):
         pass
 
@@ -158,6 +161,19 @@ class _DummyTracer:
 _current_span_var: contextvars.ContextVar[SpanContext | None] = contextvars.ContextVar(
     "_current_span", default=None
 )
+_active_tracer_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "_active_tracer", default=None
+)
+
+
+def get_active_tracer() -> Tracer | None:
+    """获取当前协程/任务上下文绑定的活跃 Tracer 实例。"""
+    return cast("Tracer | None", _active_tracer_var.get())
+
+
+def get_current_span() -> SpanContext | None:
+    """获取当前协程/任务上下文绑定的活跃 SpanContext 实例。"""
+    return _current_span_var.get()
 
 
 class _SpanManager:
@@ -180,7 +196,10 @@ class _SpanManager:
         if exc_type:
             self._span.status = SpanStatus.ERROR
         if self._token is not None:
-            _current_span_var.reset(self._token)
+            try:
+                _current_span_var.reset(self._token)
+            except ValueError:
+                _current_span_var.set(None)
             self._token = None
         self._tracer._pop(self._span)
 
@@ -240,6 +259,10 @@ def span_of(tracer: Any, name: str, kind: SpanKind = SpanKind.PIPELINE) -> Any:
 
 
 class Tracer:
+    _lf_obs: dict[str, Any]
+    _lf_exporter: Any
+    _lf_root_obs: Any
+
     def __init__(
         self,
         db: Any,
@@ -262,7 +285,9 @@ class Tracer:
         self._lf_exporter: Any = None
         self._lf_obs: dict[str, Any] = {}
         self._lf_root_obs: Any = None
+        self._tracer_token: contextvars.Token[Tracer | None] | None = None
         if self._active:
+            self._tracer_token = _active_tracer_var.set(self)
             from app.observability.langfuse_client import get_langfuse
 
             _lf_client = get_langfuse()
@@ -289,6 +314,12 @@ class Tracer:
         while self._stack:
             self._pop()
         await self.flush()
+        if self._tracer_token is not None:
+            try:
+                _active_tracer_var.reset(self._tracer_token)
+            except ValueError:
+                _active_tracer_var.set(None)
+            self._tracer_token = None
 
     def span(
         self, name: str, kind: SpanKind = SpanKind.PIPELINE, *, input: Any = None
@@ -341,6 +372,11 @@ class Tracer:
         root_span = self._root_span
         all_spans = spans[:]
         if root_span:
+            if not root_span.ended_at:
+                now = datetime.now(UTC)
+                root_span.ended_at = now
+                root_span.duration_ms = (now - root_span.started_at).total_seconds() * 1000
+                self._record_span_prometheus(root_span)
             all_spans.append(root_span)
 
         self._populate_trace_from_spans(all_spans)
@@ -374,6 +410,12 @@ class Tracer:
             logger.exception("trace flush failed", trace_id=self._trace_id)
 
         self._lf_finish()
+        if self._tracer_token is not None:
+            try:
+                _active_tracer_var.reset(self._tracer_token)
+            except ValueError:
+                _active_tracer_var.set(None)
+            self._tracer_token = None
 
     def _populate_trace_from_spans(self, spans: list[SpanContext]) -> None:
         if not self._trace:
@@ -580,4 +622,5 @@ class Tracer:
             self._lf_exporter.end_span(
                 self._lf_root_obs, output=self._trace.output if self._trace else None
             )
+            self._lf_root_obs = None
         self._lf_exporter.flush()

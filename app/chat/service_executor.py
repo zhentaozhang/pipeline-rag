@@ -69,6 +69,7 @@ async def execute_stream(
         session_id=str(session.id) if hasattr(session, "id") and session.id else None,
     )
     task.tracer = tracer
+    task.trace_id = tracer.trace_id
     ACTIVE_EXCHANGES.inc()
     tracer.root("exchange", kind=SpanKind.PIPELINE)
 
