@@ -1,0 +1,10 @@
+FROM elasticsearch:8.13.4
+
+ARG IK_PLUGIN_URL=https://get.infini.cloud/elasticsearch/analysis-ik/8.13.4
+ARG HTTP_PROXY=""
+ARG HTTPS_PROXY=""
+
+# 预烘焙 IK 中文分词插件，避免容器每次启动运行时外网下载与单点故障
+RUN HTTP_PROXY="${HTTP_PROXY}" HTTPS_PROXY="${HTTPS_PROXY}" \
+    http_proxy="${HTTP_PROXY}" https_proxy="${HTTPS_PROXY}" \
+    ./bin/elasticsearch-plugin install --batch "${IK_PLUGIN_URL}"

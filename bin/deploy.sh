@@ -57,8 +57,8 @@ fi
 
 # ── 2. 构建业务镜像 ────────────────────────────────────────────────────────
 if [ "$DO_BUILD" = 1 ]; then
-  log "构建业务镜像（app / celery 共用同一 Dockerfile）"
-  "${COMPOSE[@]}" build app
+  log "构建业务镜像（app / celery / jev-service / elasticsearch）"
+  "${COMPOSE[@]}" build
 else
   log "跳过镜像构建（--no-build）"
 fi

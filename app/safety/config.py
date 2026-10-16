@@ -23,6 +23,9 @@ class SafetySettings(BaseSettings):
     input_injection_threshold: float = 7.0
     # P0-1a: LLM 深度意图护栏（规则通道已含注入检测/PII，LLM 通道仅作兜底，默认关闭以减 LLM 调用）
     input_llm_guardrail_enabled: bool = False
+    # JEV System 1 决策护栏（单 pass 毫秒级判别，支持常态化深度安全审计）
+    jev_guardrail_enabled: bool = True
+    jev_safe_threshold: float = 0.50
 
     # L3 输出检测
     output_pii_enabled: bool = True

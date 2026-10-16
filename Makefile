@@ -9,22 +9,50 @@ FRONTEND_COMPOSE := docker compose -f docker-compose.frontend.yml
 
 .DEFAULT_GOAL := help
 
-.PHONY: help init build up up-obs down down-all restart logs ps shell migrate verify test \
+.PHONY: help init build up up-obs down down-all restart logs ps shell migrate verify test test-integration \
+        lint format format-check typecheck check config-check \
         obs-up obs-down obs-logs \
-        fe-build fe-up fe-down fe-restart fe-logs \
+        fe-build fe-up fe-down fe-restart fe-logs fe-lint fe-test \
         up-all clean reset
 
 help: ## 显示所有可用命令
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 init: ## 首次：从模板生成 .env（已存在则不覆盖）
 	@test -f .env || (cp .env.example .env && echo "已生成 .env，请填写密钥后再执行 make up")
 	@test -f .env && echo ".env 就绪"
 
+# ── 质量门禁与测试 ──────────────────────────────────────────────────────────
+lint: ## 代码风格与规范检查 (ruff check)
+	uv run ruff check .
+
+format: ## 自动格式化代码 (ruff format)
+	uv run ruff format .
+
+format-check: ## 代码格式校验 (ruff format --check)
+	uv run ruff format --check .
+
+typecheck: ## 静态类型检查 (mypy)
+	uv run mypy app
+
+test: ## 运行单元测试
+	uv run pytest tests/unit -q
+
+test-integration: ## 运行集成测试（需要本地数据库环境就绪）
+	uv run pytest tests/integration -q
+
+check: lint format-check typecheck test ## 本地全量质量门禁（推代码前必跑）
+
+config-check: ## 校验全部 Docker Compose 配置文件语法
+	@$(BACKEND_COMPOSE) config >/dev/null && echo "✓ docker-compose.yml OK"
+	@$(FRONTEND_COMPOSE) config >/dev/null && echo "✓ docker-compose.frontend.yml OK"
+	@$(OBS_COMPOSE) config >/dev/null && echo "✓ docker-compose.observability.yml OK"
+	@docker compose -f docker-compose.yml -f docker-compose.override.yml config >/dev/null && echo "✓ docker-compose.override.yml OK"
+
 # ── 后端 ────────────────────────────────────────────────────────────────────
-build: ## 构建后端镜像
-	$(BACKEND_COMPOSE) build app
+build: ## 构建全部后端业务镜像 (app, jev, elasticsearch)
+	$(BACKEND_COMPOSE) build
 
 up: ## 启动后端栈（幂等；等价 ./bin/deploy.sh）
 	./bin/deploy.sh
@@ -56,9 +84,6 @@ migrate: ## 手动执行数据库迁移（alembic upgrade head）
 verify: ## 后端分层验证（L1-L5）
 	./bin/verify-deploy.sh
 
-test: ## 运行单元测试
-	uv run pytest -q
-
 # ── 可观测性（Langfuse）────────────────────────────────────────────────────
 obs-up: ## 仅启动可观测性栈
 	$(OBS_COMPOSE) up -d
@@ -84,6 +109,12 @@ fe-restart: ## 重启前端容器
 
 fe-logs: ## 跟踪前端日志
 	$(FRONTEND_COMPOSE) logs -f --tail=100
+
+fe-lint: ## 前端代码规范检查 (eslint)
+	cd frontend && npm run lint
+
+fe-test: ## 前端单元测试 (vitest)
+	cd frontend && npm test
 
 # ── 组合 ────────────────────────────────────────────────────────────────────
 up-all: up fe-up ## 启动后端 + 前端
