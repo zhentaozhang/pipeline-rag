@@ -123,7 +123,6 @@ class ParallelExecutor(ConversationExecutor):
         async for chunk in aggregator.synthesize_streaming(
             results=all_results,
             question=plan.original_question,
-            style=plan.aggregation_style,
             conversation_id=conv_id,
             exchange_id=exch_id,
         ):
