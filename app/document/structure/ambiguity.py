@@ -9,6 +9,19 @@ from app.document.structure.models import DocumentStructureSignal, DocumentStruc
 
 logger = structlog.get_logger(__name__)
 
+# JEV 结构歧义：归类选项 + 层级等级（有序 → Score）
+_JEV_KIND_OPTIONS = {
+    "heading": "章节标题（用于分节，如“第一章”“1.2 概述”“概述”这类标题行）",
+    "list_item": "列表项或步骤项（如“1. xxx”“- xxx”“步骤一：xxx”）",
+    "body": "正文内容（普通段落文字，非标题也非列表）",
+}
+_JEV_KIND_TO_SIGNAL = {
+    "heading": "HEADING",
+    "list_item": "LIST_ITEM",
+    "body": "BODY",
+}
+_JEV_LEVELS = ["一级标题", "二级标题", "三级标题", "四级标题", "五级标题"]
+
 
 class DocumentStructureAmbiguityResolver:
     """消除文档结构信号中的歧义（依赖 LLM）"""
@@ -47,6 +60,14 @@ class DocumentStructureAmbiguityResolver:
         if not ambiguous_signals:
             return source_signals
 
+        # JEV System 1 优先：Choice（归类）+ Score（层级），一次请求并行判定，去 LLM
+        jev_cfg = getattr(get_settings(), "jev", None)
+        if jev_cfg and getattr(jev_cfg, "structure_ambiguity_enabled", True):
+            try:
+                return await self._resolve_via_jev(all_lines, source_signals, ambiguous_signals)
+            except Exception as e:
+                logger.warning("JEV 结构歧义判定失败，回退 LLM", error=str(e)[:120])
+
         try:
             prompt = self._build_prompt(document_title, ambiguous_signals, all_lines)
             async with llm_breaker():
@@ -75,6 +96,63 @@ class DocumentStructureAmbiguityResolver:
         except Exception as e:
             logger.warning("结构歧义判定失败，回退到规则结果", error=str(e), exc_info=True)
             return source_signals
+
+    async def _resolve_via_jev(
+        self,
+        all_lines: list[str],
+        source_signals: list[DocumentStructureSignal],
+        ambiguous_signals: list[DocumentStructureSignal],
+    ) -> list[DocumentStructureSignal]:
+        """用 JEV Choice（归类）+ Score（层级）一次性判定全部歧义行。
+
+        所有歧义块的上下文拼成一个 state，每个块两个问题（kind/level），
+        单次请求并行判定；空/缺字段则抛错由调用方回退 LLM。
+        """
+        from app.infra.jev_client import get_jev_client
+
+        state = self._build_candidate_blocks(ambiguous_signals, all_lines)
+        questions: dict[str, dict] = {}
+        for s in ambiguous_signals:
+            questions[f"kind_{s.line_no}"] = {
+                "type": "choice",
+                "instructions": (
+                    f"候选块（第 {s.line_no} 行，用 >> 标记）在文档结构层级中应归类为？"
+                ),
+                "options": _JEV_KIND_OPTIONS,
+            }
+            questions[f"level_{s.line_no}"] = {
+                "type": "score",
+                "instructions": (
+                    f"若第 {s.line_no} 行是标题，它是第几级标题（越靠前级别越高）？"
+                    "非标题可忽略本题。"
+                ),
+                "levels": _JEV_LEVELS,
+            }
+
+        answers = await get_jev_client().system_one(state=state, questions=questions)
+        if not answers:
+            raise ValueError("JEV returned empty answers")
+
+        resolved_map: dict[int, dict] = {}
+        for s in ambiguous_signals:
+            kind_ans = answers.get(f"kind_{s.line_no}")
+            if not isinstance(kind_ans, dict) or "choice" not in kind_ans:
+                raise ValueError(f"JEV missing kind for line {s.line_no}")
+            kind = kind_ans["choice"]
+            if kind not in _JEV_KIND_TO_SIGNAL:
+                raise ValueError(f"JEV unexpected kind={kind}")
+
+            level_hint = None
+            if kind == "heading":
+                level_ans = answers.get(f"level_{s.line_no}")
+                if isinstance(level_ans, dict) and level_ans.get("score") in _JEV_LEVELS:
+                    level_hint = _JEV_LEVELS.index(level_ans["score"]) + 1
+            resolved_map[s.line_no] = {
+                "resolved_kind": _JEV_KIND_TO_SIGNAL[kind],
+                "level_hint": level_hint,
+            }
+
+        return [self._apply_result(sig, resolved_map.get(sig.line_no)) for sig in source_signals]
 
     def _build_prompt(
         self,
