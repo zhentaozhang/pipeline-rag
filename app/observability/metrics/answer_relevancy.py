@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import structlog
+
 from app.observability.metrics.base import Metric, MetricResult
+
+logger = structlog.get_logger(__name__)
 
 _PROMPT = """You are evaluating the relevance of an answer to a question.
 
@@ -36,6 +40,66 @@ class AnswerRelevancyMetric(Metric):
                 reason="empty question or answer",
                 metadata={},
             )
+
+        # JEV System 1 Score 原语评测（等级化确定性评分与校准置信度）
+        from app.config import get_settings
+
+        settings = get_settings()
+        jev_cfg = getattr(settings, "jev", None)
+        if jev_cfg and getattr(jev_cfg, "answer_relevancy_enabled", True):
+            try:
+                from app.infra.jev_client import get_jev_client
+
+                jev = get_jev_client()
+                state = f"【用户问题】\n{question}\n\n【系统回答】\n{answer}"
+                answers = await jev.system_one(
+                    state=state,
+                    questions={
+                        "relevancy": {
+                            "type": "score",
+                            "instructions": "评估回答对问题的针对性和相关程度（语义相关，忽略表面格式）",
+                            "levels": ["完全无关", "部分相关", "基本相关", "高度相关", "完全切题"],
+                        }
+                    },
+                )
+                if not answers:
+                    raise ValueError("JEV returned empty answers")
+
+                score_data = answers.get("relevancy")
+                if not isinstance(score_data, dict) or "score" not in score_data:
+                    raise ValueError("JEV response missing valid relevancy evaluation")
+
+                level_map = {
+                    "完全无关": 0.0,
+                    "部分相关": 0.25,
+                    "基本相关": 0.50,
+                    "高度相关": 0.75,
+                    "完全切题": 1.0,
+                }
+                level = score_data.get("score", "基本相关")
+                score = level_map.get(level, 0.50)
+                conf = float(score_data.get("confidence", 1.0))
+                distribution = (
+                    score_data.get("distribution")
+                    if isinstance(score_data.get("distribution"), dict)
+                    else {}
+                )
+                return MetricResult(
+                    metric_name="answer_relevancy",
+                    value=score,
+                    reason=f"JEV Score: {level} (置信度={conf:.2f})",
+                    metadata={
+                        "level": level,
+                        "confidence": conf,
+                        "distribution": distribution,
+                        "evaluated_by": "jev-system-one",
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "JEV answer relevancy eval failed, falling back to LLM",
+                    error=str(e)[:120],
+                )
 
         content = (
             await self._call_llm(
