@@ -164,7 +164,8 @@ class _SpanManager:
     def __init__(self, tracer: Tracer, span: SpanContext):
         self._tracer = tracer
         self._span = span
-        self._token = None
+        # 显式标注：否则 mypy 从 None 推断为 NoneType，无法承接 contextvars.Token
+        self._token: contextvars.Token[SpanContext | None] | None = None
 
     async def __aenter__(self) -> SpanContext:
         self._span.started_at = datetime.now(UTC)
@@ -225,6 +226,17 @@ def next_id_str() -> str:
 def new_trace_id() -> str:
     """32-hex trace id（Langfuse 要求 32 位小写 hex；与 OTel trace_id 同格式）。"""
     return uuid.uuid4().hex
+
+
+def span_of(tracer: Any, name: str, kind: SpanKind = SpanKind.PIPELINE) -> Any:
+    """按需取得 span 上下文。
+
+    tracer 为 None 时返回共享的空 span（``_DUMMY_SPAN``），避免调用方到处散落
+    ``if tracer else`` 分支，也避免 ``tracer.span(...)`` 直接抛 AttributeError。
+    """
+    if tracer is None:
+        return _DUMMY_SPAN
+    return tracer.span(name, kind=kind)
 
 
 class Tracer:
@@ -313,15 +325,15 @@ class Tracer:
         if self._lf_exporter is not None:
             if self._trace is not None:
                 self._lf_exporter.session_id = self._trace.session_id
-            self._lf_root_obs = self._lf_exporter.start_root(
-                name, input=input, kind=kind.value
-            )
+            self._lf_root_obs = self._lf_exporter.start_root(name, input=input, kind=kind.value)
         return _SpanManager(self, span)
 
     async def flush(self) -> None:
         if not self._active or not self._trace:
             return
-        self._trace.flushed_at = datetime.now(UTC)
+        # 绑定到局部变量：mypy 无法把 self._trace 的收窄结果带进下方闭包
+        trace = self._trace
+        trace.flushed_at = datetime.now(UTC)
         spans = self._completed_spans
         self._completed_spans = []
 
@@ -333,6 +345,7 @@ class Tracer:
 
         self._populate_trace_from_spans(all_spans)
         from contextlib import suppress
+
         from app.db.session import get_session_factory
 
         sf = get_session_factory()
@@ -340,7 +353,7 @@ class Tracer:
         async def _do_save(target_db):
             store = MySQLTraceStore(target_db)
             async with target_db.begin():
-                await store.save_trace(self._trace)
+                await store.save_trace(trace)
                 await store.save_spans(all_spans)
                 all_scores = [s for sp in all_spans for s in sp.scores]
                 if all_scores:
@@ -351,10 +364,7 @@ class Tracer:
             if sf is not None:
                 async with sf() as flush_db:
                     await _do_save(flush_db)
-            elif (
-                self._db is not None
-                and getattr(self._db, "is_active", False)
-            ):
+            elif self._db is not None and getattr(self._db, "is_active", False):
                 with suppress(Exception):
                     await self._db.commit()
                 await _do_save(self._db)
@@ -487,8 +497,13 @@ class Tracer:
             target_id = getattr(target_span, "span_id", None)
             for idx in range(len(self._stack) - 1, -1, -1):
                 item = self._stack[idx]
-                if item is target_span or (target_id and getattr(item, "span_id", None) == target_id):
-                    span = self._stack.pop(idx)
+                if item is target_span or (
+                    target_id and getattr(item, "span_id", None) == target_id
+                ):
+                    # 注意：_stack 是 deque，pop() 不接受索引参数（pop(idx) 会抛 TypeError），
+                    # 按下标移除必须用 del。此处在非栈顶 span 提前退出时才会走到该分支。
+                    span = self._stack[idx]
+                    del self._stack[idx]
                     break
             if span is None:
                 span = self._stack.pop()
@@ -511,9 +526,7 @@ class Tracer:
 
     # ── Langfuse 并行上报（enabled 时；未启用则 _lf_exporter 为 None，全部短路）──
     def _lf_parent_obs(self, span: SpanContext) -> Any:
-        parent_obs = (
-            self._lf_obs.get(span.parent_span_id or "") if span.parent_span_id else None
-        )
+        parent_obs = self._lf_obs.get(span.parent_span_id or "") if span.parent_span_id else None
         if parent_obs is None:
             parent_obs = self._lf_root_obs
         return parent_obs
