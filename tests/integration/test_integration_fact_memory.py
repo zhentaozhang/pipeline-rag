@@ -16,6 +16,7 @@ async def test_fact_memory_insert_and_retrieve(integration_env):
             CREATE TABLE IF NOT EXISTS public.user_fact_memory (
                 id BIGINT NOT NULL,
                 conversation_id VARCHAR(64) NOT NULL,
+                user_key VARCHAR(64),
                 content TEXT NOT NULL,
                 category VARCHAR(32) NOT NULL DEFAULT 'fact',
                 embedding VECTOR NOT NULL,
@@ -95,6 +96,7 @@ async def test_fact_memory_cleanup_strategies(integration_env):
             CREATE TABLE IF NOT EXISTS public.user_fact_memory (
                 id BIGINT NOT NULL,
                 conversation_id VARCHAR(64) NOT NULL,
+                user_key VARCHAR(64),
                 content TEXT NOT NULL,
                 category VARCHAR(32) NOT NULL DEFAULT 'fact',
                 embedding VECTOR NOT NULL,
