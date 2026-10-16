@@ -23,7 +23,7 @@ class JEVSettings(BaseSettings):
     answer_correctness_enabled: bool = True  # M8b: 答案正确性评测
     context_precision_enabled: bool = True  # M9: 检索精度评测
     context_recall_enabled: bool = True  # M9: 检索召回评测
-    structure_ambiguity_enabled: bool = True  # 文档结构歧义消解（choice）
+    structure_ambiguity_enabled: bool = False  # 文档结构歧义消解（A/B 实测 JEV acc 0.73 < LLM 1.00，默认走 LLM；开启后 JEV 加速但精度下降）
     evidence_sufficiency_enabled: bool = True  # 纠错检索：证据充分性判定（noul）
     quality_eval_enabled: bool = True  # 回答质量审核（score）
     injection_semantic_enabled: bool = True  # 语义注入补充检测（noul）
