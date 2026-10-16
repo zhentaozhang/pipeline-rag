@@ -1,14 +1,14 @@
 <div align="center">
   <h1>pipeline-rag</h1>
-  <p><b>pipeline-rag — 企业级 AI Agent 智能体平台</b> — 检索增强 + 多智能体协作 + 长期记忆管理 + 工具调用</p>
+  <p>私有知识库问答与 AI Agent 平台 · 检索增强 + 多智能体协作 + 长期记忆 + 本地判断决策</p>
 
   <p>
     <a href="#项目简介">简介</a> •
-    <a href="#核心特性">特性</a> •
+    <a href="#核心能力">能力</a> •
     <a href="#系统架构">架构</a> •
     <a href="#技术栈">技术栈</a> •
-    <a href="#项目结构">结构</a> •
-    <a href="#快速开始">快速开始</a>
+    <a href="#快速开始">快速开始</a> •
+    <a href="#docker-部署">部署</a>
   </p>
 
   <p>
@@ -18,7 +18,6 @@
     <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&style=flat-square" alt="PostgreSQL 16">
     <img src="https://img.shields.io/badge/Elasticsearch-8.13-005571?logo=elasticsearch&style=flat-square" alt="Elasticsearch 8.13">
     <img src="https://img.shields.io/badge/Redis-7.2-FF4438?logo=redis&style=flat-square" alt="Redis 7.2">
-    <img src="https://img.shields.io/badge/MCP-插件-6A1B9A?style=flat-square" alt="MCP Plugin">
     <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&style=flat-square" alt="React 19">
   </p>
 </div>
@@ -27,490 +26,160 @@
 
 ## 项目简介
 
-面向企业知识库问答与复杂任务处理场景，构建集**检索增强生成、多智能体协作、长期记忆管理与工具调用于一体**的 AI Agent 平台。系统基于 FastAPI 与 LangGraph 构建，围绕**上下文精度、任务分解、记忆连续性**三大核心挑战，整合 PGVector + Elasticsearch 双通道召回、泛型 Pipeline 对话编排、Supervisor + DAG 任务分解、摘要压缩记忆等组件，形成了一套完整的企业级 AI Agent 解决方案。
+面向知识库问答与复杂任务处理场景的 AI Agent 平台。系统基于 FastAPI 与 LangGraph 构建，围绕上下文精度、任务分解、记忆连续性三个问题，整合 PGVector + Elasticsearch 双通道召回、泛型 Pipeline 对话编排、Supervisor 任务分解、结构化摘要记忆等组件，并提供一套本地部署的 JEV 判断决策层替代大模型的判断类调用。
 
-### 核心能力
+技术细节见 [`docs/`](docs/)。
+
+## 核心能力
 
 | 维度 | 能力 |
 |------|------|
-| **对话编排** | 9 阶段 Pipeline，三态信号（CONTINUE / SKIP / TERMINATE）驱动短路执行 |
-| **知识召回** | PGVector 向量 + Elasticsearch 关键词双通道，RRF 融合 + Reranker |
-| **多 Agent** | Supervisor 问题分解 + 6 种执行模式 + 异步并发子任务 |
-| **长期记忆** | Summary Compression 结构化摘要 + 滑动窗口，支持 50+ 轮会话 |
-| **文档处理** | 异步 Pipeline：解析（MinerU 增强）→ 分块（4 策略 + Contextual Chunking）→ 向量化 → 索引 |
-| **数据源接入** | 手动上传 + S3 / 网页爬虫连接器自动导入（飞书/网页多渠道） |
-| **引用溯源** | 回答附来源引用（chunk_id / 章节 / 原文），前端可展开查看 |
-| **响应缓存** | 无历史上下文的确定性问答走 Redis 缓存，命中省全链路 LLM |
-| **MCP 插件** | SkillRegistry 自动发现并注册 Skill 工具（Agent 工具来源）；FastMCP Server 作为独立对外集成入口 |
-| **安全控制** | PII 检测、输入/输出过滤、四级风险分级与高风险工具阻断、受限子进程沙箱执行 |
-| **可观测性** | 自研 Trace 链路（span 瀑布 + 评估分数）+ Prometheus 指标 + LLM-as-Judge 质量评估 |
-
----
-
-## 核心特性
-
-### Pipeline 对话编排引擎
-
-泛型 Pipeline 模式，请求拆分为 9 个独立 Stage：
-
-```mermaid
-flowchart LR
-    classDef stage fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1
-    classDef shortcut fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#bf360c
-    classDef terminal fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20
-
-    H[📋 History Building]:::stage
-    T[🕐 Time Sensitivity]:::stage
-    G[🛡️ Guardrail]:::stage
-    V[✅ Validation]:::stage
-    O[⚡ Open Chat Shortcut]:::shortcut
-    Q[🏷️ Intent + Query Rewrite]:::stage
-    K[🗺️ Knowledge Routing]:::shortcut
-    N[🧭 Navigation Analysis]:::stage
-    F[📐 Final Plan Building]:::terminal
-
-    H --> T --> G --> V --> O --> Q --> K --> N --> F
-
-    G -.->|TERMINATE| R1([⛔ Refusal Executor]):::terminal
-    O -.->|TERMINATE| R2([🤖 React Agent]):::terminal
-    K -.->|TERMINATE| R3([❓ Clarification]):::terminal
-```
-
-每个 Stage 返回 CONTINUE / SKIP / TERMINATE 信号：
-- **CONTINUE** — 更新上下文，进入下一 Stage
-- **SKIP** — 跳过当前 Stage，继续后续
-- **TERMINATE** — 终止管道，立即进入对应执行器
-
-Post-Pipeline 可调用 Supervisor 进行 LLM 任务分解。
-
-### 双通道 RAG 召回体系
-
-```mermaid
-flowchart TB
-    classDef query fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1
-    classDef vector fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1
-    classDef keyword fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#bf360c
-    classDef fusion fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20
-    classDef enhance fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px,color:#4a148c
-
-    Q[💬 原始问题]:::query
-    QR[✏️ Query Rewriter]:::query
-    V[🔍 PGVector<br/>向量检索<br/>BGE-M3]:::vector
-    K[🔎 Elasticsearch<br/>IK 关键词]:::keyword
-    F[🔄 RRF Fusion<br/>+ BGE Reranker]:::fusion
-    PC[📎 Parent-Child<br/>上下文补全]:::enhance
-    PB[📊 Prompt Budget<br/>预算控制]:::enhance
-    E[📈 评估与反馈<br/>LLM-as-Judge]:::fusion
-
-    Q --> QR
-    QR --> V
-    QR --> K
-    V -->|Top-K| F
-    K -->|Top-K| F
-    F --> PC --> PB --> E
-```
-
-- **PGVector** — 稠密向量语义检索（BGE-M3 Embedding）
-- **Elasticsearch** — IK 分词器中文关键词检索
-- **RRF 融合** — 双通道结果按 Reciprocal Rank Fusion 合并，缓解单一通道的召回盲区（效果以 `scripts/evaluation` 离线评测为准）
-- **Reranker** — 可配置 BGE Reranker V2 重排序
-- **Parent-Child** — Chunk 级别上下文补全，解决分块断裂问题
-- **Contextual Chunking** — 分块时注入文档级上下文窗口（可开关，需重索引生效）
-
-### 多 Agent Supervisor 架构
-
-```mermaid
-flowchart TB
-    classDef supervisor fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#bf360c
-    classDef executor fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20
-    classDef tool fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px,color:#4a148c
-
-    subgraph Supervisor[🧠 Supervisor Agent]
-        LLM[🤖 LLM 问题分解]
-        DAG[📋 DAG 子任务图]
-        LLM --> DAG
-    end
-
-    subgraph Executors[⚡ 执行器集群]
-        RAG[💬 RAG Chat]:::executor
-        RA[🤖 React Agent<br/>LangGraph]:::executor
-        CLAR[❓ Clarification]:::executor
-        GRA[🕸️ Graph]:::executor
-        GTE[📎 Graph→Evidence]:::executor
-        REF[⛔ Refusal]:::executor
-    end
-
-    subgraph Tools[🔧 工具层]
-        RG[📚 RAG Search]:::tool
-        CD[🖥️ Code Executor<br/>沙箱 Python]:::tool
-        TB[🌐 Tavily Web Search]:::tool
-    end
-
-    DAG -->|Retrieval| RAG
-    DAG -->|Complex| RA
-    DAG -->|Ambiguous| CLAR
-    DAG -->|Structure| GRA
-    DAG -.->|Optional| GTE
-    RA --> RG
-    RA --> CD
-    RA --> TB
-```
-
-Supervisor 利用 LLM 自动分解复杂问题生成带依赖关系的子任务，结合拓扑分层与异步并发执行机制，完成多阶段任务协同处理。
-
-### 数据源连接器与多渠道
-
-平台支持多种内容接入方式，统一汇入文档处理流水线：
-
-| 方式 | 说明 | 配置 |
-|------|------|------|
-| **手动上传** | Web 端直接上传文件（PDF/Word/TXT/MD/PPT/Excel） | — |
-| **S3 连接器** | 扫描 S3 兼容存储（含 MinIO）的 bucket/prefix，按扩展名过滤后自动导入 | `CONNECTOR_S3_*`，任务 `document.import_s3` |
-| **网页爬虫** | 通过 sitemap 或种子 URL 递归发现站点页面，trafilatura 提取正文转 Markdown 导入 | `CONNECTOR_WEB_*`，任务 `document.import_web` |
-| **飞书机器人** | 长连接事件订阅，群里 @ 机器人提问，卡片流式回答 + 引用链接 | `FEISHU_*`（lark-oapi 长连接，无需公网回调） |
-
-- 连接器统一基于 `DocumentConnector` 抽象（list / fetch / 触发流水线），新增数据源按同一模式扩展
-- 飞书渠道按 (chat_id, open_id) 映射独立平台会话：私聊一人一会话，群聊每人独立上下文
-- 所有渠道共享同一编排/检索/记忆/评估链路，可观测性 Trace 统一可查
-
-### 响应缓存与断线续传
-
-**响应缓存**：企业知识问答中「无历史上下文的确定性提问」（FAQ/制度/手册）重复率极高。
-- 仅当会话**无历史上下文**（摘要为空）且模式为 auto/retrieval 时缓存——多轮上下文永不污染缓存
-- 缓存键 = 规范化问题 + 模式 + 文档集（**跨会话复用**），TTL 默认 24h
-- 命中时跳过编排/检索/生成，直接回放缓存答案与引用；会话记录仍正常落库
-- 配置：`CHAT_CACHE_ENABLED` / `CHAT_CACHE_TTL_HOURS`
-
-**SSE 断线续传**：流式回答期间网络抖动/服务发布不会丢失回答。
-- 服务端将事件写入 Redis 缓冲（TTL 180s），客户端断线后自动重连（指数退避 ×3）并携带 `resume` 计数
-- 服务端重放未消费事件（**不重复渲染**）：已完成则正常收尾；原流仍在执行则提示「执行中」
-
-### 长期记忆架构
-
-三种记忆策略，按场景切换：
-
-| 策略 | 机制 | 适用场景 |
-|------|------|----------|
-| **Summary Compression** | 结构化摘要压缩历史 + 滑动窗口保留近期上下文，异步增量压缩 + 版本校验 | 生产推荐，50+ 轮长会话 |
-| **Sliding Window** | 保留最近 N 轮完整对话原文 | 短期连续追问，Token 成本可控 |
-| **No Memory** | 每轮独立，不保存任何历史 | 一次性查询，零开销 |
-
-Summary Compression 长期摘要包含：会话目标、已确认事实、用户偏好与约束、已解决问题、待跟进问题、检索提示词等结构化字段。
-
-### MCP Skills 插件系统
-
-工具层由两个职责分离的部件组成，请勿混为一谈：
-
-**1. SkillRegistry（Agent 实际使用的工具来源）**
-
-`app/mcp/skill_registry.py` 基于 `pkgutil` 扫描 `app/mcp/skills/` 自动发现 `BaseSkill`
-子类并注册其工具，同时联动 `app/safety/tool_registry.py` 完成风险分级。
-ReAct Agent 通过 `SkillRegistry.resolve(tool_name)` 取用工具。
-
-| 内置 Skill | 功能 |
-|------------|------|
-| **Knowledge Retrieval** | 知识库检索（`search_knowledge_base` / `rag_search`） |
-| **Document Navigation** | 文档结构图谱导航（章节/条目/搜索） |
-| **Web Research** | Tavily 网络搜索集成 |
-
-**2. FastMCP Server（对外集成入口，独立进程）**
-
-`app/mcp/server.py` 是一个独立的 FastMCP 服务进程（`run_mcp_server()`），
-面向外部 MCP 客户端暴露知识库能力。它**不参与**主应用内的 Agent 工具注册，
-需单独启动后由外部客户端连接使用。
-
-### 安全与合规
-
-| 层 | 能力 |
-|----|------|
-| **输入过滤** | 关键词风险检测（默认启用）+ Presidio PII 检测；LLM 深度护栏为可选兜底通道（`SAFETY_INPUT_LLM_GUARDRAIL_ENABLED`，默认关闭以节省 LLM 调用） |
-| **输出过滤** | 敏感信息脱敏，策略合规检查 |
-| **风险分级** | 四级风险定级（LOW / MEDIUM / HIGH / CRITICAL），CRITICAL 与命中危险关键词的 HIGH 工具调用被拦截 |
-| **工具审批** | 当前为 **fail-close 阻断**：高风险工具调用被拒绝并向模型返回说明，尚无人工确认（HITL）交互闭环 |
-| **沙箱执行** | Code Executor 在受限子进程中运行 Python 代码：AST 白名单审查 + POSIX `setrlimit`（内存 256MB / CPU 8s / 文件 10MB）+ 进程组 SIGKILL；属进程级隔离，非容器级隔离 |
-
-### JEV System 1 本地判断决策层（开源免费平替）
-
-在传统的 LLM 应用中，开发团队普遍面临**“用生成式大模型做条件判断”**的困境：延迟高达 600~1500ms、JSON 格式幻觉、token 费用昂贵，导致企业级安全护栏往往被迫在生产环境默认关闭。
-
-本平台创新性地引入了 **JEV（System 1 判断模型）** 架构理念，并以 **完全开源、免费、支持本地/Docker 容器化部署** 的形式完成了全链路平替：
-- **核心机制**：自建 `jev-service` 微服务（基于 `Qwen/Qwen2.5-1.5B-Instruct`），在单次前向推理（Forward Pass）中直接提取候选空间 Logits 进行受限 Softmax，**完全抛弃自回归文本生成**，实现 30~80ms 极低延迟与 100% 强类型决策。
-- **三大决策原语**：
-  1. `Noul`：布尔真值判别与校准概率输出 $[0.0, 1.0]$（用于安全拦截、引用审计、NLI 事实一致性）；
-  2. `Choice`：互斥枚举选项决策与全概率分布（用于意图分流、改写意图分类、违规威胁类型）；
-  3. `Score`：等级序列评分（用于答案相关度等距打分、质量量化）。
-
-| 环节 | 改造前（传统 LLM 方案） | 改造后（JEV System 1 本地平替） | 收益与技术亮点 |
-|:--|:--|:--|:--|
-| **安全护栏** | LLM 深度检测延迟 800ms+，生产代码**被迫默认关闭** | **JEV Noul+Choice**，30~80ms，**全量常态化开启** | 兼顾零延迟劣化与企业级安全合规 |
-| **意图分流** | 静态关键词表，曾出现「今天报销流程」误判外网天气 | **JEV Choice + Noul** 语义意图分类 | 彻底消除词表冲突，新增模糊歧义澄清分支 |
-| **导航分析** | 正则规则预筛，口语化表达容易漏判 | 正则快路径 + **JEV Noul** 语义兜底 | 覆盖率提升，复杂结构问答准确率提高 |
-| **引用审计** | LLM 吐 JSON，需 30 行正则清洗与解析防御代码 | **JEV 并行 Noul**，单次请求并发校验多条引用 | **主路径免除 JSON 防御代码**，格式错误率降为 0%，保留 LLM 降级兜底 |
-| **忠实度评测** | Ragas 式双阶段调用 LLM，离线评测极慢 | Phase 2 替换为 **JEV Noul** | 批量数据集评测总耗时降低约 60% |
-| **相关度/精度评测** | LLM 输出字符串解析数字或数组，偶发异常 0.0 | **JEV Score / 并行 Noul** 强类型评分 | 消除评测异常值，输出平滑校准置信度 |
-
-### 可观测性
-
-| 层 | 能力 |
-|----|------|
-| **自研 Trace** | 一次对话 = 一条 trace，阶段/检索通道/LLM 调用以 span 树组织；落 MySQL 三表（`trace_observability*`），管理后台可视化 |
-| **Langfuse** | 应用层 LLM/RAG 可观测 + 评估：trace/generation/score、Prompt、Dataset/Experiment；与自研 trace 并行上报（`LANGFUSE_ENABLED`） |
-| **OpenTelemetry** | 基础设施级分布式追踪（FastAPI/SQLAlchemy/Redis/HTTPX），OTLP HTTP 导出（Langfuse 不支持 gRPC；`OTEL_ENABLED`） |
-| **RAG 评估** | faithfulness / answer_relevancy / context_precision / context_recall / answer_correctness，分数写入 Langfuse Score 与 MySQL；golden dataset 可跑 Langfuse Experiment |
-| **Prometheus** | `/metrics` 端点暴露阶段耗时、token、成本、缓存命中率等聚合指标 |
-| **结构化日志** | structlog JSON 输出，按 trace_id 关联 |
-
-> **默认关闭**：未设置 `LANGFUSE_ENABLED=true` / `OTEL_ENABLED=true` 时，所有 Langfuse/OTel 路径静默短路，仅保留自研 trace + Prometheus。
-
----
+| **对话编排** | 9 阶段 Pipeline，规则层就地短路；意图分流规则快路径 + JEV 语义兜底 |
+| **知识召回** | PGVector 向量 + Elasticsearch BM25 双通道 → RRF 融合 → Cross-Encoder 精排 → 证据闸门 |
+| **多 Agent** | Supervisor 任务分解（LangGraph）+ 拓扑分层并发 + 结果汇总 |
+| **长期记忆** | 结构化摘要（`summary_version` CAS 乐观锁）+ 滑动窗口；可选用户事实记忆（pgvector） |
+| **文档接入** | 本地目录 / zip / 批量上传 + S3 / 网页连接器；解析 → 两阶段父子切块 → 向量化 → 索引 |
+| **引用溯源** | 回答附来源引用（chunk_id / 章节 / 原文），前端可展开 |
+| **本地判断（JEV）** | 护栏 / 意图 / 引用审计 / 证据充分性 / 质量审核 / 评测走本地单次前向，替代 LLM-as-Judge |
+| **响应缓存** | 无历史上下文的确定性问答走 Redis 回放；SSE 断线续传 |
+| **安全** | JWT + JTI 即时吊销、Lua 滑动窗口限流、Luhn 校验 PII、AST + `setrlimit` 沙箱、工具风险分级 |
+| **可观测性** | 自研 Trace（span 树落库）+ Prometheus；可选 Langfuse / OpenTelemetry |
 
 ## 系统架构
 
 ```mermaid
 flowchart TB
-    classDef client fill:#90EE90,stroke:#2E7D2E,stroke-width:2px,color:#1B5E20
-    classDef api fill:#87CEEB,stroke:#1565C0,stroke-width:2px,color:#0D47A1
-    classDef core fill:#E6E6FA,stroke:#4A148C,stroke-width:2px,color:#4A148C
-    classDef store fill:#FFE66D,stroke:#F08C00,stroke-width:2px,color:#000
-    classDef async fill:#FFB6C1,stroke:#C62828,stroke-width:2px,color:#B71C1C
-    classDef infra fill:#95E1D3,stroke:#087F5B,stroke-width:2px,color:#000
-    classDef obs fill:#D4A5A5,stroke:#7D4E57,stroke-width:2px,color:#fff
+    classDef client fill:#90EE90,stroke:#2E7D2E,color:#1B5E20
+    classDef core fill:#E6E6FA,stroke:#4A148C,color:#4A148C
+    classDef store fill:#FFE66D,stroke:#F08C00
+    classDef infra fill:#95E1D3,stroke:#087F5B
+    classDef obs fill:#D4A5A5,stroke:#7D4E57,color:#fff
 
-    subgraph Clients[👤 客户端]
-        UI[💬 Chat SPA<br/>React 19 + Zustand]:::client
-        ADMIN[📊 Admin Dashboard<br/>React 19 + Recharts]:::client
-        FEISHU[💬 飞书机器人<br/>长连接事件]:::client
+    UI[Chat SPA]:::client
+    ADMIN[Admin 后台]:::client
+    FEISHU[飞书机器人]:::client
+
+    FW[接入层 FastAPI + SSE<br/>JWT · 限流 · 会话租约]:::core
+
+    subgraph Orchestration[编排层]
+        ORC[9 阶段 Pipeline<br/>就地短路]:::core
+        SUP[Supervisor<br/>任务分解]:::core
+        REG[Executor Registry]:::core
     end
 
-    subgraph API[🌐 API 层]
-        FW[⚡ FastAPI + SSE<br/>Port 8080]:::api
-        MID[🔧 Middleware 栈<br/>CORS · Rate Limit · Auth · Tracing]:::api
+    subgraph Services[核心服务]
+        CHAT[Chat Service<br/>会话 + 记忆]:::core
+        RAG[RAG Engine<br/>双通道 + RRF + 精排]:::core
+        AGENT[React Agent<br/>LangGraph + 工具]:::core
+        JEV[JEV System 1<br/>本地判断]:::infra
     end
 
-    subgraph Orchestration[⚙️ 编排层]
-        ORC[📋 Pre-Orchestrator<br/>9-Stage Pipeline]:::core
-        SUP[🧠 Supervisor Agent<br/>LLM 任务分解]:::core
-        REG[📦 Executor Registry<br/>6 种执行模式]:::core
+    subgraph Storage[存储]
+        PG[(PostgreSQL<br/>PGVector)]:::store
+        ES[(Elasticsearch<br/>IK)]:::store
+        MYSQL[(MySQL)]:::store
+        RD[(Redis<br/>缓存/锁/黑名单)]:::store
+        MINIO[(MinIO)]:::store
+        NEO4J[(Neo4j 可选)]:::store
     end
 
-    subgraph CoreServices[🔬 核心服务]
-        CHAT[💬 Chat Service<br/>会话管理 + 记忆]:::core
-        RAG_ENG[🔍 RAG Engine<br/>双通道召回 + Fusion]:::core
-        AGENT[🤖 React Agent<br/>LangGraph 驱动]:::core
-    end
+    DOC[文档流水线<br/>解析→切块→向量化→索引]:::infra
+    OBS[可观测性<br/>Trace + Prometheus]:::obs
 
-    subgraph Safety[🔐 安全层]
-        SAFE_IN[📥 Input Safety<br/>PII + Risk Detection]:::core
-        SAFE_OUT[📤 Output Safety<br/>Filter + Redaction]:::core
-        SAFE_TOOL[🛡️ Tool Approval<br/>Risk Grading]:::core
-    end
-
-    subgraph Storage[💾 数据存储]
-        PG[(PostgreSQL 16<br/>PGVector)]:::store
-        ES[(Elasticsearch 8.13<br/>IK Analyzer)]:::store
-        MYSQL[(MySQL 8.4<br/>Business Data)]:::store
-        NEO4J[(Neo4j 5.20<br/>Document Graph<br/>可选·默认关闭)]:::store
-        MINIO[(📦 MinIO<br/>Document Storage)]:::store
-        RD[(⚡ Redis 7.2<br/>Cache + Lock)]:::store
-    end
-
-    subgraph Async[⏳ 异步任务]
-        CL[⚙️ Celery Worker<br/>文档处理]:::async
-        BEAT[⏰ Celery Beat<br/>定时清理]:::async
-        EB[📨 Event Bus<br/>内存事件总线]:::async
-    end
-
-    subgraph Infrastructure[🏗️ 基础设施]
-        DOC[📄 DOC Pipeline<br/>Parse → Chunk → Vectorize → Index]:::infra
-        MCP[🔌 MCP Skills<br/>插件系统]:::infra
-        JEV[⚡ JEV System 1<br/>Qwen2.5-1.5B 单Pass决策]:::infra
-        OBS[📊 自研可观测性<br/>Trace + Prometheus]:::obs
-        EVAL[📈 Evaluation<br/>JEV + LLM-as-Judge]:::obs
-    end
-
-    UI -->|HTTP/SSE| FW
-    ADMIN -->|HTTP/SSE| FW
-    FEISHU -->|流式卡片| FW
-    FW --> MID
-    MID --> ORC
-    ORC --> SUP
-    SUP --> REG
+    UI --> FW
+    ADMIN --> FW
+    FEISHU --> FW
+    FW --> ORC --> SUP --> REG
     REG --> CHAT
-    REG --> RAG_ENG
+    REG --> RAG
     REG --> AGENT
-    CHAT --> SAFE_IN
-    RAG_ENG --> SAFE_IN
-    AGENT --> SAFE_IN
-    SAFE_IN --> SAFE_OUT
-    SAFE_OUT --> SAFE_TOOL
-    CHAT --> PG
-    RAG_ENG --> PG
-    RAG_ENG --> ES
-    AGENT --> MCP
+    ORC -.-> JEV
+    RAG -.-> JEV
+    CHAT -.-> JEV
+    CHAT --> MYSQL
     CHAT --> RD
-    MINIO --> DOC
-    DOC --> CL
-    DOC --> ES
+    RAG --> PG
+    RAG --> ES
+    AGENT -.-> DOC
+    DOC --> MYSQL
     DOC --> PG
+    DOC --> ES
+    DOC --> MINIO
     DOC --> NEO4J
-    EB -.->|事件通知| CL
-    ORC -.- OBS
-    CHAT -.- EVAL
+    CHAT -.-> OBS
+    RAG -.-> OBS
 ```
 
----
+- **接入层**：验签、限流、会话租约；SSE 长连接推流。
+- **编排层**：9 阶段流水线逐级推演，护栏 / 闲聊 / 路由可尽早短路；产出 `ExecutionPlan` 后可选 Supervisor 分解。
+- **核心服务**：会话与记忆、RAG 检索、ReAct Agent。
+- **存储**：MySQL（元数据/父块/消息）、PGVector（子块向量）、ES（BM25）、Redis（缓存/锁/黑名单）、MinIO（原文）、Neo4j（目录树，可选）。
+- **JEV**：本地判断微服务，供编排与执行层在判断点调用。
+
+## 关键设计
+
+- **9 阶段就地短路**：历史 → 时效 → 护栏 → 校验 → 闲聊 → 改写分流 → 路由 → 导航 → 组装计划；违规返回拒答、闲聊走轻量直答、意图模糊触发澄清，不需要的请求不进入检索与生成。
+- **两阶段父子切块**：父块（800~1500 字）存 MySQL 供完整上下文投喂，子块（256~512 Token）存 PGVector / ES 供高精度检索；命中子块后按 `parent_block_id` 回填父块，父块查询加进程内 LRU 缓存。
+- **双通道 RRF**：向量与词法通道并发召回，按排名位次做 RRF（k=60）融合，避免分数量纲冲突；再精排与证据闸门过滤。
+- **短事务解耦推流**：数据库操作收敛为请求首尾两段短事务，SSE 推流期间数据库连接占用为 0；Redis 会话租约防连点乱序。
+- **分层记忆**：滑动窗口保留近期原文，超出部分异步压缩为结构化摘要，`summary_version` CAS 乐观锁防并发脏写；可选用户事实记忆跨会话复用。
+- **JEV 本地判断**：自建 `jev-service`（Qwen2.5-1.5B），单次前向读 logits 输出 Noul / Choice / Score 三类强类型结论，替代判断类 LLM 调用；统一入口 `jev_decide`，逐环节开关，灰区或服务不可达时回退 LLM / 规则。
+- **安全纵深**：输入（PII + 注入）→ 编排护栏（规则 + JEV 语义）→ 输出过滤 → 工具风险分级与沙箱执行。
+- **响应缓存**：仅对无历史、确定性问答生效，文档变更时按 doc_id 精准失效。
 
 ## 技术栈
 
 ### 后端
 
-| 分类 | 技术 | 版本 |
-|------|------|------|
-| **语言** | Python | >=3.11, <3.13 |
-| **Web 框架** | FastAPI | 0.115 |
-| **Agent 框架** | LangGraph | 0.3 |
-| **ORM** | SQLAlchemy (async) | 2.0 |
-| **数据库迁移** | Alembic | — |
-| **向量数据库** | PostgreSQL 16 + PGVector | — |
-| **搜索引擎** | Elasticsearch | 8.13.4 |
-| **图数据库** | Neo4j（可选，默认关闭） | 5.20 |
-| **缓存/锁** | Redis 7.2 + Redisson | — |
-| **消息队列** | Celery + Redis | — |
-| **对象存储** | MinIO | — |
-| **LLM 客户端** | OpenAI SDK + httpx | — |
-| **Prompt 模板** | Jinja2 | — |
-| **MCP** | FastMCP | — |
-| **PII 检测** | Microsoft Presidio | — |
-| **追踪** | 自研 Trace（span 树 + MySQL 落库） + Langfuse + OpenTelemetry | — |
-| **评估** | 自实现 RAGAS 指标（faithfulness/relevancy/precision/recall/correctness） | — |
-| **指标** | Prometheus | — |
-| **日志** | structlog | — |
-| **文档解析** | Unstructured + MarkItDown + MinerU（可选增强） | — |
-| **IM 渠道** | 飞书（lark-oapi 长连接） | — |
-| **网页提取** | trafilatura | — |
+| 分类 | 技术 |
+|------|------|
+| 语言 / 框架 | Python 3.11 · FastAPI · LangGraph · SQLAlchemy 2.0 (async) · Alembic |
+| 存储 | PostgreSQL 16 + PGVector · Elasticsearch 8.13（IK） · MySQL 8.4 · Neo4j 5.20（可选） · MinIO · Redis 7.2 |
+| 异步 | Celery + Redis |
+| 判断决策 | JEV System 1（`jev_service/`，Qwen2.5-1.5B，本地 / Docker） |
+| 文档解析 | Unstructured + MarkItDown + MinerU（可选增强） · trafilatura（网页） |
+| 安全 | Microsoft Presidio（PII） |
+| 可观测性 | 自研 Trace（span 树 + MySQL） · Prometheus · structlog · 可选 Langfuse / OpenTelemetry |
+| 评估 | 自实现 RAGAS 指标（faithfulness / relevancy / precision / recall / correctness） |
 
 ### 前端
 
 | 应用 | 技术栈 |
 |------|--------|
-| **用户端 (Chat SPA)** | React 19 + TypeScript + Vite + Zustand + Tailwind CSS 4 + react-markdown |
-| **管理端 (Admin)** | React 19 + TypeScript + Vite + React Router + Recharts + Tailwind CSS 4 |
-
----
+| 用户端 (Chat SPA) | React 19 + TypeScript + Vite + Zustand + Tailwind CSS 4 + react-markdown |
+| 管理端 (Admin) | React 19 + TypeScript + Vite + React Router + Recharts + Tailwind CSS 4 |
 
 ## 项目结构
 
 ```
 pipeline-rag/
-├── app/                              # 后端应用
-│   ├── main.py                       # 应用入口 & Lifespan
-│   ├── api/                          # REST API 路由
-│   │   ├── router.py                 # 路由注册
-│   │   ├── chat_session.py           # 会话管理 API
-│   │   ├── chat_stream.py            # SSE 流式对话 API
-│   │   └── manage_*.py              # 管理后台 API
-│   ├── orchestrator/                 # 主编排器
-│   │   ├── orchestrator.py           # 9-Stage Pipeline
-│   │   ├── supervisor.py            # LLM 任务分解
-│   │   ├── stages/                  # 各 Stage 实现
-│   │   └── classifier.py            # 意图分类
-│   ├── chat/                         # 对话服务
-│   │   ├── service.py               # 对话业务逻辑
-│   │   ├── memory.py                # 3 种记忆策略
-│   │   ├── memory_compressor.py     # 异步摘要压缩
-│   │   ├── store.py                 # 会话仓储
-│   │   └── channels/                # 多渠道适配（飞书机器人）
-│   ├── executors/                    # 执行器集群
-│   │   ├── registry.py              # 执行器注册表
-│   │   ├── rag.py                   # RAG Chat 执行器
-│   │   ├── agent.py                 # React Agent 执行器
-│   │   └── ...                      # 其他 4 种执行器
-│   ├── rag/                          # RAG 引擎
-│   │   ├── channels/                # 检索通道
-│   │   │   ├── vector.py           # PGVector 向量通道
-│   │   │   └── keyword.py          # ES 关键词通道
-│   │   ├── fusion.py                # RRF 融合
-│   │   ├── reranker.py              # BGE Reranker
-│   │   ├── assembly.py             # Prompt 组装 + Budget
-│   │   └── parent_block.py         # Parent-Child 上下文
-│   ├── document/                     # 文档处理
-│   │   ├── pipeline.py              # 文档处理编排
-│   │   ├── parser.py                # 文档解析（含 MinerU 增强通道）
-│   │   ├── mineru_parser.py         # MinerU 复杂版式解析（可选）
-│   │   ├── chunker/                 # 4 种分块策略
-│   │   ├── connectors/              # 数据源连接器（S3 / 网页爬虫）
-│   │   ├── vectorizer.py            # 向量化（Contextual Chunking）
-│   │   └── indexer.py               # 索引写入
-│   ├── mcp/                          # MCP 插件系统
-│   │   ├── server.py                # MCP 服务器
-│   │   ├── skill_registry.py        # Skills 注册中心
-│   │   └── skills/                  # 内置 Skills
-│   ├── safety/                       # 安全层
-│   │   ├── input.py                 # 输入过滤
-│   │   ├── output.py                # 输出过滤
-│   │   ├── presidio_pii.py          # PII 检测
-│   │   └── tool_registry.py         # 工具审批
-│   ├── observability/               # 可观测性（自研体系）
-│   │   ├── tracer.py                # Trace 追踪（span 树 + 采样）
-│   │   ├── storage.py               # Trace 落库（trace/span/score）
-│   │   ├── metrics/                 # RAG 质量评估（LLM-as-Judge）
-│   │   └── models.py               # 评估数据模型
-│   ├── infra/                        # 基础设施
-│   │   ├── pg.py                    # PostgreSQL 连接
-│   │   ├── es.py                    # Elasticsearch 连接
-│   │   ├── neo4j.py                 # Neo4j 连接
-│   │   ├── minio.py                 # MinIO 存储
-│   │   └── tracing.py              # OTel 初始化（deprecated，默认关闭）
-│   ├── common/                       # 共享基础库
-│   │   ├── pipeline.py              # 泛型 Pipeline 模式
-│   │   ├── llm_client.py            # LLM 客户端
-│   │   ├── jinja.py                 # Jinja2 模板引擎
-│   │   └── sse.py                   # SSE 工具
-│   ├── config/                       # 配置管理
-│   ├── db/                           # 数据库层
-│   │   ├── models/                  # SQLAlchemy 模型
-│   │   └── repositories/           # 仓储层
-│   └── api/schemas/                 # Pydantic Schema
-├── frontend/                         # 前端 SPA
-│   └── src/
-│       ├── pages/                    # 页面组件
-│       ├── components/               # UI 组件
-│       ├── store/                    # Zustand 状态
-│       └── lib/                      # API 客户端
-├── alembic/                          # 数据库迁移
-├── scripts/                          # 工具脚本
-├── demo_docs/                        # 演示文档
-├── docker-compose.yml               # 容器编排
-├── Dockerfile                        # 多阶段构建
-├── pyproject.toml                    # 项目元数据
-└── worker.py                         # Celery 入口
+├── app/
+│   ├── api/            # REST 路由（会话、SSE 流式对话、管理后台）
+│   ├── orchestrator/   # 9 阶段流水线、Supervisor、意图/改写/路由
+│   ├── chat/           # 会话服务、记忆策略、事实记忆、响应缓存
+│   ├── executors/      # 执行器集群（Rag / ReactAgent / Graph / Clarification / Refusal / Parallel）
+│   ├── rag/            # 检索通道、RRF 融合、精排、父块提升、Prompt 组装
+│   ├── document/       # 解析、分块、连接器、向量化、索引
+│   ├── safety/         # 输入/输出过滤、PII、工具审批
+│   ├── observability/  # 自研 Trace、Langfuse、OTel、指标
+│   ├── mcp/            # SkillRegistry + FastMCP Server
+│   ├── infra/          # 数据库/存储/JEV 客户端等基础设施
+│   ├── common/         # 泛型 Pipeline、LLM 客户端、SSE 工具
+│   ├── config/         # 配置管理
+│   └── db/             # 模型与仓储
+├── jev_service/        # JEV System 1 判断微服务（FastAPI + 1.5B 模型）
+├── frontend/           # React SPA（用户端 + 管理端）
+├── alembic/            # 数据库迁移
+├── scripts/            # 评测、基准等工具脚本
+├── bin/                # 部署与验证脚本
+└── docker-compose*.yml # 容器编排
 ```
-
----
-
-## 管理后台功能
-
-| 模块 | 功能 |
-|------|------|
-| **Dashboard** | 运营数据概览、对话统计、Token 用量 |
-| **文档中心** | 文档上传、处理策略配置、执行流水线可视化 |
-| **Chunk 管理** | 分块结果查看、策略对比、质量分析 |
-| **知识路由** | 查询→知识域映射管理、路由轨迹追踪 |
-| **RAG 评估** | Faithfulness / Relevancy / Precision / Recall / Correctness |
-| **对话观测** | 会话列表 → 单轮执行链路（通道召回/检索结果） |
-| **Trace 链路** | span 瀑布 + 评估分数 + 指标卡片（自研 trace 三表） |
-| **观测指标** | Prometheus 指标看板（时延/Token/成本/降级） |
-| **评估数据集** | 离线评估运行、Regression 测试（--min-* 阈值门禁） |
-
----
 
 ## 快速开始
 
 ### 环境要求
 
-- Python 3.11+
-- Docker & Docker Compose
-- Node.js 20+ (前端)
+- Python 3.11+ · Docker & Docker Compose · Node.js 20+（前端）
 
 ### 启动基础设施
 
@@ -521,31 +190,19 @@ docker compose up -d
 ### 安装并启动后端
 
 ```bash
-# 安装依赖
+# 安装依赖（可选：完整文档解析 unstructured 增强通道）
 uv sync
-# 可选：完整文档解析（unstructured 增强通道，复杂 PDF/Word/PPT 版式）
-# 不装时自动降级 markitdown，复杂版式可启用 MinerU 增强通道
 uv sync --extra full-parsing
 
-# 数据库迁移
+# 数据库迁移（迁移链已 squash 为单一 baseline，空库可直接重建）
 alembic upgrade head
-# 说明：迁移链已 squash 为单一 baseline（revision=0001_baseline），可从空库直接重建完整 schema。
-#   若旧库仍记为历史版本号（如 e2f3a4b5c6d7），其 schema 与 baseline 等价，执行一次：
-#   alembic stamp 0001_baseline
 
 # 启动 API 服务
-# 多 worker 说明：跨实例状态已收敛到 Redis，可安全使用多 worker / 多副本。
-#   - 会话排他执行：Redis 分布式租约（pipeline_rag:lock:conversation:{id}）
-#   - 停止会话：Redis 取消键 + Pub/Sub 跨实例广播（main.py 订阅端）
-#   - 运行状态查询：ChatRuntimeRegistry.is_running_cluster() 以「本地注册表 ∪ 租约键」判定
-#   - 实时答案缓冲仍为进程内（跨 worker 时退化为已落库的最新回答）
+# 多 worker 说明：跨实例状态已收敛到 Redis（会话租约 / 停止广播 / 运行状态），可安全多 worker。
 fastapi dev app/main.py --port 8080        # 开发
-# 生产部署（Docker 默认）：uvicorn app.main:app --host 0.0.0.0 --port 8080 \
-#   --workers 4 --timeout-graceful-shutdown 60   # SSE 长连接优雅停机
+# 生产（Docker 默认）：uvicorn app.main:app --host 0.0.0.0 --port 8080 --workers 4
 
 # 启动 Celery Worker（新终端）
-# 两种等价入口：`python worker.py` 或 `celery -A app.celery_app worker`
-# （与 docker-compose 中 celery-worker 服务一致；含 beat 调度需另起 celery beat）
 uv run python worker.py
 ```
 
@@ -572,91 +229,50 @@ npm run dev
 | 配置项 | 说明 |
 |--------|------|
 | `CHAT_CACHE_ENABLED` / `CHAT_CACHE_TTL_HOURS` | 响应缓存开关与 TTL（默认关 / 24h） |
-| `CONNECTOR_S3_*` | S3 数据源连接器（扫描 bucket 自动导入） |
-| `CONNECTOR_WEB_*` | 网页爬虫连接器（sitemap/种子递归抓取） |
+| `RAG_USER_MEMORY_ENABLED` | 用户事实记忆开关（默认关） |
+| `JEV_*` | JEV 服务地址与各环节开关（护栏/意图/引用/证据/质量/评测等） |
+| `CONNECTOR_S3_*` / `CONNECTOR_WEB_*` | S3 / 网页连接器 |
 | `FEISHU_*` | 飞书机器人渠道（长连接事件订阅 + 卡片流式回复） |
-| `MINERU_*` | MinerU 复杂版式解析增强通道（失败自动降级） |
-| `LANGFUSE_*` | Langfuse 可观测平台（`ENABLED`/`PUBLIC_KEY`/`SECRET_KEY`/`HOST`/`PUBLIC_URL`/`SAMPLE_RATE`，默认关） |
-| `OTEL_*` | OpenTelemetry OTLP 导出（`ENABLED`/`EXPORTER_OTLP_ENDPOINT`/`EXPORTER_OTLP_HEADERS`/`SERVICE_NAME`，默认关） |
+| `MINERU_*` | MinerU 复杂版式解析增强（失败自动降级） |
+| `LANGFUSE_*` / `OTEL_*` | 可观测性上报（默认关） |
 
 完整变量清单见 `.env.example`。
 
 ### 开发命令
 
 ```bash
-# 代码检查
-ruff check . && ruff format --check .
-
-# 类型检查
-mypy app/
-
-# 测试
-pytest tests/ -v
-
-# 测试覆盖率（可选，输出缺失行）
-pytest --cov=app --cov-report=term-missing
-
-# 集成测试（需先 docker compose up -d 起基础设施，不可达自动 skip）
-pytest tests/integration -v
+ruff check . && ruff format --check .   # 代码检查
+mypy app/                               # 类型检查
+pytest tests/ -v                        # 测试
+pytest tests/integration -v             # 集成测试（需先起基础设施）
+make eval-ab                            # JEV 决策 A/B 门禁（需 jev-service 可达）
 ```
-
----
 
 ## Docker 部署
 
 ### 一键部署（幂等，可重复执行）
 
 ```bash
-cp .env.example .env    # 首次：填写密钥（外部 LLM key、JWT、Langfuse 等）
+cp .env.example .env    # 首次：填写密钥（外部 LLM key、JWT 等）
 
-# 基础栈：基础设施（MySQL/PG/ES/Neo4j/Redis/MinIO）+ 业务（app/celery-worker/beat）
-./bin/deploy.sh
+./bin/deploy.sh                          # 基础设施 + 业务（app / celery-worker / beat）
+./bin/deploy.sh --with-observability     # 额外启动 Langfuse 自托管观测栈
 
-# 额外启动可观测性栈（Langfuse 自托管：web/worker/clickhouse + 自带 PG/Redis/MinIO）
-./bin/deploy.sh --with-observability
+./bin/verify-deploy.sh                   # 分层验证：容器 → 应用健康 → 基础设施 → 业务链路 → 监控
 ```
+
+数据库表结构由 compose 的一次性 `migrate` 服务在 app 启动前自动执行（`alembic upgrade head`），无需手工建表。
 
 ### 常用命令（Makefile）
 
 ```bash
-make help         # 查看全部命令
-make init         # 首次：cp .env.example .env
-make up           # 启动后端栈（= ./bin/deploy.sh）
-make up-obs       # 后端 + Langfuse 可观测性
+make help / init / up / up-obs / down / clean / reset
 make ps / logs / shell
-make migrate      # 手动补跑数据库迁移（alembic upgrade head）
-make verify       # 后端分层验证（L1-L5）
-make down / down-all / clean / reset
-
-make fe-up        # 启动前端（独立部署）
-make fe-logs / fe-down
-make up-all       # 后端 + 前端
+make migrate            # 手动补跑迁移
+make verify             # 后端分层验证（L1-L5）
+make jev-up / jev-logs  # 启动 / 跟踪 JEV 决策服务
+make up-all / fe-up / fe-down
 ```
-
-数据库表结构由 compose 的一次性 `migrate` 服务在 app 启动前自动执行
-（`alembic upgrade head`），无需手工建表。
-
-### 分层验证（不要只看 `docker ps`）
-
-```bash
-./bin/verify-deploy.sh                     # L1 容器 → L2 应用健康 → L3 基础设施
-                                           # → L4 业务链路 → L5 监控
-./bin/verify-deploy.sh --with-observability # 额外验证 Langfuse 与 OTLP 端点
-```
-
-### 前端（独立部署）
-
-前后端完全解耦，各用一套 compose：
-
-```bash
-make up                    # 后端（含基础设施）
-make fe-up                 # 前端（nginx 托管静态产物 + 反代后端），默认 http://localhost:80
-BACKEND_URL=http://10.0.0.12:8080 make fe-up   # 前后端不在同一宿主机时
-```
-
-前端容器按 `BACKEND_URL` 反代 `/api` `/admin` `/manage` `/health`；默认指向宿主机
-（`host.docker.internal`）上发布的后端端口。构建期可用 `VITE_API_BASE_URL` 注入 API
-绝对地址（留空则走同源相对路径，由 nginx 反代）。
 
 ### 服务与端口
 
@@ -664,32 +280,13 @@ BACKEND_URL=http://10.0.0.12:8080 make fe-up   # 前后端不在同一宿主机�
 |---|---|---|
 | 基础设施 | mysql / postgres / elasticsearch / neo4j / redis / minio | 3306 / 5432 / 9200 / 7474·7687 / 6379 / 9000·9001 |
 | 业务 | app（FastAPI，含 `/metrics` `/health/*`） | `APP_PORT`（默认 8080） |
-| 业务 | celery-worker / celery-beat | —（无对外端口） |
-| 可观测性（profile） | langfuse-web | `LANGFUSE_WEB_PORT`（默认 3000） |
-| 可观测性（profile） | langfuse-worker / clickhouse / postgres / redis / minio | —（仅容器内可达） |
-| 前端（独立 compose） | frontend（nginx 静态托管 + 反代） | `FRONTEND_PORT`（默认 80） |
+| 业务 | celery-worker / celery-beat / jev-service | —（无对外端口） |
+| 可观测性 | langfuse-web | `LANGFUSE_WEB_PORT`（默认 3000） |
+| 前端（独立 compose） | frontend（nginx 托管 + 反代） | `FRONTEND_PORT`（默认 80） |
 
-> 基础设施端口（mysql/postgres/es/neo4j/redis/minio）**仅在开发模式发布**：裸
-> `docker compose up` 会自动加载 `docker-compose.override.yml`；`bin/deploy.sh` /
-> `make up` 显式指定 `-f docker-compose.yml`，不发布基础设施端口，降低暴露面。
+> 基础设施端口**仅在开发模式发布**：裸 `docker compose up` 加载 `docker-compose.override.yml` 时发布；`bin/deploy.sh` / `make up` 不发布，降低暴露面。
 
-### 设计要点
+## 文档
 
-- **配置外部化**：所有基础设施地址经环境变量注入；容器内用服务名（`mysql`/`redis`/…），`docker-compose.yml` 覆盖 `.env` 的 `localhost` 值（含 `CELERY_BROKER_URL`、`NEO4J_URI`）。
-- **启动依赖**：`depends_on: service_healthy` + 健康检查，等基础设施真正就绪再起业务（非 `sleep`）；`migrate` 一次性成功后才启动 app/worker。
-- **持久化**：所有有状态服务挂载 Volume；数据库表结构由一次性 `migrate` 服务（`alembic upgrade head`）在 app 启动前自动迁移。
-- **非 root 运行**：后端镜像以 uid 10001 运行；日志统一 json-file 轮转（10m×3）。
-- **ES 中文分词（IK 插件）**：ES 容器启动时经 `curl` 按 `ES_IK_PLUGIN_URL`（默认国内 CDN）安装，并持久化到 `es_plugins` 卷；下载需经代理时设置 `ES_HTTP_PROXY`（如 `http://host.docker.internal:7897`）。安装失败不阻断 ES 启动（中文分词降级为默认分析器）。
-- **可观测性默认关**：`LANGFUSE_ENABLED`/`OTEL_ENABLED` 默认 `false`，未启观测 profile 时仅自研 trace + Prometheus，行为与之前一致。
-- **Langfuse 自包含**：观测栈自带 PG/ClickHouse/Redis/MinIO，与被观测应用隔离，可独立升降级。
-- **深链**：容器内 `LANGFUSE_HOST` 是服务名，浏览器深链用 `LANGFUSE_PUBLIC_URL`。
-
-### 观测数据流
-
-```text
-app / celery
-  ├── Langfuse SDK ──► langfuse-web:3000（trace/generation/score）
-  └── OTel OTLP HTTP ─► langfuse-web:3000/api/public/otel/v1/traces
-                          （Basic auth 自动派生自 LANGFUSE_PUBLIC_KEY/SECRET_KEY）
-  └── Prometheus /metrics ─► 外部抓取
-```
+- 架构与各模块专题：见 [`docs/`](docs/)（全景架构、离线摄入、网关安全、编排、检索、记忆、多 Agent、高并发、可观测性、JEV）。
+- 配置项：见 [`.env.example`](.env.example)。
