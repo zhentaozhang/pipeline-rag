@@ -314,7 +314,10 @@ services:
     restart: unless-stopped
     environment:
       JEV_MODEL: ${JEV_MODEL:-Qwen/Qwen2.5-1.5B-Instruct}
+      # 推理设备：cpu（默认）/ cuda（需 GPU 直通，见下方注释）/ mps（Apple Silicon）
       JEV_DEVICE: ${JEV_DEVICE:-cpu}
+      # 单次前向可容纳的问题数（judger 批处理）：越大前向次数越少，内存/显存峰值越高
+      JEV_BATCH_CHUNK: ${JEV_BATCH_CHUNK:-8}
       HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
       - jev_model_cache:/data/cache
@@ -332,6 +335,15 @@ services:
         limits:
           cpus: "4.0"
           memory: 4G
+        # ── 可选：NVIDIA GPU 直通（默认注释；CPU 为默认）──────────────────────
+        # 宿主安装 nvidia-container-toolkit 后取消注释，并将上方 JEV_DEVICE 设为 cuda：
+        # reservations:
+        #   devices:
+        #     - driver: nvidia
+        #       count: all
+        #       capabilities: [gpu]
+        # Apple Silicon（M 系列）无需直通，直接设 JEV_DEVICE=mps 即可。
+        # 【注意】无 GPU 的宿主切勿取消注释，否则容器无法启动。
 
 volumes:
   mysql_data:
