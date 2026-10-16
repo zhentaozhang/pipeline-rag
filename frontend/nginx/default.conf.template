@@ -29,7 +29,8 @@ server {
         proxy_send_timeout 600s;
     }
 
-    location /admin/ {
+    # 管理员鉴权接口反向代理（/admin/login 等管理后台页面由 SPA location / 托管）
+    location /admin/auth {
         proxy_pass ${BACKEND_URL};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -47,7 +48,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location /health/ {
+    # 健康检查反向代理（同时支持 /health 及 /health/readiness 等子路径）
+    location /health {
         proxy_pass ${BACKEND_URL};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
