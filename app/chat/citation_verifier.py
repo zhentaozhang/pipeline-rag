@@ -63,7 +63,61 @@ async def verify_citations(
         note = "\n\n（注：回答中标注的引用未能从当前知识库证据核实，请以官方文件为准。）"
         return answer + note, refs, {"status": "no_evidence"}
 
-    # 构造证据映射：reference 列表按顺序对应 [1][2]...
+    # 优先采用 JEV System 1 并行 Noul 原语进行精准事实核验（零格式解析错误、毫秒级响应）
+    settings = get_settings()
+    jev_cfg = getattr(settings, "jev", None)
+    if jev_cfg and getattr(jev_cfg, "citation_verify_enabled", True):
+        try:
+            from app.infra.jev_client import get_jev_client
+
+            jev = get_jev_client()
+            evidence_map = {
+                i + 1: _reference_content(r, i + 1)[:280] for i, r in enumerate(references)
+            }
+            questions = {
+                f"cite_{ref_n}": {
+                    "type": "noul",
+                    "instructions": (
+                        f"回答中带有 [{ref_n}] 编号的引用论断，是否确实被以下证据内容直接支持（无推测、无捏造）？\n"
+                        f"证据[{ref_n}]：{evidence_map.get(ref_n, '（该引用编号无对应证据内容）')}"
+                    ),
+                }
+                for ref_n in refs
+            }
+            state = f"用户问题：{question}\n\nAI 生成的带有引用编号的完整回答：\n{answer}"
+            answers = await jev.system_one(state=state, questions=questions)
+
+            threshold = getattr(jev_cfg, "citation_confidence_threshold", 0.60)
+            unsupported = []
+            scores = {}
+            for ref_n in refs:
+                key = f"cite_{ref_n}"
+                res = answers.get(key) or {}
+                prob = res.get("noul", 1.0) if isinstance(res, dict) else 1.0
+                scores[str(ref_n)] = prob
+                if prob < threshold:
+                    unsupported.append(ref_n)
+
+            _meta = {
+                "status": "jev_judged",
+                "unsupported": unsupported,
+                "scores": scores,
+            }
+            logger.info("citation verify JEV judge", **_meta)
+
+            if not unsupported:
+                return answer, [], _meta
+
+            cited = "、".join(f"[{u}]" for u in unsupported)
+            note = (
+                f"\n\n（注：回答中 {cited} 的引用内容未能在当前知识库证据中找到支持，"
+                "相关内容请以官方文件为准。）"
+            )
+            return answer + note, unsupported, _meta
+        except Exception as e:
+            logger.warning("JEV citation verify failed, falling back to LLM", error=str(e)[:120])
+
+    # 构造证据映射与 LLM 审计提示词（备用/降级路径）
     evidence_block = "\n".join(
         f"[{i + 1}] {_reference_content(r, i + 1)[:280]}" for i, r in enumerate(references)
     )
@@ -80,6 +134,7 @@ async def verify_citations(
         f"回答中出现的引用编号：{ref_list}\n"
         "判断：哪些编号的引用内容在对应证据中找不到支持？（证据提及相似主题但未直接说明的不算支持）"
     )
+
     try:
         resp = await fallback.chat_completion(
             model=None,
@@ -88,6 +143,27 @@ async def verify_citations(
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         )
         raw = resp.choices[0].message.content or "{}"
+
+        from app.observability import get_active_tracer
+        from app.observability.llm_observe import record_generation
+
+        active_tracer = get_active_tracer()
+        if active_tracer:
+            usage = getattr(resp, "usage", None)
+            p_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+            c_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+            record_generation(
+                active_tracer,
+                "citation_verify_llm",
+                model=str(
+                    getattr(resp, "model", None) or getattr(fallback, "model_name", "unknown")
+                ),
+                input=user,
+                output=raw,
+                prompt_tokens=p_tokens,
+                completion_tokens=c_tokens,
+            )
+
         data = _parse_json(raw)
         unsupported = [int(x) for x in data.get("unsupported", []) if str(x).isdigit()]
         _meta = {"status": "judged", "judge_raw": raw[:200], "unsupported": unsupported}

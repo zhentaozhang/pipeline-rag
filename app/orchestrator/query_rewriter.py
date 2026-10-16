@@ -228,14 +228,14 @@ JSON 格式：
         if not settings.rag.rewrite_enabled or (
             not force and not _needs_rewrite(normalized_question, history_summary)
         ):
-            # P0-1b: 无需改写时也给出规则意图判定（开放提问/闲聊快速分流）
-            rule_intent = self._rule_based_intent(normalized_question)
+            # P0-1b: 无需改写时进行意图判定（优先 JEV System 1 Choice）
+            resolved_intent = await self._resolve_intent(normalized_question)
             return RewriteResult(
                 rewritten=normalized_question,
                 sub_questions=[normalized_question],
                 keywords=[],
                 needs_rewrite=False,
-                intent=rule_intent,
+                intent=resolved_intent,
             )
 
         # ── LLM rewrite ───────────────────────────────────────────────
@@ -268,6 +268,25 @@ JSON 格式：
             content = response.choices[0].message.content
             if not content:
                 raise ValueError("Empty response from LLM")
+
+            from app.observability import get_active_tracer
+            from app.observability.llm_observe import record_generation
+
+            active_tracer = get_active_tracer()
+            if active_tracer:
+                usage = getattr(response, "usage", None)
+                p_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+                c_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+                record_generation(
+                    active_tracer,
+                    "query_rewrite_llm",
+                    model=getattr(response, "model", None) or settings.llm.model,
+                    input=prompt,
+                    output=content,
+                    prompt_tokens=p_tokens,
+                    completion_tokens=c_tokens,
+                )
+
             raw_output = content
             parsed = self._parse(content)
             result = self._normalize_rewrite_result(normalized_question, parsed, history_summary)
@@ -308,9 +327,41 @@ JSON 格式：
             sub_questions=sub_qs,
             keywords=[],
             needs_rewrite=True,
-            # P0-1b: 规则回退时用规则意图判定（LLM 失败/关闭时兜底）
-            intent=self._rule_based_intent(normalized_question),
+            # P0-1b: 规则回退时用 JEV 意图判定（失败兜底回退规则）
+            intent=await self._resolve_intent(normalized_question),
         )
+
+    async def _resolve_intent(self, question: str) -> str:
+        jev_cfg = getattr(settings, "jev", None)
+        if jev_cfg and getattr(jev_cfg, "intent_detection_enabled", True):
+            try:
+                from app.infra.jev_client import get_jev_client
+
+                jev = get_jev_client()
+                answers = await jev.system_one(
+                    state=question,
+                    questions={
+                        "intent": {
+                            "type": "choice",
+                            "instructions": "该用户问题的知识检索意图类型",
+                            "options": {
+                                "knowledge": "可从企业内部文档与知识库中查证的业务咨询",
+                                "open": "需要外部搜索的实时信息（天气、新闻、股票等）或日常闲聊",
+                                "ambiguous": "信息不完整或模糊不清，需要澄清",
+                            },
+                        }
+                    },
+                )
+                intent_res = answers.get("intent")
+                choice = intent_res.get("choice") if isinstance(intent_res, dict) else intent_res
+                if choice in ("knowledge", "open", "ambiguous"):
+                    return str(choice)
+            except Exception as e:
+                logger.warning(
+                    "JEV intent in query rewriter failed, falling back to rule-based",
+                    error=str(e)[:120],
+                )
+        return self._rule_based_intent(question)
 
     def _rule_based_intent(self, question: str) -> str:
         """规则意图判定：开放提问/闲聊 → open，其余默认 knowledge（P0-1b）"""
