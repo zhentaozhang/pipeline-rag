@@ -1,4 +1,4 @@
-"""Stage 10/11 — 最终 ExecutionPlan 构建"""
+"""Stage 9 — 最终 ExecutionPlan 构建"""
 
 from __future__ import annotations
 

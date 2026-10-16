@@ -124,7 +124,7 @@ async def execute_stream(
         try:
             if _settings.fact_memory.enabled and plan.mode in (
                 ExecutionMode.RETRIEVAL,
-                ExecutionMode.AGENT,
+                ExecutionMode.REACT_AGENT,
             ):
                 from app.chat.fact_memory import FactMemoryStore
                 from app.infra.embedding import get_embedding_provider

@@ -51,6 +51,15 @@ class ExecutorRegistry:
 
     def get(self, mode: ExecutionMode) -> ConversationExecutor:
         """根据执行模式查找并实例化对应的执行器。"""
+        if mode == ExecutionMode.MULTI_AGENT:
+            from app.executors.parallel_executor import ParallelExecutor
+
+            return ParallelExecutor(self.db, self.task, self)
+
+        # RAG_CHAT 别名回退到 RETRIEVAL（RagChatExecutor）
+        if mode == ExecutionMode.RAG_CHAT:
+            mode = ExecutionMode.RETRIEVAL
+
         from app.executors.clarification import ClarificationExecutor
         from app.executors.refusal import RefusalExecutor
 
@@ -75,9 +84,7 @@ class ExecutorRegistry:
         )
 
         if plan.supervisor_mode or plan.mode == ExecutionMode.MULTI_AGENT:
-            from app.executors.parallel_executor import ParallelExecutor
-
-            executor: ConversationExecutor = ParallelExecutor(self.db, self.task, self)
+            executor: ConversationExecutor = self.get(ExecutionMode.MULTI_AGENT)
             async for chunk in executor.execute(plan):
                 yield chunk
             return

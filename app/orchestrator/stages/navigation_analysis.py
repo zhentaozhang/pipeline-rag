@@ -1,4 +1,4 @@
-"""Stage 9/11 — 文档导航分析
+"""Stage 8 — 文档导航分析
 
 根据路由结果执行 Neo4j/ES 导航分析，决定执行模式（GRAPH_ONLY / GRAPH_THEN_EVIDENCE / RETRIEVAL）。
 """

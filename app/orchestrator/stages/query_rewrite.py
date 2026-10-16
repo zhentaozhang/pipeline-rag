@@ -1,4 +1,4 @@
-"""Stage 6/11 — 查询改写 + 意图分流（P0-1b：合并原 IntentClassifyStage）
+"""Stage 6 — 查询改写 + 意图分流（合并原 IntentClassifyStage）
 
 职责：
 1. 意图分流（原 IntentClassifyStage）：AUTO_DOCUMENT 模式下开放提问 → REACT_AGENT。

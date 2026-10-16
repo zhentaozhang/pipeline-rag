@@ -1,4 +1,4 @@
-"""Stage 1/11 — 历史上下文构建"""
+"""Stage 1 — 历史上下文构建"""
 
 from __future__ import annotations
 

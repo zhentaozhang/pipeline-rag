@@ -1,4 +1,4 @@
-"""Stage 2/11 — 时间感知查询检测"""
+"""Stage 2 — 时间感知查询检测"""
 
 from __future__ import annotations
 

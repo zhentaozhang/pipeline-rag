@@ -52,6 +52,20 @@ class TestRegistryGet:
         executor = ExecutorRegistry(db=None, task=task).get(ExecutionMode.REFUSAL)
         assert isinstance(executor, RefusalExecutor)
 
+    def test_rag_chat_aliased_to_retrieval(self):
+        from app.executors.rag import RagChatExecutor
+
+        task = _task()
+        executor = ExecutorRegistry(db=None, task=task).get(ExecutionMode.RAG_CHAT)
+        assert isinstance(executor, RagChatExecutor)
+
+    def test_multi_agent_instantiated(self):
+        from app.executors.parallel_executor import ParallelExecutor
+
+        task = _task()
+        executor = ExecutorRegistry(db=None, task=task).get(ExecutionMode.MULTI_AGENT)
+        assert isinstance(executor, ParallelExecutor)
+
 
 class TestClarificationExecutor:
     @pytest.mark.asyncio

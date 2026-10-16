@@ -1,4 +1,4 @@
-"""Stage 8/11 — 知识路由（由 .when() 守卫，仅当 AUTO_DOCUMENT / DOCUMENT 模式执行）
+"""Stage 7 — 知识路由（由 .when() 守卫，仅当 AUTO_DOCUMENT / DOCUMENT 模式执行）
 
 AUTO_DOCUMENT 模式做完整路由（含澄清决策），DOCUMENT 模式只做影子路由记录。
 可能 TERMINATE → CLARIFICATION 计划。

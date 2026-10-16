@@ -1,4 +1,4 @@
-"""Stage 3/11 — 企业意图护栏拦截"""
+"""Stage 3 — 企业意图护栏拦截"""
 
 from __future__ import annotations
 

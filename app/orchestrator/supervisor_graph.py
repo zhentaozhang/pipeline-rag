@@ -16,7 +16,12 @@ from app.chat.schema import ExecutionPlan, SubPlan
 from app.common.jinja import jinja_env
 from app.common.llm_client import get_chat_client, llm_breaker
 from app.config import get_settings
-from app.orchestrator.supervisor import _build_sub_plans, _validate_sub_plans
+from app.orchestrator.subplan import (
+    build_sub_plans as _build_sub_plans,
+)
+from app.orchestrator.subplan import (
+    validate_sub_plans as _validate_sub_plans,
+)
 
 logger = structlog.get_logger(__name__)
 

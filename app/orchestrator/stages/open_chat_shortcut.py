@@ -1,4 +1,4 @@
-"""Stage 5/11 — OPEN_CHAT 早期短路（由 .when() 守卫，仅当 OPEN_CHAT 模式执行）"""
+"""Stage 5 — OPEN_CHAT 早期短路（由 .when() 守卫，仅当 OPEN_CHAT 模式执行）"""
 
 from __future__ import annotations
 

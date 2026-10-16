@@ -7,10 +7,10 @@ Pre-Orchestrator 主编排器
 3. GuardrailStage            — 企业意图护栏拦截（可短路 → REFUSAL）
 4. ValidationStage           — RAG 启停 + DOCUMENT 模式校验
 5. OpenChatShortcutStage     — OPEN_CHAT 早期短路（可短路 → REACT_AGENT）
-6. QueryRewriteStage         — 查询改写 + 意图分流（P0-1b：合并原 IntentClassifyStage）
+6. QueryRewriteStage         — 查询改写 + 意图分流
 7. KnowledgeRoutingStage     — 知识路由（可短路 → CLARIFICATION）
-9. NavigationAnalysisStage   — 图谱导航分析
-10. FinalPlanBuildingStage   — 构建 ExecutionPlan（终止管道）
+8. NavigationAnalysisStage   — 图谱导航分析
+9. FinalPlanBuildingStage    — 构建 ExecutionPlan（终止管道）
 
 Post-pipeline：
 - SupervisorService.decompose() — 可选的多 Agent 任务分解
