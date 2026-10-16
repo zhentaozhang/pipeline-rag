@@ -35,6 +35,22 @@ class _DummyMetric(Metric):
         return MetricResult(metric_name="dummy", value=1.0)
 
 
+@pytest.fixture
+def jev_on(monkeypatch):
+    """启用 JEV 评测开关（单测默认全局关闭）。"""
+    from app.config import get_settings
+
+    for flag in (
+        "answer_relevancy_enabled",
+        "answer_correctness_enabled",
+        "faithfulness_eval_enabled",
+        "context_precision_enabled",
+        "context_recall_enabled",
+    ):
+        monkeypatch.setattr(get_settings().jev, flag, True, raising=False)
+    yield
+
+
 @pytest.mark.asyncio
 async def test_metric_call_llm_records_generation():
     metric = _DummyMetric(eval_llm=_FakeEvalLLM(), model="deepseek-chat")
@@ -69,7 +85,7 @@ async def test_metric_call_llm_noop_recording_without_tracer():
 
 
 @pytest.mark.asyncio
-async def test_answer_relevancy_jev_handles_none_score_data():
+async def test_answer_relevancy_jev_handles_none_score_data(jev_on):
     """验证当 JEV 返回 answers 中 relevancy 为 None 时，AnswerRelevancyMetric 触发回退到 LLM"""
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -94,7 +110,7 @@ async def test_answer_relevancy_jev_handles_none_score_data():
 
 
 @pytest.mark.asyncio
-async def test_answer_relevancy_jev_success_path():
+async def test_answer_relevancy_jev_success_path(jev_on):
     """验证当 JEV 正常返回完整结构时，正常解析 JEV 打分与置信度"""
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -126,7 +142,7 @@ async def test_answer_relevancy_jev_success_path():
 
 
 @pytest.mark.asyncio
-async def test_answer_relevancy_jev_exception_falls_back_to_llm():
+async def test_answer_relevancy_jev_exception_falls_back_to_llm(jev_on):
     """验证当 JEV 抛出异常时，AnswerRelevancyMetric 平滑降级到 LLM"""
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -151,7 +167,7 @@ async def test_answer_relevancy_jev_exception_falls_back_to_llm():
 
 
 @pytest.mark.asyncio
-async def test_answer_correctness_jev_success_path():
+async def test_answer_correctness_jev_success_path(jev_on):
     """JEV 正常返回完整结构时，解析等级评分与置信度"""
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -184,7 +200,7 @@ async def test_answer_correctness_jev_success_path():
 
 
 @pytest.mark.asyncio
-async def test_answer_correctness_jev_invalid_falls_back_to_llm():
+async def test_answer_correctness_jev_invalid_falls_back_to_llm(jev_on):
     """JEV 返回缺失/非法结构时回退到 LLM 打分"""
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -207,7 +223,7 @@ async def test_answer_correctness_jev_invalid_falls_back_to_llm():
 
 
 @pytest.mark.asyncio
-async def test_answer_correctness_jev_exception_falls_back_to_llm():
+async def test_answer_correctness_jev_exception_falls_back_to_llm(jev_on):
     """JEV 抛异常时平滑降级到 LLM"""
     from unittest.mock import AsyncMock, MagicMock, patch
 
