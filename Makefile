@@ -10,7 +10,7 @@ FRONTEND_COMPOSE := docker compose -f docker-compose.frontend.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help init build up up-obs down down-all restart logs ps shell migrate verify test test-integration \
-        lint format format-check typecheck check config-check \
+        lint format format-check typecheck check config-check eval-ab \
         obs-up obs-down obs-logs \
         fe-build fe-up fe-down fe-restart fe-logs fe-lint fe-test \
         up-all clean reset
@@ -43,6 +43,10 @@ test-integration: ## 运行集成测试（需要本地数据库环境就绪）
 	uv run pytest tests/integration -q
 
 check: lint format-check typecheck test ## 本地全量质量门禁（推代码前必跑）
+
+eval-ab: ## JEV 决策 A/B 门禁（需 jev-service 可达；不可达则跳过）
+	uv run python -m scripts.evaluation.decision_ab --all --backends jev \
+		--min-recall 0.8 --min-precision 0.85 --min-f1 0.8
 
 config-check: ## 校验全部 Docker Compose 配置文件语法
 	@$(BACKEND_COMPOSE) config >/dev/null && echo "✓ docker-compose.yml OK"

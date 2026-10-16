@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from scripts.evaluation.datasets.base import DecisionSample
+from scripts.evaluation.datasets.base import ChoiceSample, DecisionSample
 
 # ══════════════════════════════════════════════════════════════════════════
 # 任务 1：检索相关性（正样本 = 片段包含有助于回答问题的信息）
@@ -394,4 +394,35 @@ QUALITY_DATASET: list[DecisionSample] = [
         context="试用期不发工资，转正后一起补发。",
         label=False,
     ),
+]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 任务 5：文档结构行归类（多分类：heading / list_item / body）
+#   input=该行文本，label=结构类别
+# ══════════════════════════════════════════════════════════════════════════
+STRUCTURE_AMBIGUITY_DATASET: list[ChoiceSample] = [
+    ChoiceSample(id="sa01", input="# 第一章 概述", label="heading"),
+    ChoiceSample(id="sa02", input="第二章 核心制度", label="heading"),
+    ChoiceSample(id="sa03", input="2.3.1 报销流程", label="heading"),
+    ChoiceSample(id="sa04", input="关于我们", label="heading"),
+    ChoiceSample(id="sa05", input="一、总则", label="heading"),
+    ChoiceSample(id="sa06", input="1. 打开配置文件 config.yaml", label="list_item"),
+    ChoiceSample(id="sa07", input="- 检查依赖是否安装", label="list_item"),
+    ChoiceSample(id="sa08", input="步骤一：安装 Python 依赖", label="list_item"),
+    ChoiceSample(id="sa09", input="（1）提交报销申请单", label="list_item"),
+    ChoiceSample(id="sa10", input="3. 试用期：合同3个月以上不满1年为1个月", label="list_item"),
+    ChoiceSample(
+        id="sa11", input="公司成立于 2015 年，主营业务为企业软件研发与服务。", label="body"
+    ),
+    ChoiceSample(
+        id="sa12", input="员工的义务包括遵守公司各项规章制度，并保守商业秘密。", label="body"
+    ),
+    ChoiceSample(id="sa13", input="本节介绍了系统的整体架构与主要模块的职责划分。", label="body"),
+    ChoiceSample(
+        id="sa14",
+        input="注意事项：报销单据须在费用发生后 30 日内提交，逾期需附情况说明。",
+        label="body",
+    ),
+    ChoiceSample(id="sa15", input="如对考勤结果有异议，可向直属主管提出复核申请。", label="body"),
 ]
