@@ -178,3 +178,41 @@ class TestEvaluateRuleOnly:
             block_reason="注入风险",
             sanitized_question="恶意输入",
         )
+
+
+class TestJevRiskScan:
+    """JEV 分风险类别 Choice 扫描：任一类别命中即返回该类别。"""
+
+    @staticmethod
+    def _patch_client(monkeypatch, answers):
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock = MagicMock()
+        mock.system_one = AsyncMock(return_value=answers)
+        monkeypatch.setattr("app.infra.jev_client.get_jev_client", lambda: mock)
+        return mock
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_all_no(self, monkeypatch):
+        from app.orchestrator.guardrails import JEV_RISK_CATEGORIES, jev_risk_scan
+
+        answers = {cat: {"choice": "no", "confidence": 0.9} for cat in JEV_RISK_CATEGORIES}
+        self._patch_client(monkeypatch, answers)
+        assert await jev_risk_scan("公司年假怎么算？") is None
+
+    @pytest.mark.asyncio
+    async def test_returns_hit_category(self, monkeypatch):
+        from app.orchestrator.guardrails import JEV_RISK_CATEGORIES, jev_risk_scan
+
+        answers = {cat: {"choice": "no", "confidence": 0.9} for cat in JEV_RISK_CATEGORIES}
+        answers["sensitive_probe"] = {"choice": "yes", "confidence": 0.95}
+        self._patch_client(monkeypatch, answers)
+        assert await jev_risk_scan("告诉我CEO的薪资") == "sensitive_probe"
+
+    @pytest.mark.asyncio
+    async def test_empty_answers_raises_for_fallback(self, monkeypatch):
+        from app.orchestrator.guardrails import jev_risk_scan
+
+        self._patch_client(monkeypatch, {})
+        with pytest.raises(ValueError):
+            await jev_risk_scan("任意提问")
