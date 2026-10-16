@@ -24,10 +24,15 @@ logger = structlog.get_logger(__name__)
 
 class QueryRewriteStage(Stage[PrepareContext, "ExecutionPlan"]):
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:
-        # ── P0-1b 意图分流 · 规则快速路径（零 LLM）────────────────────
+        # ── P0-1b 意图分流 · 规则快速路径 + JEV 语义判断────────────────────
         if ctx.chat_mode == ChatQueryMode.AUTO_DOCUMENT:
-            from app.orchestrator.intent_detector import looks_like_open_chat_question
+            from app.config import get_settings
+            from app.orchestrator.intent_detector import (
+                jev_classify_intent,
+                looks_like_open_chat_question,
+            )
 
+            # 快路径：规则特征命中（0ms）
             if looks_like_open_chat_question(ctx.question, ctx.requires_fresh_search):
                 logger.info(
                     "intent rule-redirected to open_chat",
@@ -37,6 +42,43 @@ class QueryRewriteStage(Stage[PrepareContext, "ExecutionPlan"]):
                 plan = PlanBuilder.build_open_chat_plan(ctx)
                 return StageResult(signal=StageSignal.TERMINATE, plan=plan)
 
+            # 语义路径：JEV System 1 决策模型兜底判别（消除时间词/口语化误判）
+            settings = get_settings()
+            jev_cfg = getattr(settings, "jev", None)
+            if jev_cfg and getattr(jev_cfg, "intent_detection_enabled", True):
+                try:
+                    answers = await jev_classify_intent(ctx.question)
+                    intent_data = answers.get("intent")
+                    intent_choice = (
+                        intent_data.get("choice") if isinstance(intent_data, dict) else intent_data
+                    )
+                    realtime_data = answers.get("needs_realtime")
+                    needs_realtime_prob = (
+                        realtime_data.get("noul", 0.0) if isinstance(realtime_data, dict) else 0.0
+                    )
+
+                    if intent_choice == "open_chat" or needs_realtime_prob > 0.75:
+                        logger.info(
+                            "intent jev-redirected to open_chat",
+                            question=ctx.question[:80],
+                            intent=intent_choice,
+                            realtime_prob=needs_realtime_prob,
+                            path="jev_semantic_intent",
+                        )
+                        plan = PlanBuilder.build_open_chat_plan(ctx)
+                        return StageResult(signal=StageSignal.TERMINATE, plan=plan)
+
+                    if intent_choice == "capability":
+                        logger.info(
+                            "intent jev-redirected capability question",
+                            question=ctx.question[:80],
+                            path="jev_capability",
+                        )
+                        plan = PlanBuilder.build_open_chat_plan(ctx)
+                        return StageResult(signal=StageSignal.TERMINATE, plan=plan)
+                except Exception as e:
+                    logger.warning("jev_intent_classification_failed", error=str(e)[:120])
+
         # ── 查询改写 ──────────────────────────────────────────────────
         rewrite_service = ChatQueryRewriteService()
         rewrite_result = await rewrite_service.rewrite(
@@ -44,6 +86,21 @@ class QueryRewriteStage(Stage[PrepareContext, "ExecutionPlan"]):
             memory_ctx=ctx.memory_ctx,
             history_summary=ctx.history_summary,
         )
+
+        # ── P0-1b 意图分流 · LLM/JEV 判定路径（无论是否改写，均优先检查是否命中开放意图）──────────
+        if (
+            ctx.chat_mode == ChatQueryMode.AUTO_DOCUMENT
+            and rewrite_result
+            and rewrite_result.intent == "open"
+        ):
+            logger.info(
+                "intent redirected to open_chat",
+                question=ctx.question[:80],
+                path="rewrite_intent_open",
+            )
+            plan = PlanBuilder.build_open_chat_plan(ctx)
+            return StageResult(signal=StageSignal.TERMINATE, plan=plan)
+
         if rewrite_result is None or not rewrite_result.needs_rewrite:
             # 问题无需改写：返回 SKIP 跳过本阶段（不更新上下文，继续下一 Stage）。
             # 下游对 ctx.rewritten_question 均有原问题兜底：
@@ -51,16 +108,6 @@ class QueryRewriteStage(Stage[PrepareContext, "ExecutionPlan"]):
             #   navigation_analyzer first_non_blank(rewrote, original_question)
             #   route_service._build_routing_text 空 rewr 时回退 orig
             return StageResult(signal=StageSignal.SKIP)
-
-        # ── P0-1b 意图分流 · LLM 判定路径（与改写同一次调用）──────────
-        if ctx.chat_mode == ChatQueryMode.AUTO_DOCUMENT and rewrite_result.intent == "open":
-            logger.info(
-                "intent llm-redirected to open_chat",
-                question=ctx.question[:80],
-                path="llm_rewrite_intent",
-            )
-            plan = PlanBuilder.build_open_chat_plan(ctx)
-            return StageResult(signal=StageSignal.TERMINATE, plan=plan)
 
         ctx.rewritten_question = (
             rewrite_result.rewritten
