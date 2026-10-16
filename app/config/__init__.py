@@ -15,6 +15,7 @@ from app.config.infra import (
     Neo4jSettings,
     RedisSettings,
 )
+from app.config.jev import JEVSettings
 from app.config.langfuse import LangfuseSettings
 from app.config.llm import LLMSettings, RerankSettings, TavilySettings
 from app.config.otel import OtelSettings
@@ -78,6 +79,7 @@ class Settings:
         self.observability: ObservabilitySettings = ObservabilitySettings()  # type: ignore[call-arg]
         self.langfuse: LangfuseSettings = LangfuseSettings()  # type: ignore[call-arg]
         self.otel: OtelSettings = OtelSettings()  # type: ignore[call-arg]
+        self.jev: JEVSettings = JEVSettings()  # type: ignore[call-arg]
         self._check_default_credentials()
 
     _KNOWN_DEFAULT_CREDENTIALS = {

@@ -38,7 +38,7 @@ WORKDIR /app
 #   --build-arg APT_MIRROR=mirrors.tuna.tsinghua.edu.cn）
 ARG APT_MIRROR=""
 
-# 安装系统依赖 (给 unstructured 和其他解析工具用)
+# 安装系统依赖 (给 unstructured 和其他解析工具用，含中文字体支持防文档乱码)
 RUN if [ -n "$APT_MIRROR" ]; then \
       sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; \
     fi \
@@ -48,18 +48,20 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     poppler-utils \
     tesseract-ocr \
     libreoffice \
+    fonts-wqy-zenhei \
     && rm -rf /var/lib/apt/lists/*
+
+# 非 root 运行（安全基线）：固定 uid 便于宿主 Volume 权限对齐
+# 提前创建用户，后续通过 COPY --chown 注入，避免在已有层上 chown -R 导致镜像层体积翻倍
+RUN useradd --create-home --uid 10001 appuser && chown appuser:appuser /app
 
 # 从 builder 复制已安装的包（基础镜像为 python:3.12-slim，路径必须是 python3.12）
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# 复制项目代码
-COPY . /app
+# 复制项目代码并直接指定所属非 root 用户
+COPY --chown=appuser:appuser . /app
 
-# 非 root 运行（安全基线）：固定 uid 便于宿主 Volume 权限对齐
-RUN useradd --create-home --uid 10001 appuser \
-    && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8080
