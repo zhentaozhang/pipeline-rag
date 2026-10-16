@@ -12,6 +12,7 @@ logger = structlog.get_logger(__name__)
 # Celery prefork 每个子进程一个事件循环，只 stop 不 close，保证连接池中的
 # aiomysql/asyncpg 连接始终绑定到同一个循环，避免 "Future attached to a
 # different loop" 错误。
+import asyncio
 import contextlib
 
 from celery.signals import worker_process_init
@@ -56,6 +57,17 @@ def _on_worker_process_init(**kwargs) -> None:
     init_minio()
 
 
+def _safe_dispatch(coro):
+    """安全调度协程：若当前事件循环已在运行则通过 create_task 调度，否则使用 run_async 同步等待"""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop and loop.is_running():
+        return loop.create_task(coro)
+    return run_async(coro)
+
+
 def _save_log(
     doc_id: str,
     task_id: str,
@@ -94,7 +106,7 @@ def _save_log(
             )
             await db.commit()
 
-    run_async(_do())
+    _safe_dispatch(_do())
 
 
 def _get_mysql_session():
@@ -114,7 +126,7 @@ def _record_task(doc_id: str, stage: str, task_id: str, status: int = 1) -> None
             await record_task(db, doc_id, stage, task_id, status)
             await db.commit()
 
-    run_async(_do())
+    _safe_dispatch(_do())
 
 
 def _task_failed(task_self, doc_id: str, stage: int, fail_message: str, exc: Exception) -> None:
@@ -146,7 +158,7 @@ def _update_task_status(task_id: str, status: int, error_msg: str | None = None)
             await update_status(db, task_id, status, error_msg)
             await db.commit()
 
-    run_async(_do())
+    _safe_dispatch(_do())
 
 
 # ── 流水线阶段追踪 ──────────────────────────────────────────────────────────
@@ -163,7 +175,7 @@ def _update_pipeline_stage(doc_id: str, stage: int) -> None:
                 update(DocModel).where(DocModel.doc_id == doc_id).values(pipeline_stage=stage)
             )
 
-    run_async(_do())
+    _safe_dispatch(_do())
 
 
 # ── 补偿清理 ─────────────────────────────────────────────────────────────────
@@ -192,106 +204,115 @@ def _previous_stage(stage: int) -> int:
     return mapping.get(stage, DocumentPipelineStageEnum.INIT.value)
 
 
-def _update_document_failed(doc_id: str, error_msg: str) -> None:
-    async def _do():
-        from sqlalchemy import update
+async def _update_document_failed_async(doc_id: str, error_msg: str) -> None:
+    from sqlalchemy import update
 
-        from app.db.models.document import Document as DocModel
+    from app.db.models.document import Document as DocModel
 
-        async with _get_mysql_session() as db, db.begin():
-            await db.execute(
-                update(DocModel)
-                .where(DocModel.doc_id == doc_id)
-                .values(
-                    parse_status=DocumentParseStatusEnum.PARSE_FAILED.value,
-                    pipeline_stage=DocumentPipelineStageEnum.FAILED.value,
-                    parse_error_msg=error_msg,
-                )
+    async with _get_mysql_session() as db, db.begin():
+        await db.execute(
+            update(DocModel)
+            .where(DocModel.doc_id == doc_id)
+            .values(
+                parse_status=DocumentParseStatusEnum.PARSE_FAILED.value,
+                pipeline_stage=DocumentPipelineStageEnum.FAILED.value,
+                parse_error_msg=error_msg,
             )
+        )
 
-    run_async(_do())
+
+def _update_document_failed(doc_id: str, error_msg: str) -> None:
+    _safe_dispatch(_update_document_failed_async(doc_id, error_msg))
 
 
-def _compensate(doc_id: str, failed_stage: int | None) -> None:
-    """补偿清理：清除失败步骤及后续步骤的残留数据"""
+async def _compensate_async(doc_id: str, failed_stage: int | None) -> None:
+    """补偿清理：清除失败步骤及后续步骤的残留数据（异步执行核心）"""
     if failed_stage is None:
         return
 
-    async def _do():
-        from sqlalchemy import delete, select
+    from sqlalchemy import delete, select
 
-        from app.db.models.document import Document, DocumentChunk, DocumentParentBlock
+    from app.db.models.document import Document, DocumentChunk, DocumentParentBlock
 
-        # vectorize 及之后 → 删 MySQL chunks + MySQL 父块 + PG 向量
-        if failed_stage >= DocumentTaskStageEnum.VECTORIZE.value:
-            async with _get_mysql_session() as db, db.begin():
-                doc = (
-                    await db.execute(select(Document).where(Document.doc_id == doc_id))
-                ).scalar_one_or_none()
-                if doc:
-                    await db.execute(
-                        delete(DocumentChunk).where(DocumentChunk.document_id == doc.id)
-                    )
-                    await db.execute(
-                        delete(DocumentParentBlock).where(DocumentParentBlock.document_id == doc.id)
-                    )
+    # vectorize 及之后 → 删 MySQL chunks + MySQL 父块 + PG 向量
+    if failed_stage >= DocumentTaskStageEnum.VECTORIZE.value:
+        async with _get_mysql_session() as db, db.begin():
+            doc = (
+                await db.execute(select(Document).where(Document.doc_id == doc_id))
+            ).scalar_one_or_none()
+            if doc:
+                await db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == doc.id))
+                await db.execute(
+                    delete(DocumentParentBlock).where(DocumentParentBlock.document_id == doc.id)
+                )
 
-            from app.infra.pg import transaction as _pg_transaction
+        from app.infra.pg import transaction as _pg_transaction
 
-            async with _pg_transaction() as conn, _get_mysql_session() as db:
-                doc = (
-                    await db.execute(select(Document).where(Document.doc_id == doc_id))
-                ).scalar_one_or_none()
-                if doc:
-                    await conn.execute(
-                        "DELETE FROM pipeline_rag_document_embedding WHERE document_id = $1",
-                        doc.id,
-                    )
-                    await conn.execute(
-                        "DELETE FROM document_chunk WHERE doc_id = $1",
-                        doc_id,
-                    )
+        async with _pg_transaction() as conn, _get_mysql_session() as db:
+            doc = (
+                await db.execute(select(Document).where(Document.doc_id == doc_id))
+            ).scalar_one_or_none()
+            if doc:
+                await conn.execute(
+                    "DELETE FROM pipeline_rag_document_embedding WHERE document_id = $1",
+                    doc.id,
+                )
+                await conn.execute(
+                    "DELETE FROM document_chunk WHERE doc_id = $1",
+                    doc_id,
+                )
 
-        # index 及之后 → 删 ES + Neo4j
-        if failed_stage >= DocumentTaskStageEnum.STORE_COMPLETE.value:
-            from app.common.utils import safe_int
-            from app.infra.es import CHUNK_INDEX, get_es
+    # index 及之后 → 删 ES + Neo4j
+    if failed_stage >= DocumentTaskStageEnum.STORE_COMPLETE.value:
+        from app.common.utils import safe_int
+        from app.infra.es import CHUNK_INDEX, get_es
 
-            async with _get_mysql_session() as db:
-                doc = (
-                    await db.execute(select(Document).where(Document.doc_id == doc_id))
-                ).scalar_one_or_none()
+        async with _get_mysql_session() as db:
+            doc = (
+                await db.execute(select(Document).where(Document.doc_id == doc_id))
+            ).scalar_one_or_none()
 
-            doc_id_int = doc.id if doc else safe_int(doc_id, default=0)
-            if doc_id_int:
+        doc_id_int = doc.id if doc else safe_int(doc_id, default=0)
+        if doc_id_int:
+            try:
                 es = get_es()
                 await es.delete_by_query(
                     index=CHUNK_INDEX,
                     body={"query": {"term": {"documentId": doc_id_int}}},
                     refresh=True,
+                    ignore_unavailable=True,
+                )
+            except Exception as e:
+                logger.warning(
+                    "es compensation delete_by_query failed", error=str(e), doc_id=doc_id
                 )
 
-            from app.config import get_settings
+        from app.config import get_settings
 
-            if get_settings().neo4j.enabled and doc:
-                from app.infra.neo4j import get_neo4j
+        if get_settings().neo4j.enabled and doc:
+            from app.infra.neo4j import get_neo4j
 
-                driver = get_neo4j()
-                if driver:
-                    async with driver.session() as session:
-                        await session.run(
-                            "MATCH (n) WHERE n.documentId = $doc_id DETACH DELETE n",
-                            doc_id=doc.id,
-                        )
+            driver = get_neo4j()
+            if driver:
+                async with driver.session() as session:
+                    await session.run(
+                        "MATCH (n) WHERE n.documentId = $doc_id OR n.docId = $doc_uuid DETACH DELETE n",
+                        doc_id=doc.id,
+                        doc_uuid=doc.doc_id,
+                    )
 
-        # 回退 pipeline_stage
-        async with _get_mysql_session() as db, db.begin():
-            from sqlalchemy import update as sa_update
+    # 回退 pipeline_stage
+    async with _get_mysql_session() as db, db.begin():
+        from sqlalchemy import update as sa_update
 
-            await db.execute(
-                sa_update(Document)
-                .where(Document.doc_id == doc_id)
-                .values(pipeline_stage=_previous_stage(failed_stage))
-            )
+        await db.execute(
+            sa_update(Document)
+            .where(Document.doc_id == doc_id)
+            .values(pipeline_stage=_previous_stage(failed_stage))
+        )
 
-    run_async(_do())
+
+def _compensate(doc_id: str, failed_stage: int | None) -> None:
+    """补偿清理：清除失败步骤及后续步骤的残留数据（兼容同步与异步上下文）"""
+    if failed_stage is not None:
+        _safe_dispatch(_compensate_async(doc_id, failed_stage))

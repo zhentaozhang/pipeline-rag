@@ -26,7 +26,27 @@ class ChunkPipeline:
         if ChunkStrategyType.STRUCTURE in self.strategies:
             parent_chunks = await StructureChunker().chunk(text, doc_id, self.config)
 
-        if ChunkStrategyType.RECURSIVE in self.strategies:
+        if ChunkStrategyType.LLM in self.strategies:
+            if not parent_chunks:
+                child_chunks = await LLMChunker().chunk(text, doc_id, self.config)
+                if not child_chunks and ChunkStrategyType.RECURSIVE in self.strategies:
+                    child_chunks = await RecursiveChunker().chunk(text, doc_id, self.config)
+            else:
+                for p in parent_chunks:
+                    p_children = await LLMChunker().chunk(p.content, doc_id, self.config)
+                    for c in p_children:
+                        c.parent_chunk_id = p.chunk_id
+                        c.section_title = p.section_title
+                        c.section_path = p.section_path
+                        c.structure_node_id = p.structure_node_id
+                        c.structure_node_type = p.structure_node_type
+                        c.canonical_path = p.canonical_path
+                    child_chunks.extend(p_children)
+                if not child_chunks and ChunkStrategyType.RECURSIVE in self.strategies:
+                    child_chunks = await RecursiveChunker().chunk_parents(
+                        parent_chunks, self.config
+                    )
+        elif ChunkStrategyType.RECURSIVE in self.strategies:
             if not parent_chunks:
                 child_chunks = await RecursiveChunker().chunk(text, doc_id, self.config)
             else:
@@ -40,9 +60,8 @@ class ChunkPipeline:
         if ChunkStrategyType.SEMANTIC in self.strategies and child_chunks:
             child_chunks = await SemanticChunker().chunk(child_chunks, self.config)
 
-        if ChunkStrategyType.LLM in self.strategies:
-            llm_chunks = await LLMChunker().chunk(text, doc_id, self.config)
-            child_chunks.extend(llm_chunks)
+        for idx, c in enumerate(child_chunks):
+            c.chunk_index = idx
 
         logger.info(
             "chunk pipeline done",

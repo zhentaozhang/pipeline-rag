@@ -28,6 +28,7 @@ class DocumentIndexer:
         document_tags: str = "",
         tenant_id: str = "default",
         task_id: str = "",
+        document_id: int | None = None,
     ) -> int:
         """批量写入 Elasticsearch（IK 分词索引）"""
         es = get_es()
@@ -35,16 +36,23 @@ class DocumentIndexer:
 
         # 清理该文档的旧 ES 索引，避免 pipeline 重跑后累积重复
         doc_id = (
-            (getattr(chunks[0], "document_id", None) or safe_int(chunks[0].doc_id, default=None))
+            document_id
+            or (getattr(chunks[0], "document_id", None) or safe_int(chunks[0].doc_id, default=None))
             if chunks
-            else None
+            else document_id
         )
         if doc_id:
-            await es.delete_by_query(
-                index=CHUNK_INDEX,
-                body={"query": {"term": {"documentId": doc_id}}},
-                refresh=True,
-            )
+            try:
+                await es.delete_by_query(
+                    index=CHUNK_INDEX,
+                    body={"query": {"term": {"documentId": doc_id}}},
+                    refresh=True,
+                    ignore_unavailable=True,
+                )
+            except Exception as e:
+                logger.warning(
+                    "es delete_by_query failed or index missing", error=str(e), doc_id=doc_id
+                )
 
         child_chunks = [c for c in chunks if c.chunk_type == "child"]
         docs: list[dict[str, Any]] = []
@@ -56,6 +64,7 @@ class DocumentIndexer:
                     "chunkId": chunk.chunk_id,
                     "tenantId": tenant_id,
                     "documentId": getattr(chunk, "document_id", None)
+                    or document_id
                     or safe_int(chunk.doc_id, default=0),
                     "taskId": safe_int(task_id),
                     "chunkNo": chunk.chunk_index,
@@ -146,6 +155,7 @@ class DocumentIndexer:
                 {
                     "nodeId": n.id,
                     "documentId": n.document_id,
+                    "docId": doc_uuid,
                     "parseTaskId": safe_int(n.parse_task_id, default=0) if n.parse_task_id else 0,
                     "nodeNo": n.node_no or 0,
                     "nodeType": str(n.node_type) if n.node_type is not None else "",
@@ -167,8 +177,9 @@ class DocumentIndexer:
         async with driver.session() as n_session:
             # 1. 删除旧节点
             await n_session.run(
-                "MATCH (n) WHERE n.documentId = $doc_id DETACH DELETE n",
+                "MATCH (n) WHERE n.documentId = $doc_id OR n.docId = $doc_uuid DETACH DELETE n",
                 doc_id=doc_internal_id,
+                doc_uuid=doc_uuid,
             )
 
             # 2. 创建 Document 根节点
@@ -189,6 +200,7 @@ class DocumentIndexer:
                 CREATE (node:Section {
                     nodeId: n.nodeId,
                     documentId: n.documentId,
+                    docId: n.docId,
                     parseTaskId: n.parseTaskId,
                     nodeNo: n.nodeNo,
                     nodeType: n.nodeType,
@@ -261,11 +273,17 @@ class DocumentIndexer:
 
         es = get_es()
         if doc_internal_id:
-            await es.delete_by_query(
-                index=CHUNK_INDEX,
-                body={"query": {"term": {"documentId": doc_internal_id}}},
-                refresh=True,
-            )
+            try:
+                await es.delete_by_query(
+                    index=CHUNK_INDEX,
+                    body={"query": {"term": {"documentId": doc_internal_id}}},
+                    refresh=True,
+                    ignore_unavailable=True,
+                )
+            except Exception as e:
+                logger.warning(
+                    "es delete_by_query in delete_doc failed", error=str(e), doc_id=doc_id
+                )
 
         from app.config import get_settings
 
@@ -278,10 +296,11 @@ class DocumentIndexer:
                     await session.run(
                         """
                         MATCH (n)
-                        WHERE n.documentId = $doc_id
+                        WHERE n.documentId = $doc_id OR n.docId = $doc_uuid
                         DETACH DELETE n
                         """,
                         doc_id=doc_internal_id,
+                        doc_uuid=doc_id,
                     )
 
         logger.info("es and neo4j doc deleted", doc_id=doc_id, internal_id=doc_internal_id)

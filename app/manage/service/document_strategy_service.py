@@ -422,7 +422,7 @@ async def confirm_strategy(db: AsyncSession, doc_id: str, plan_id: int, user_id:
     logger.info("strategy confirmed", doc_id=doc_id, plan_id=plan_id)
 
 
-async def build_chunks(db: AsyncSession, doc_id: str, text: str, task_id: str) -> list[dict]:
+async def build_chunks(db: AsyncSession, doc_id: str, text: str, task_id: str = "0") -> list[dict]:
     from app.db.models.document import DocumentStrategyPlan, DocumentStrategyStep
 
     """批量构建 Parent-Child 切块关联关系"""
@@ -464,21 +464,84 @@ async def build_chunks(db: AsyncSession, doc_id: str, text: str, task_id: str) -
                 if strategy_type:
                     child_strategies.append(strategy_type)
 
-    from app.document.chunker import ChunkConfig, ChunkPipeline, ChunkStrategyType
+    from app.document.chunker import (
+        Chunk,
+        ChunkConfig,
+        ChunkPipeline,
+        ChunkStrategyType,
+        LLMChunker,
+        RecursiveChunker,
+        SemanticChunker,
+        StructureChunker,
+    )
 
     if not child_strategies:
-        child_strategies = [ChunkStrategyType.STRUCTURE, ChunkStrategyType.RECURSIVE]
+        child_strategies = [ChunkStrategyType.RECURSIVE]
 
-    parent_pipeline = ChunkPipeline(strategies=parent_strategies, config=ChunkConfig())
-    child_pipeline = ChunkPipeline(strategies=child_strategies, config=ChunkConfig())
+    parent_chunks: list[Chunk] = []
+    child_chunks: list[Chunk] = []
 
-    parent_chunks = await parent_pipeline.run(text, doc_id) if parent_strategies else []
-    child_chunks = await child_pipeline.run(text, doc_id)
+    # 1. 执行父块策略 (Parent Strategy)
+    if parent_strategies:
+        if ChunkStrategyType.STRUCTURE in parent_strategies:
+            parent_chunks = await StructureChunker().chunk(text, doc_id, ChunkConfig())
+        elif ChunkStrategyType.RECURSIVE in parent_strategies:
+            parent_chunks = await RecursiveChunker().chunk(
+                text, doc_id, ChunkConfig(chunk_size=1500, min_chunk_size=100)
+            )
+
+        for p in parent_chunks:
+            p.chunk_type = "parent"
+            p.document_id = doc_internal_id or 0
+            p.plan_id = plan_id
+
+    # 2. 执行子块策略 (Child Strategy)，与父块建立严格的关联引用
+    if parent_chunks:
+        if ChunkStrategyType.LLM in child_strategies:
+            for p in parent_chunks:
+                p_children = await LLMChunker().chunk(p.content, doc_id, ChunkConfig())
+                for c in p_children:
+                    c.parent_chunk_id = p.chunk_id
+                    c.section_title = p.section_title
+                    c.section_path = p.section_path
+                    c.structure_node_id = p.structure_node_id
+                    c.structure_node_type = p.structure_node_type
+                    c.canonical_path = p.canonical_path
+                child_chunks.extend(p_children)
+        elif ChunkStrategyType.RECURSIVE in child_strategies or not child_strategies:
+            child_chunks = await RecursiveChunker().chunk_parents(parent_chunks, ChunkConfig())
+        else:
+            child_chunks = await RecursiveChunker().chunk_parents(
+                parent_chunks, ChunkConfig(chunk_size=999999)
+            )
+
+        if ChunkStrategyType.SEMANTIC in child_strategies and child_chunks:
+            child_chunks = await SemanticChunker().chunk(child_chunks, ChunkConfig())
+    else:
+        child_pipeline = ChunkPipeline(strategies=child_strategies, config=ChunkConfig())
+        child_chunks = await child_pipeline.run(text, doc_id)
+
+    for idx, c in enumerate(child_chunks):
+        c.chunk_type = "child"
+        c.chunk_index = idx
+        c.document_id = doc_internal_id or 0
+        c.plan_id = plan_id
+
+    # 3. 幂等保存父块至 MySQL DocumentParentBlock (先删旧，再插新)
+    if doc_internal_id:
+        await db.execute(
+            delete(DocumentParentBlock).where(DocumentParentBlock.document_id == doc_internal_id)
+        )
 
     if parent_chunks:
+        from app.common.utils import stable_id_to_int
+
         for p in parent_chunks:
+            matched_children = [c for c in child_chunks if c.parent_chunk_id == p.chunk_id]
+            start_no = min((c.chunk_index for c in matched_children), default=None)
+            end_no = max((c.chunk_index for c in matched_children), default=None)
             pb = DocumentParentBlock(
-                id=int(p.chunk_id) if p.chunk_id.isdigit() else next_id(),
+                id=stable_id_to_int(p.chunk_id),
                 document_id=doc_internal_id,
                 task_id=task_id,
                 plan_id=plan_id,
@@ -492,18 +555,24 @@ async def build_chunks(db: AsyncSession, doc_id: str, text: str, task_id: str) -
                 parent_text=p.content,
                 char_count=len(p.content),
                 token_count=p.token_count,
-                child_count=sum(1 for c in child_chunks if c.parent_chunk_id == p.chunk_id),
+                child_count=len(matched_children),
+                start_chunk_no=start_no,
+                end_chunk_no=end_no,
             )
             db.add(pb)
         await db.flush()
-        logger.info("parent blocks saved", count=len(parent_chunks), doc_id=doc_id)
+        logger.info(
+            "parent blocks saved",
+            count=len(parent_chunks),
+            doc_id=doc_id,
+            children_linked=len(child_chunks),
+        )
 
     import dataclasses
 
-    for c in child_chunks:
-        c.document_id = doc_internal_id or 0
-
-    return [dataclasses.asdict(c) for c in child_chunks]
+    # 返回父块与子块的合集，使下游 VectorizerService 和 PGVector document_chunk 能够完整落盘
+    all_chunks = parent_chunks + child_chunks
+    return [dataclasses.asdict(c) for c in all_chunks]
 
 
 def _map_strategy_type(type_code: int):

@@ -320,6 +320,8 @@ PREVIEW_BLOCKED_PATHS = frozenset(
         "/api/chat/session/reset",
         "/api/chat/session/summary/rebuild",
         "/manage/document/upload",
+        "/manage/document/upload/archive",
+        "/manage/document/upload/batch",
         "/manage/document/delete",
         "/manage/document/retry",
         "/manage/document/cache/purge",

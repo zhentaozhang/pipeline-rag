@@ -54,7 +54,14 @@ def task_chunk_document(self, parse_result: dict, doc_id: str) -> dict:
             return await build_chunks(db, doc_id, text, self.request.id)
 
     try:
-        child_chunk_dicts = run_async(_do_build())
+        if not text or not text.strip():
+            raise ValueError(f"文档《{doc_id}》解析文本内容为空，无法执行切块")
+
+        all_chunk_dicts = run_async(_do_build())
+        if not all_chunk_dicts:
+            raise ValueError(f"文档《{doc_id}》切块结果为空，无法继续后续流程")
+        child_count = sum(1 for c in all_chunk_dicts if c.get("chunk_type") == "child")
+        parent_count = sum(1 for c in all_chunk_dicts if c.get("chunk_type") == "parent")
         _save_log(
             doc_id,
             self.request.id,
@@ -64,12 +71,16 @@ def task_chunk_document(self, parse_result: dict, doc_id: str) -> dict:
             DocumentOperatorTypeEnum.SYSTEM.value,
             "system",
             "切块执行完成。",
-            {"child_count": len(child_chunk_dicts)},
+            {
+                "child_count": child_count,
+                "parent_count": parent_count,
+                "total_chunks": len(all_chunk_dicts),
+            },
         )
         _update_task_status(self.request.id, DocumentTaskStatusEnum.SUCCESS.value)
         _update_pipeline_stage(doc_id, DocumentPipelineStageEnum.CHUNKED.value)
+        return {"doc_id": doc_id, "chunks": all_chunk_dicts}
     except Exception as e:
         logger.error("task chunk failed", error=str(e), exc_info=True)
         _task_failed(self, doc_id, DocumentTaskStageEnum.CHUNK_EXECUTE.value, "切块执行失败。", e)
-
-    return {"doc_id": doc_id, "chunks": child_chunk_dicts}
+        return {"doc_id": doc_id, "chunks": []}

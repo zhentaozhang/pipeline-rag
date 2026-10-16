@@ -27,3 +27,4 @@ class Chunk:
     structure_node_type: int | None = None
     item_index: int = 0
     document_id: int = 0
+    plan_id: int | None = None

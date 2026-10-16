@@ -36,7 +36,7 @@ def task_generate_profile(self, index_result: dict, doc_id: str) -> dict:
                 return {"doc_id": doc_id, "profile_status": "skipped"}
 
             async with _get_mysql_session() as db:
-                await generate_profile(db, doc_id, text_bytes.decode("utf-8"))
+                await generate_profile(db, doc_id, text_bytes.decode("utf-8", errors="replace"))
 
             logger.info("profile generation completed", doc_id=doc_id)
             return {"doc_id": doc_id, "profile_status": "completed"}

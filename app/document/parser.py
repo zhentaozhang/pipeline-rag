@@ -38,6 +38,46 @@ def _unstructured_available() -> bool:
     return importlib.util.find_spec("unstructured") is not None
 
 
+def _read_file_text_safe(path: Path) -> str:
+    """按优先级尝试多编码读取文本，若均失败则使用 errors='replace' 兜底"""
+    encodings = ("utf-8-sig", "utf-8", "gb18030", "gbk", "big5")
+    for enc in encodings:
+        try:
+            return path.read_text(encoding=enc)
+        except UnicodeDecodeError:
+            continue
+        except Exception:
+            break
+    # 终极兜底：replace 丢弃不可解码字符
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def _df_to_markdown(df: Any) -> str:
+    """零依赖将 DataFrame 转换为 Markdown 表格，彻底杜绝缺失 tabulate 抛出 ImportError"""
+    if df is None or getattr(df, "empty", True):
+        return ""
+    try:
+        cols = [
+            str(c).replace("|", "\\|").replace("\r", "").replace("\n", " ").strip()
+            for c in df.columns
+        ]
+        lines = ["| " + " | ".join(cols) + " |"]
+        lines.append("| " + " | ".join(["---"] * len(cols)) + " |")
+        for _, row in df.iterrows():
+            vals = [
+                str(v).replace("|", "\\|").replace("\r", "").replace("\n", " ").strip()
+                if v is not None and str(v) != "nan"
+                else ""
+                for v in row
+            ]
+            padded = vals[: len(cols)] + [""] * max(0, len(cols) - len(vals))
+            lines.append("| " + " | ".join(padded) + " |")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.warning("df to markdown conversion error", error=str(e))
+        return ""
+
+
 class DocumentParser:
     """
     多格式文档解析器。
@@ -67,6 +107,10 @@ class DocumentParser:
                 res = await self._parse_text(path)
             elif suffix in ("html", "htm"):
                 res = await self._parse_html(path)
+            elif suffix in ("xls", "xlsx"):
+                res = await self._parse_excel(path)
+            elif suffix == "csv":
+                res = await self._parse_csv(path)
             else:
                 res = await self._parse_fallback(path)
         except Exception:
@@ -119,7 +163,8 @@ class DocumentParser:
     def _cleanup_text(raw_text: str) -> str:
         if not raw_text:
             return ""
-        cleaned = raw_text.replace("\r\n", "\n").replace("\r", "\n")
+        cleaned = raw_text.lstrip("\ufeff").replace("\ufeff", "")
+        cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n")
         cleaned = cleaned.replace("\x00", " ")
         cleaned = re.sub(r"[\t\x0b\f]+", " ", cleaned)
         cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
@@ -264,13 +309,12 @@ class DocumentParser:
         from markitdown import MarkItDown
 
         md = MarkItDown()
-        loop = asyncio.get_event_loop()
 
         def _do_parse() -> Any:
             return md.convert(str(path))
 
         try:
-            result = await loop.run_in_executor(None, _do_parse)
+            result = await asyncio.to_thread(_do_parse)
             text = result.text_content or ""
             if not text.strip():
                 raise ValueError("markitdown returned empty content")
@@ -286,30 +330,22 @@ class DocumentParser:
         from markitdown import MarkItDown
 
         md = MarkItDown()
-        loop = asyncio.get_event_loop()
 
         def _do_parse() -> Any:
             return md.convert(str(path))
 
-        result = await loop.run_in_executor(None, _do_parse)
+        result = await asyncio.to_thread(_do_parse)
         return ParseResult(text=result.text_content or "", metadata={}, file_type="html")
 
     async def _parse_text(self, path: Path) -> ParseResult:
-        """直接读取 Markdown/txt（不阻塞事件循环）"""
-        loop = asyncio.get_event_loop()
-        try:
-            text = await loop.run_in_executor(None, path.read_text, "utf-8")
-        except UnicodeDecodeError:
-            text = await loop.run_in_executor(None, path.read_text, "gbk")
+        """直接读取 Markdown/txt（不阻塞事件循环，支持 BOM 与多编码嗅探）"""
+        text = await asyncio.to_thread(_read_file_text_safe, path)
         return ParseResult(text=text, metadata={}, file_type=path.suffix.lstrip("."))
 
     @staticmethod
     def _parse_text_direct(path: Path) -> ParseResult:
-        """Tika 失败回退：直接按文本读取"""
-        try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            text = path.read_text(encoding="gbk")
+        """解析失败回退：直接按安全多编码文本读取"""
+        text = _read_file_text_safe(path)
         return ParseResult(text=text, metadata={}, file_type=path.suffix.lstrip("."))
 
     async def _parse_fallback(self, path: Path) -> ParseResult:
@@ -317,7 +353,87 @@ class DocumentParser:
         from markitdown import MarkItDown
 
         md = MarkItDown()
-        loop = asyncio.get_event_loop()
-
-        result = await loop.run_in_executor(None, md.convert, str(path))
+        result = await asyncio.to_thread(md.convert, str(path))
         return ParseResult(text=result.text_content or "", metadata={}, file_type="unknown")
+
+    async def _parse_csv(self, path: Path) -> ParseResult:
+        """解析 CSV 文件，流式读取并转为 Markdown 表格（采样前 1000 行，多编码兼容）"""
+        import csv
+
+        def _do_csv() -> str:
+            lines: list[str] = []
+            encodings = ("utf-8-sig", "utf-8", "gb18030", "gbk", "big5")
+            rows: list[list[str]] = []
+
+            for enc in encodings:
+                try:
+                    rows = []
+                    with path.open(mode="r", encoding=enc, errors="strict") as f:
+                        reader = csv.reader(f)
+                        for i, row in enumerate(reader):
+                            rows.append(row)
+                            if i >= 1000:
+                                break
+                    break
+                except UnicodeDecodeError:
+                    continue
+                except Exception:
+                    break
+
+            if not rows:
+                try:
+                    with path.open(mode="r", encoding="utf-8", errors="replace") as f:
+                        reader = csv.reader(f)
+                        for i, row in enumerate(reader):
+                            rows.append(row)
+                            if i >= 1000:
+                                break
+                except Exception as e:
+                    logger.warning("failed to stream read csv with fallback", error=str(e))
+                    return ""
+
+            if not rows:
+                return ""
+
+            def _clean_cell(val: str) -> str:
+                return str(val).replace("|", "\\|").replace("\r", "").replace("\n", " ").strip()
+
+            header = rows[0]
+            col_count = len(header)
+            if col_count == 0:
+                return ""
+
+            lines.append("| " + " | ".join(_clean_cell(c) for c in header) + " |")
+            lines.append("| " + " | ".join(["---"] * col_count) + " |")
+            for row in rows[1:1000]:
+                padded_row = list(row[:col_count]) + [""] * max(0, col_count - len(row))
+                lines.append("| " + " | ".join(_clean_cell(c) for c in padded_row) + " |")
+            return "\n".join(lines)
+
+        text = await asyncio.to_thread(_do_csv)
+        return ParseResult(text=text, metadata={"source_encoding": "csv"}, file_type="csv")
+
+    async def _parse_excel(self, path: Path) -> ParseResult:
+        """解析 Excel (.xlsx, .xls) 表格，优先 MarkItDown 转换，降级使用零依赖 Markdown 生成"""
+        try:
+            return await self._parse_via_markitdown(path, path.suffix.lstrip("."))
+        except Exception:
+
+            def _read_excel() -> str:
+                try:
+                    import pandas as pd
+
+                    sheets = pd.read_excel(path, sheet_name=None)
+                    md_parts = []
+                    for name, df in sheets.items():
+                        md_parts.append(f"### Sheet: {name}\n")
+                        md_parts.append(_df_to_markdown(df.head(500)))
+                    return "\n\n".join(md_parts)
+                except Exception as e:
+                    logger.warning("fallback excel read failed", error=str(e))
+                    return ""
+
+            text = await asyncio.to_thread(_read_excel)
+            if not text.strip():
+                raise
+            return ParseResult(text=text, metadata={}, file_type=path.suffix.lstrip("."))
