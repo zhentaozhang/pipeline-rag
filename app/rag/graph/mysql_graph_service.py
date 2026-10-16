@@ -35,6 +35,30 @@ def _safe_text(text: str | None) -> str:
     return text.strip() if text else ""
 
 
+def _doc_filter(doc_id: str | int):
+    """同时匹配内部整数 document_id 与外部 UUID doc_id（单次查询内联子查询，避免额外交互）"""
+    from sqlalchemy import or_, select
+
+    from app.common.utils import safe_int
+    from app.db.models.document import Document
+
+    val = safe_int(doc_id, default=None)
+    doc_str = str(doc_id).strip()
+    if val is not None and val > 0:
+        return or_(
+            DocumentStructureNode.document_id == val,
+            DocumentStructureNode.document_id.in_(
+                select(Document.id).where(Document.doc_id == doc_str)
+            ),
+        )
+    return or_(
+        DocumentStructureNode.document_id == doc_id,
+        DocumentStructureNode.document_id.in_(
+            select(Document.id).where(Document.doc_id == doc_str)
+        ),
+    )
+
+
 class MysqlGraphService:
     def _to_section(self, node: DocumentStructureNode) -> GraphSection:
         return GraphSection(
@@ -78,8 +102,8 @@ class MysqlGraphService:
             stmt = (
                 select(DocumentStructureNode)
                 .where(
-                    DocumentStructureNode.document_id == doc_id,
-                    DocumentStructureNode.node_type == 2,
+                    _doc_filter(doc_id),
+                    DocumentStructureNode.node_type.in_([1, 2]),
                 )
                 .order_by(DocumentStructureNode.node_no)
             )
@@ -95,7 +119,7 @@ class MysqlGraphService:
         async with _get_session_factory()() as db:
             stmt = select(DocumentStructureNode).where(
                 DocumentStructureNode.id == int(section_node_id),
-                DocumentStructureNode.document_id == doc_id,
+                _doc_filter(doc_id),
             )
             res = await db.execute(stmt)
             node = res.scalar_one_or_none()
@@ -107,7 +131,7 @@ class MysqlGraphService:
                 select(DocumentStructureNode)
                 .where(
                     DocumentStructureNode.node_code == node_code.strip(),
-                    DocumentStructureNode.document_id == doc_id,
+                    _doc_filter(doc_id),
                 )
                 .limit(1)
             )
@@ -117,7 +141,7 @@ class MysqlGraphService:
 
     async def find_section_by_title(self, doc_id: str, title: str) -> GraphSection | None:
         async with _get_session_factory()() as db:
-            stmt = select(DocumentStructureNode).where(DocumentStructureNode.document_id == doc_id)
+            stmt = select(DocumentStructureNode).where(_doc_filter(doc_id))
             res = await db.execute(stmt)
             nodes = res.scalars().all()
 
@@ -139,7 +163,7 @@ class MysqlGraphService:
                 select(DocumentStructureNode)
                 .where(
                     DocumentStructureNode.canonical_path == canonical_path.strip(),
-                    DocumentStructureNode.document_id == doc_id,
+                    _doc_filter(doc_id),
                 )
                 .limit(1)
             )
@@ -152,7 +176,7 @@ class MysqlGraphService:
         normalized_facet = _normalize(facet)
 
         async with _get_session_factory()() as db:
-            stmt = select(DocumentStructureNode).where(DocumentStructureNode.document_id == doc_id)
+            stmt = select(DocumentStructureNode).where(_doc_filter(doc_id))
             res = await db.execute(stmt)
             nodes = res.scalars().all()
 
@@ -191,8 +215,8 @@ class MysqlGraphService:
             stmt = (
                 select(DocumentStructureNode)
                 .where(
-                    DocumentStructureNode.document_id == doc_id,
-                    DocumentStructureNode.node_type == 2,
+                    _doc_filter(doc_id),
+                    DocumentStructureNode.node_type.in_([1, 2]),
                 )
                 .order_by(DocumentStructureNode.node_no)
             )
@@ -206,8 +230,8 @@ class MysqlGraphService:
                 select(DocumentStructureNode)
                 .where(
                     DocumentStructureNode.parent_node_id == int(section_node_id),
-                    DocumentStructureNode.document_id == doc_id,
-                    DocumentStructureNode.node_type == 2,
+                    _doc_filter(doc_id),
+                    DocumentStructureNode.node_type.in_([1, 2]),
                 )
                 .order_by(DocumentStructureNode.node_no)
             )
@@ -268,8 +292,8 @@ class MysqlGraphService:
                 select(DocumentStructureNode)
                 .where(
                     DocumentStructureNode.parent_node_id == int(section_node_id),
-                    DocumentStructureNode.document_id == doc_id,
-                    DocumentStructureNode.node_type.in_([3, 4]),
+                    _doc_filter(doc_id),
+                    DocumentStructureNode.node_type.in_([2, 3, 4]),
                     DocumentStructureNode.item_index == item_index,
                 )
                 .order_by(DocumentStructureNode.node_no)
@@ -285,8 +309,8 @@ class MysqlGraphService:
                 select(DocumentStructureNode)
                 .where(
                     DocumentStructureNode.parent_node_id == int(section_node_id),
-                    DocumentStructureNode.document_id == doc_id,
-                    DocumentStructureNode.node_type.in_([3, 4]),
+                    _doc_filter(doc_id),
+                    DocumentStructureNode.node_type.in_([2, 3, 4]),
                 )
                 .order_by(DocumentStructureNode.node_no)
             )

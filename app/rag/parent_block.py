@@ -108,12 +108,10 @@ class ParentBlockElevator:
 
         # 2. 对未命中的 chunk_id 批量查库并回填
         if missing_chunk_ids:
-            query_cids = [
-                int(cid)
-                if isinstance(cid, int) or (isinstance(cid, str) and str(cid).isdigit())
-                else cid
-                for cid in missing_chunk_ids
-            ]
+            from app.common.utils import stable_id_to_int
+
+            cid_to_query_map = {stable_id_to_int(cid): str(cid) for cid in missing_chunk_ids}
+            query_cids = list(cid_to_query_map.keys())
             async with _ensure_session(session) as s:
                 result = await s.execute(
                     select(DocumentChunk.id, DocumentChunk.parent_block_id).where(
@@ -122,10 +120,14 @@ class ParentBlockElevator:
                 )
                 found_cids = set()
                 for row in result.all():
+                    orig_cid = cid_to_query_map.get(row.id, str(row.id))
                     cid_str = str(row.id)
                     pid_str = str(row.parent_block_id) if row.parent_block_id else None
+                    parent_map[orig_cid] = pid_str
                     parent_map[cid_str] = pid_str
+                    found_cids.add(orig_cid)
                     found_cids.add(cid_str)
+                    _CHUNK_PARENT_CACHE.set(orig_cid, pid_str or "__none__")
                     _CHUNK_PARENT_CACHE.set(cid_str, pid_str or "__none__")
 
                 # 兼容兜底：对于在 DocumentChunk 中未查到的 chunk，尝试查 PG public.document_chunk 表（应对存量数据）
@@ -177,12 +179,10 @@ class ParentBlockElevator:
 
         # 4. 仅对未命中内容缓存的 parent_id 查库并回填
         if parent_ids_to_fetch:
-            p_query_ids = [
-                int(pid)
-                if isinstance(pid, int) or (isinstance(pid, str) and str(pid).isdigit())
-                else pid
-                for pid in parent_ids_to_fetch
-            ]
+            from app.common.utils import stable_id_to_int
+
+            pid_to_query_map = {stable_id_to_int(pid): str(pid) for pid in parent_ids_to_fetch}
+            p_query_ids = list(pid_to_query_map.keys())
             async with _ensure_session(session) as s:
                 p_result = await s.execute(
                     select(
@@ -199,7 +199,10 @@ class ParentBlockElevator:
                         "text": parent_text or "",
                         "path": getattr(prow, "section_path", "") or "",
                     }
+                    orig_pid = pid_to_query_map.get(prow.id, str(prow.id))
+                    parent_contents[orig_pid] = content_dict
                     parent_contents[str(prow.id)] = content_dict
+                    _PARENT_CONTENT_CACHE.set(orig_pid, content_dict)
                     _PARENT_CONTENT_CACHE.set(str(prow.id), content_dict)
 
             # 兼容兜底：对于在 DocumentParentBlock 中未查到的 parent_id，尝试查 PG public.document_chunk 表

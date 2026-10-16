@@ -129,9 +129,15 @@ class Neo4jGraphService:
 
     async def is_graph_available(self, doc_id: str) -> bool:
         """检查指定文档在图谱中是否存在。"""
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         record = await self._run_query(
-            "MATCH (d:Document {documentId: $documentId}) RETURN count(d) > 0 AS available",
-            {"documentId": safe_int(doc_id)},
+            """
+            MATCH (d:Document)
+            WHERE d.docId = $docId OR ($documentId > 0 AND d.documentId = $documentId)
+            RETURN count(d) > 0 AS available
+            """,
+            {"documentId": doc_int, "docId": doc_str},
             "is_graph_available",
             fetch_mode="single",
         )
@@ -142,14 +148,18 @@ class Neo4jGraphService:
         logger.debug("neo4j query document tree", doc_id=doc_id)
         driver = get_neo4j()
 
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         query = """
-        MATCH (d:Document {documentId: $doc_id})-[:HAS_SECTION]->(s:Section)
+        MATCH (d:Document)
+        WHERE d.docId = $docId OR ($doc_id > 0 AND d.documentId = $doc_id)
+        OPTIONAL MATCH (d)-[:HAS_SECTION]->(s:Section)
         RETURN d, collect(s) as sections
         """
 
         try:
             async with driver.session() as session:
-                result = await session.run(query, doc_id=safe_int(doc_id))
+                result = await session.run(query, doc_id=doc_int, docId=doc_str)
                 record = await result.single()
                 if not record:
                     return None
@@ -160,7 +170,9 @@ class Neo4jGraphService:
                 return GraphQueryResult(
                     doc=_to_dict(doc_node),
                     sections=[
-                        GraphSection(**_neo_node_to_section(dict(s.items()))) for s in sections
+                        GraphSection(**_neo_node_to_section(dict(s.items())))
+                        for s in sections
+                        if s is not None
                     ],
                 )
         except Exception as e:
@@ -170,9 +182,20 @@ class Neo4jGraphService:
     # ── 图谱精确导航 (Graph Navigation API) ─────────────────────────────────
 
     async def find_section_by_id(self, doc_id: str, section_node_id: str) -> GraphSection | None:
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         record = await self._run_query(
-            "MATCH (s:Section {documentId: $documentId, nodeId: $nodeId}) RETURN s LIMIT 1",
-            {"documentId": safe_int(doc_id), "nodeId": safe_int(section_node_id)},
+            """
+            MATCH (s:Section)
+            WHERE (s.docId = $docId OR ($documentId > 0 AND s.documentId = $documentId))
+              AND s.nodeId = $nodeId
+            RETURN s LIMIT 1
+            """,
+            {
+                "documentId": doc_int,
+                "docId": doc_str,
+                "nodeId": safe_int(section_node_id),
+            },
             "find_section_by_id",
             fetch_mode="single",
         )
@@ -182,9 +205,20 @@ class Neo4jGraphService:
         return None
 
     async def find_section_by_code(self, doc_id: str, node_code: str) -> GraphSection | None:
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         record = await self._run_query(
-            "MATCH (s:Section {documentId: $documentId, nodeCode: $nodeCode}) RETURN s ORDER BY s.nodeNo ASC LIMIT 1",
-            {"documentId": safe_int(doc_id), "nodeCode": node_code.strip()},
+            """
+            MATCH (s:Section)
+            WHERE (s.docId = $docId OR ($documentId > 0 AND s.documentId = $documentId))
+              AND s.nodeCode = $nodeCode
+            RETURN s ORDER BY s.nodeNo ASC LIMIT 1
+            """,
+            {
+                "documentId": doc_int,
+                "docId": doc_str,
+                "nodeCode": node_code.strip(),
+            },
             "find_section_by_code",
             fetch_mode="single",
         )
@@ -195,15 +229,22 @@ class Neo4jGraphService:
 
     async def find_section_by_title(self, doc_id: str, title: str) -> GraphSection | None:
         normalized = _normalize(title)
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         record = await self._run_query(
             """
-        MATCH (s:Section {documentId: $documentId})
-        WHERE s.normalizedTitle = $normalized OR s.normalizedPath = $normalized
-        RETURN s
-        ORDER BY s.nodeNo ASC
-        LIMIT 1
-        """,
-            {"documentId": safe_int(doc_id), "normalized": normalized},
+            MATCH (s:Section)
+            WHERE (s.docId = $docId OR ($documentId > 0 AND s.documentId = $documentId))
+              AND (s.normalizedTitle = $normalized OR s.normalizedPath = $normalized)
+            RETURN s
+            ORDER BY s.nodeNo ASC
+            LIMIT 1
+            """,
+            {
+                "documentId": doc_int,
+                "docId": doc_str,
+                "normalized": normalized,
+            },
             "find_section_by_title",
             fetch_mode="single",
         )
@@ -215,9 +256,20 @@ class Neo4jGraphService:
     async def find_section_by_canonical_path(
         self, doc_id: str, canonical_path: str
     ) -> GraphSection | None:
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         record = await self._run_query(
-            "MATCH (s:Section {documentId: $documentId, canonicalPath: $canonicalPath}) RETURN s LIMIT 1",
-            {"documentId": safe_int(doc_id), "canonicalPath": canonical_path.strip()},
+            """
+            MATCH (s:Section)
+            WHERE (s.docId = $docId OR ($documentId > 0 AND s.documentId = $documentId))
+              AND s.canonicalPath = $canonicalPath
+            RETURN s LIMIT 1
+            """,
+            {
+                "documentId": doc_int,
+                "docId": doc_str,
+                "canonicalPath": canonical_path.strip(),
+            },
             "find_section_by_canonical_path",
             fetch_mode="single",
         )
@@ -231,10 +283,20 @@ class Neo4jGraphService:
         normalized_facet = _normalize(facet)
 
         driver = get_neo4j()
-        query = "MATCH (s:Section {documentId: $documentId}) RETURN s"
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
+        query = """
+        MATCH (s:Section)
+        WHERE s.docId = $docId OR ($documentId > 0 AND s.documentId = $documentId)
+        RETURN s
+        """
         try:
             async with driver.session() as session:
-                result = await session.run(query, documentId=safe_int(doc_id))
+                result = await session.run(
+                    query,
+                    documentId=doc_int,
+                    docId=doc_str,
+                )
                 records = await result.data()
 
             best_section = None
@@ -277,9 +339,15 @@ class Neo4jGraphService:
             return None
 
     async def list_sections(self, doc_id: str) -> list[GraphSection]:
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         records = await self._run_query(
-            "MATCH (s:Section {documentId: $documentId}) RETURN s ORDER BY s.nodeNo ASC",
-            {"documentId": safe_int(doc_id)},
+            """
+            MATCH (s:Section)
+            WHERE s.docId = $docId OR ($documentId > 0 AND s.documentId = $documentId)
+            RETURN s ORDER BY s.nodeNo ASC
+            """,
+            {"documentId": doc_int, "docId": doc_str},
             "list_sections",
             fetch_mode="data",
         )
@@ -292,8 +360,12 @@ class Neo4jGraphService:
 
     async def list_children(self, doc_id: str, section_node_id: str) -> list[GraphSection]:
         driver = get_neo4j()
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         query = """
-        MATCH (:Section {documentId: $documentId, nodeId: $nodeId})-[:HAS_CHILD]->(c:Section {documentId: $documentId})
+        MATCH (p:Section)-[:HAS_CHILD]->(c:Section)
+        WHERE (p.docId = $docId OR ($documentId > 0 AND p.documentId = $documentId))
+          AND p.nodeId = $nodeId
         RETURN c ORDER BY c.nodeNo ASC
         """
         try:
@@ -301,7 +373,8 @@ class Neo4jGraphService:
                 result = await session.run(
                     query,
                     nodeId=safe_int(section_node_id),
-                    documentId=safe_int(doc_id),
+                    documentId=doc_int,
+                    docId=doc_str,
                 )
                 records = await result.data()
                 sections = []
@@ -316,8 +389,12 @@ class Neo4jGraphService:
 
     async def parent_section(self, doc_id: str, section_node_id: str) -> GraphSection | None:
         driver = get_neo4j()
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         query = """
-        MATCH (p:Section {documentId: $documentId})-[:HAS_CHILD]->(:Section {documentId: $documentId, nodeId: $nodeId})
+        MATCH (p:Section)-[:HAS_CHILD]->(c:Section)
+        WHERE (c.docId = $docId OR ($documentId > 0 AND c.documentId = $documentId))
+          AND c.nodeId = $nodeId
         RETURN p LIMIT 1
         """
         try:
@@ -325,7 +402,8 @@ class Neo4jGraphService:
                 result = await session.run(
                     query,
                     nodeId=safe_int(section_node_id),
-                    documentId=safe_int(doc_id),
+                    documentId=doc_int,
+                    docId=doc_str,
                 )
                 record = await result.single()
                 if record and "p" in record:
@@ -338,8 +416,12 @@ class Neo4jGraphService:
 
     async def previous_sibling(self, doc_id: str, section_node_id: str) -> GraphSection | None:
         driver = get_neo4j()
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         query = """
-        MATCH (p:Section {documentId: $documentId})-[:NEXT_SIBLING]->(:Section {documentId: $documentId, nodeId: $nodeId})
+        MATCH (p:Section)-[:NEXT_SIBLING]->(c:Section)
+        WHERE (c.docId = $docId OR ($documentId > 0 AND c.documentId = $documentId))
+          AND c.nodeId = $nodeId
         RETURN p LIMIT 1
         """
         try:
@@ -347,7 +429,8 @@ class Neo4jGraphService:
                 result = await session.run(
                     query,
                     nodeId=safe_int(section_node_id),
-                    documentId=safe_int(doc_id),
+                    documentId=doc_int,
+                    docId=doc_str,
                 )
                 record = await result.single()
                 if record and "p" in record:
@@ -360,8 +443,12 @@ class Neo4jGraphService:
 
     async def next_sibling(self, doc_id: str, section_node_id: str) -> GraphSection | None:
         driver = get_neo4j()
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         query = """
-        MATCH (:Section {documentId: $documentId, nodeId: $nodeId})-[:NEXT_SIBLING]->(n:Section {documentId: $documentId})
+        MATCH (c:Section)-[:NEXT_SIBLING]->(n:Section)
+        WHERE (c.docId = $docId OR ($documentId > 0 AND c.documentId = $documentId))
+          AND c.nodeId = $nodeId
         RETURN n LIMIT 1
         """
         try:
@@ -369,7 +456,8 @@ class Neo4jGraphService:
                 result = await session.run(
                     query,
                     nodeId=safe_int(section_node_id),
-                    documentId=safe_int(doc_id),
+                    documentId=doc_int,
+                    docId=doc_str,
                 )
                 record = await result.single()
                 if record and "n" in record:
@@ -384,8 +472,13 @@ class Neo4jGraphService:
         self, doc_id: str, section_node_id: str, item_index: int
     ) -> GraphItem | None:
         driver = get_neo4j()
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         query = """
-        MATCH (:Section {documentId: $documentId, nodeId: $sectionNodeId})-[:HAS_ITEM]->(i:Item {documentId: $documentId, itemIndex: $itemIndex})
+        MATCH (s:Section)-[:HAS_ITEM]->(i:Item)
+        WHERE (s.docId = $docId OR ($documentId > 0 AND s.documentId = $documentId))
+          AND s.nodeId = $sectionNodeId
+          AND i.itemIndex = $itemIndex
         RETURN i
         ORDER BY i.nodeNo ASC
         LIMIT 1
@@ -395,7 +488,8 @@ class Neo4jGraphService:
                 result = await session.run(
                     query,
                     sectionNodeId=safe_int(section_node_id),
-                    documentId=safe_int(doc_id),
+                    documentId=doc_int,
+                    docId=doc_str,
                     itemIndex=item_index,
                 )
                 record = await result.single()
@@ -409,8 +503,12 @@ class Neo4jGraphService:
 
     async def list_items(self, doc_id: str, section_node_id: str) -> list[GraphItem]:
         driver = get_neo4j()
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         query = """
-        MATCH (:Section {documentId: $documentId, nodeId: $sectionNodeId})-[:HAS_ITEM]->(i:Item {documentId: $documentId})
+        MATCH (s:Section)-[:HAS_ITEM]->(i:Item)
+        WHERE (s.docId = $docId OR ($documentId > 0 AND s.documentId = $documentId))
+          AND s.nodeId = $sectionNodeId
         RETURN i ORDER BY i.nodeNo ASC
         """
         try:
@@ -418,7 +516,8 @@ class Neo4jGraphService:
                 result = await session.run(
                     query,
                     sectionNodeId=safe_int(section_node_id),
-                    documentId=safe_int(doc_id),
+                    documentId=doc_int,
+                    docId=doc_str,
                 )
                 records = await result.data()
                 items = []
@@ -436,9 +535,13 @@ class Neo4jGraphService:
     ) -> list[GraphItem]:
         normalized_keyword = _normalize(keyword)
         driver = get_neo4j()
+        doc_int = safe_int(doc_id, default=0)
+        doc_str = str(doc_id).strip()
         query = """
-        MATCH (:Section {documentId: $documentId, nodeId: $sectionNodeId})-[:HAS_ITEM]->(i:Item {documentId: $documentId})
-        WHERE i.normalizedTitle CONTAINS $keyword OR toLower(coalesce(i.contentText, '')) CONTAINS $keyword
+        MATCH (s:Section)-[:HAS_ITEM]->(i:Item)
+        WHERE (s.docId = $docId OR ($documentId > 0 AND s.documentId = $documentId))
+          AND s.nodeId = $sectionNodeId
+          AND (i.normalizedTitle CONTAINS $keyword OR toLower(coalesce(i.contentText, '')) CONTAINS $keyword)
         RETURN i ORDER BY i.nodeNo ASC
         """
         try:
@@ -446,7 +549,8 @@ class Neo4jGraphService:
                 result = await session.run(
                     query,
                     sectionNodeId=safe_int(section_node_id),
-                    documentId=safe_int(doc_id),
+                    documentId=doc_int,
+                    docId=doc_str,
                     keyword=normalized_keyword,
                 )
                 records = await result.data()
