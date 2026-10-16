@@ -35,6 +35,7 @@ class PrepareContext:
     original_selected_task_id: str | None = None
 
     # ── 时间感知（TimeSensitivityStage 填充）────────────────────────
+    enriched_question: str = ""
     current_date: date = field(default_factory=date.today)
     current_date_text: str = ""
     requires_current_date_anchoring: bool = False

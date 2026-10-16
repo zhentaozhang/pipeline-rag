@@ -25,6 +25,7 @@ class PlanBuilder:
         return dict(
             original_question=ctx.question,
             agent_question=ctx.question,
+            enriched_question=ctx.enriched_question,
             rewritten_question=question,
             rewrite_sub_questions=sub_qs,
             retrieval_question=ret_q,

@@ -4,6 +4,7 @@ Supervisor Agent — LLM 问题分解 + SubPlan 生成
 
 import json
 import uuid
+from collections import defaultdict
 
 import structlog
 from openai import AsyncOpenAI
@@ -120,9 +121,10 @@ class SupervisorService:
                 config={"configurable": {"thread_id": f"sup-{uuid.uuid4().hex}"}},
             )
             sub_plans = result.get("sub_plans")
-            if result.get("review_status") == "approved" and sub_plans:
+            review_status = result.get("review_status")
+            if review_status in ("approved", "degraded") and sub_plans:
                 for sp in sub_plans:
-                    sp.review_status = "approved"
+                    sp.review_status = review_status
                     sp.review_feedback = result.get("feedback", "") or ""
                 return sub_plans, True
             return None, True
@@ -330,7 +332,7 @@ def _build_sub_plans(raw_plans: list[dict]) -> list[SubPlan]:
 
 
 def _validate_sub_plans(sub_plans: list[SubPlan]) -> tuple[bool, list[str]]:
-    """结构验证：检查依赖引用有效、无重复 ID、问题非空。"""
+    """结构验证：检查依赖引用有效、无重复 ID、问题非空、无循环依赖。"""
     errors: list[str] = []
     ids = {sp.id for sp in sub_plans}
 
@@ -338,11 +340,34 @@ def _validate_sub_plans(sub_plans: list[SubPlan]) -> tuple[bool, list[str]]:
         errors.append("子计划 ID 存在重复")
         return False, errors
 
+    has_invalid_dep = False
     for sp in sub_plans:
         if not sp.question or not sp.question.strip():
             errors.append(f"子计划 {sp.id} 问题为空")
         for dep_id in sp.depends_on:
             if dep_id not in ids:
                 errors.append(f"子计划 {sp.id} 依赖 {dep_id} 不存在")
+                has_invalid_dep = True
+
+    # 仅在所有依赖 ID 合法时进行环检测
+    if not has_invalid_dep and sub_plans:
+        in_degree = {sp.id: len(sp.depends_on) for sp in sub_plans}
+        dependents: dict[str, list[str]] = defaultdict(list)
+        for sp in sub_plans:
+            for dep_id in sp.depends_on:
+                dependents[dep_id].append(sp.id)
+
+        queue = [sp.id for sp in sub_plans if in_degree[sp.id] == 0]
+        visited = 0
+        while queue:
+            pid = queue.pop(0)
+            visited += 1
+            for did in dependents.get(pid, []):
+                in_degree[did] -= 1
+                if in_degree[did] == 0:
+                    queue.append(did)
+
+        if visited != len(sub_plans):
+            errors.append("子计划依赖存在循环依赖")
 
     return len(errors) == 0, errors

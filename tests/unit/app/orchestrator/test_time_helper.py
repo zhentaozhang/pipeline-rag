@@ -74,6 +74,11 @@ class TestRequiresFreshSearch:
         assert H.requires_fresh_search("现在发生什么") is True
         assert H.requires_fresh_search("最新消息") is True
 
+    def test_knowledge_base_state_keywords_not_fresh(self):
+        assert H.requires_fresh_search("最新的差旅标准是多少") is False
+        assert H.requires_fresh_search("现在系统支持哪些单点登录方式") is False
+        assert H.requires_fresh_search("目前支持的数据库版本") is False
+
     def test_plain_question(self):
         assert H.requires_fresh_search("如何配置数据库") is False
 

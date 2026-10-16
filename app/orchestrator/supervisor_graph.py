@@ -110,7 +110,13 @@ async def review_node(state: SupervisorState) -> dict:
         result = json.loads(content)
     except Exception:
         logger.exception("sub_plan_review_failed")
-        return {"review_status": "approved"}
+        try:
+            from app.observability.metrics import DEGRADATION_TOTAL
+
+            DEGRADATION_TOTAL.labels(reason="supervisor_review_failed").inc()
+        except Exception:
+            pass
+        return {"review_status": "degraded", "feedback": "评审异常降级通过"}
 
     approved = result.get("approved", True)
     feedback = result.get("feedback", "") or ""
@@ -125,12 +131,12 @@ def _route_after_validate(state: SupervisorState) -> str:
 
 
 def _route_after_review(state: SupervisorState) -> str:
-    """approved → END；rejected 且重试未耗尽 → retry 回 decompose；否则 → END。
+    """approved/degraded → END；rejected 且重试未耗尽 → retry 回 decompose；否则 → END。
 
     与 legacy 语义一致（range(max_review_retries + 1) 次评审）：
     rejected 且 review_retries <= max 时还有重试机会。
     """
-    if state.get("review_status") == "approved":
+    if state.get("review_status") in ("approved", "degraded"):
         return "approved"
     retries_used = state.get("review_retries", 0)
     settings = get_settings()

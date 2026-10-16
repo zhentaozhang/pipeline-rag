@@ -58,8 +58,18 @@ class TestTimeLimiterDoesNotHijackRouting:
     """
 
     def test_time_limiter_alone_stays_in_knowledge_base(self):
-        assert looks_like_open_chat_question("今天报销流程有变化吗", False) is False
-        assert looks_like_open_chat_question("明天的会议安排是什么", False) is False
+        from app.orchestrator.time_helper import TimeSensitiveQueryHelper
+
+        for q in (
+            "今天报销流程有变化吗",
+            "明天的会议安排是什么",
+            "最新的差旅标准是多少",
+            "现在系统支持哪些单点登录方式",
+            "目前支持的数据库版本有哪些",
+        ):
+            fresh = TimeSensitiveQueryHelper.requires_fresh_search(q)
+            assert fresh is False
+            assert looks_like_open_chat_question(q, fresh) is False
 
     def test_real_time_domain_still_routes(self):
         assert looks_like_open_chat_question("今天天气怎么样", False) is True

@@ -16,7 +16,7 @@ class TimeSensitivityStage(Stage[PrepareContext, "ExecutionPlan"]):
             TimeSensitiveQueryHelper.requires_current_date_anchoring(ctx.question)
         )
         ctx.requires_fresh_search = TimeSensitiveQueryHelper.requires_fresh_search(ctx.question)
-        ctx.question = TimeSensitiveQueryHelper.enrich(ctx.question)
+        ctx.enriched_question = TimeSensitiveQueryHelper.enrich(ctx.question)
         ctx.current_date = date.today()
         ctx.current_date_text = TimeSensitiveQueryHelper.get_current_time_context()
         ctx.is_time_sensitive = TimeSensitiveQueryHelper.is_time_sensitive(ctx.question)
