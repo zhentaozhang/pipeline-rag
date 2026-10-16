@@ -80,6 +80,87 @@ class TestSemanticOutput:
         assert res.safe is True
 
 
+class _FakeCitationResp:
+    def __init__(self, content: str) -> None:
+        self.choices = [types.SimpleNamespace(message=types.SimpleNamespace(content=content))]
+        self.usage = None
+        self.model = "fake"
+
+
+class _FakeFallback:
+    """引用核验 LLM 降级通道的最小替身。"""
+
+    def __init__(self, content: str = "{}", error: Exception | None = None) -> None:
+        self.content = content
+        self.error = error
+        self.called = False
+
+    async def chat_completion(self, **kwargs):
+        self.called = True
+        if self.error:
+            raise self.error
+        return _FakeCitationResp(self.content)
+
+
+class TestCitationVerifyBand:
+    """引用核验置信度带：灰区整轮升级到既有 LLM 审计；明确支持/不支持保持 JEV 决策。"""
+
+    @pytest.mark.asyncio
+    async def test_ambiguous_noul_escalates_to_llm(self, monkeypatch):
+        from app.chat.citation_verifier import verify_citations
+
+        _enable(monkeypatch, "citation_verify_enabled")
+        fallback = _FakeFallback(content='{"unsupported": []}')
+        answers = {"cite_1": {"noul": 0.90}, "cite_2": {"noul": 0.50}}
+        with _patch_jev(answers):
+            answer, bad, meta = await verify_citations(
+                fallback=fallback,
+                answer="结论一 [1]，结论二 [2]",
+                references=[{"content": "证据一"}, {"content": "证据二"}],
+                question="问题",
+            )
+        assert fallback.called is True
+        assert meta["status"] == "judged"
+        assert bad == []
+
+    @pytest.mark.asyncio
+    async def test_confident_unsupported_stays_jev(self, monkeypatch):
+        from app.chat.citation_verifier import verify_citations
+
+        _enable(monkeypatch, "citation_verify_enabled")
+        fallback = _FakeFallback(content='{"unsupported": [1]}')
+        answers = {"cite_1": {"noul": 0.20}, "cite_2": {"noul": 0.95}}
+        with _patch_jev(answers):
+            answer, bad, meta = await verify_citations(
+                fallback=fallback,
+                answer="结论一 [1]，结论二 [2]",
+                references=[{"content": "证据一"}, {"content": "证据二"}],
+                question="问题",
+            )
+        assert fallback.called is False
+        assert meta["status"] == "jev_judged"
+        assert bad == [1]
+        assert "[1]" in answer
+
+    @pytest.mark.asyncio
+    async def test_confident_supported_stays_jev(self, monkeypatch):
+        from app.chat.citation_verifier import verify_citations
+
+        _enable(monkeypatch, "citation_verify_enabled")
+        fallback = _FakeFallback(content='{"unsupported": []}')
+        answers = {"cite_1": {"noul": 0.95}}
+        with _patch_jev(answers):
+            answer, bad, meta = await verify_citations(
+                fallback=fallback,
+                answer="结论一 [1]",
+                references=[{"content": "证据一"}],
+                question="问题",
+            )
+        assert fallback.called is False
+        assert meta["status"] == "jev_judged"
+        assert bad == []
+
+
 class TestSemanticToolRisk:
     @pytest.mark.asyncio
     async def test_jev_escalates_high_risk_params(self, monkeypatch):

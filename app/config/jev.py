@@ -34,6 +34,15 @@ class JEVSettings(BaseSettings):
     safe_threshold: float = 0.50  # 安全判断阈值 (>= 视为安全)
     citation_confidence_threshold: float = 0.60  # 引用置信度阈值 (>= 视为证据支持)
 
+    # 置信度带（cascade）：JEV 仅在高置信时直接决策，落入灰区则升级到既有 LLM/规则通道。
+    # 护栏（yes=有风险）：有风险概率 >= high 才高置信拦截；判 no 且概率 <= low 视为高置信无风险；
+    #                    其余（灰区 / 低置信 yes / 分布分裂）视为不确定 -> 升级，安全侧永不静默降级。
+    guardrail_review_low: float = 0.35
+    guardrail_review_high: float = 0.65
+    # 引用核验（noul 为"证据支持"概率）：< low 明确不支持；>= citation_confidence_threshold
+    #                                    明确支持；[low, threshold) 为灰区 -> 整轮升级到既有 LLM 审计。
+    citation_review_low: float = 0.45
+
     # 超时时间 (秒，收敛为 2.0s 防止热路径服务不可用时阻塞过久)
     timeout_seconds: float = 2.0
 

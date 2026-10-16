@@ -40,8 +40,48 @@ JEV_RISK_REASONS: dict[str, str] = {
 }
 
 
+class JEVUncertainError(Exception):
+    """JEV 风险判定落入灰区（低置信 yes 或分布分裂），调用方应升级到 LLM/规则通道。"""
+
+
+def _category_risk_probability(info: object) -> tuple[str, float] | None:
+    """从 JEV Choice 结果中提取 (选择, 有风险概率)，无法解析返回 None。
+
+    有风险概率优先取 ``distribution["yes"]``；无分布时由 ``choice`` + ``confidence`` 推导
+    （choice=yes 取 confidence，choice=no 取 1-confidence）。
+    """
+    if not isinstance(info, dict):
+        return None
+    choice = info.get("choice")
+    if choice not in ("yes", "no"):
+        return None
+
+    dist = info.get("distribution")
+    if isinstance(dist, dict) and ("yes" in dist or "no" in dist):
+        try:
+            p_yes = float(dist.get("yes", 0.0))
+        except (TypeError, ValueError):
+            p_yes = None
+        if p_yes is not None:
+            return choice, max(0.0, min(1.0, p_yes))
+
+    conf = info.get("confidence", 1.0)
+    try:
+        c = float(conf)
+    except (TypeError, ValueError):
+        c = 1.0
+    c = max(0.0, min(1.0, c))
+    return choice, c if choice == "yes" else 1.0 - c
+
+
 async def jev_risk_scan(state: str) -> str | None:
     """用 JEV Choice 原语逐类扫描风险，返回命中的风险类别（无风险返回 None）。
+
+    置信度带策略（cascade）：
+    - 任一类别有风险概率 >= guardrail_review_high -> 高置信命中，返回该类别（拦截）。
+    - 判 no 且概率 <= guardrail_review_low -> 该类别高置信无风险。
+    - 其余（灰区 / 低置信 yes / 分布分裂 / 无法解析）-> 抛 JEVUncertainError，
+      由调用方升级到既有 LLM/规则通道（安全侧永不静默降级）。
 
     空响应视为失败并抛错，交由调用方回退到 LLM/规则通道（fail-safe）。
     """
@@ -61,10 +101,26 @@ async def jev_risk_scan(state: str) -> str | None:
     )
     if not answers:
         raise ValueError("JEV returned empty answers")
+
+    jev_cfg = getattr(settings, "jev", None)
+    low = float(getattr(jev_cfg, "guardrail_review_low", 0.35))
+    high = float(getattr(jev_cfg, "guardrail_review_high", 0.65))
+
+    uncertain: list[str] = []
     for cat in JEV_RISK_CATEGORIES:
-        info = answers.get(cat)
-        if isinstance(info, dict) and info.get("choice") == "yes":
+        parsed = _category_risk_probability(answers.get(cat))
+        if parsed is None:
+            uncertain.append(cat)
+            continue
+        choice, p_risk = parsed
+        if p_risk >= high:
             return cat
+        # 低置信 yes 或灰区（含分布分裂）都视为不确定；仅"判 no 且概率 <= low"才算高置信无风险
+        if choice != "no" or p_risk > low:
+            uncertain.append(cat)
+
+    if uncertain:
+        raise JEVUncertainError(f"ambiguous JEV risk bands: {','.join(uncertain)}")
     return None
 
 
@@ -157,6 +213,12 @@ class IntentGuardrailService:
                         sanitized_question=sanitized,
                     )
                 return GuardrailVerdict(is_safe=True, sanitized_question=sanitized)
+            except JEVUncertainError as e:
+                logger.warning(
+                    "JEV uncertain -> escalate to LLM/rules",
+                    detail=str(e)[:120],
+                    question=question[:80],
+                )
             except Exception as e:
                 logger.warning(
                     "guardrail JEV eval failed, falling back to LLM/rules",
