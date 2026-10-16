@@ -31,12 +31,21 @@ dependencies = [
     "neo4j>=5.20.0",
     "elasticsearch>=8.13.0,<9.0.0",
     # MCP 协议
-    "fastmcp>=2.0.0",
+    # 下限 2.11.3：2.9.x 的 Settings 类与 pydantic>=2.13 不兼容
+    # （pydantic 报 "cannot specify both default and default_factory"），
+    # 会导致 app.mcp.server 无法导入、MCP 服务无法启动。
+    # 上限 <3：本模块使用的 FastMCP() / @mcp.tool() / mcp.run(transport=)
+    # 在 2.x 线已验证；升级到 3.x/4.x 需单独评估 API 变更。
+    "fastmcp>=2.11.3,<3",
     # 文档解析
     "markitdown>=0.1.0",
     # 认证
     "pyjwt>=2.8.0",
     "passlib[bcrypt]>=1.7.4",
+    # 安全：Presidio PII 检测依赖 spaCy 英文模型（app/safety/presidio_pii.py 中
+    # 显式指定 en_core_web_sm）。spaCy 模型不走 PyPI 常规包名，必须显式声明，
+    # 否则全新 `uv sync` 出来的环境缺少模型 → PII 检测静默降级为不生效。
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
     # 可观测性
     # 自研 Trace（app/observability）为唯一生产标准；如需接入 OTLP Collector，
     # 按需安装 opentelemetry-sdk + otlp exporter 后自建初始化模块。
@@ -83,6 +92,11 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+# en-core-web-sm 以 GitHub release 直链声明（spaCy 模型不在 PyPI 常规索引），
+# hatchling 默认拒绝 project.dependencies 中的直接引用，需显式放行。
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
@@ -144,6 +158,11 @@ ignore = ["E501", "B008"]
 
 [tool.mypy]
 python_version = "3.11"
+# pydantic 插件：让 mypy 正确理解 BaseModel 的字段名 / 别名 / 默认值。
+# 不启用时，凡以 camelCase 别名序列化、以 snake_case 构造的模型
+# （GraphSection / GraphItem / GraphQueryResult 等）都会被误报
+# "Unexpected keyword argument"（约 30 处噪音，掩盖真实错误）。
+plugins = ["pydantic.mypy"]
 strict = false
 ignore_missing_imports = true
 check_untyped_defs = true
@@ -151,43 +170,6 @@ warn_return_any = true
 no_implicit_optional = true
 strict_equality = true
 disable_error_code = ["prop-decorator"]
-
-[[tool.mypy.overrides]]
-# 仅对仍存在类型错误的文件保留 ignore_errors（2026-08-15 收紧：
-# 此前以模块 glob 大面积掩盖，现改为精确文件列表，其余文件均纳入严格检查）。
-module = [
-    "alembic.*",
-    "tests.*",
-    "app.agent.graph",
-    "app.chat.service",
-    "app.chat.store",
-    "app.chat.tasks",
-    "app.db.repositories.document_repository",
-    "app.db.repositories.observability_repository",
-    "app.document.structure.extractors",
-    "app.executors.agent",
-    "app.executors.graph",
-    "app.executors.rag",
-    "app.executors.rag_stream",
-    "app.executors.registry",
-    "app.infra.es_services",
-    "app.infra.minio",
-    "app.infra.pg",
-    "app.infra.rate_limiter",
-    "app.manage.service.document_profile_service",
-    "app.manage.service.scope_service",
-    "app.manage.service.storage_service",
-    "app.mcp.skills.document_navigation",
-    "app.mcp.skills.knowledge_retrieval",
-    "app.mcp.skills.web_research",
-    "app.observability.metrics.base",
-    "app.rag.channels.keyword",
-    "app.rag.channels.vector",
-    "app.rag.graph.composite_graph_service",
-    "app.rag.graph.graph_engine",
-    "app.rag.graph.mysql_graph_service",
-]
-ignore_errors = true
 
 [tool.pytest.ini_options]
 addopts = "-p no:cacheprovider"
