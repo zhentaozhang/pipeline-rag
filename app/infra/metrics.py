@@ -155,6 +155,33 @@ RATE_LIMIT_HITS_TOTAL = Counter(
 )
 
 
+# ── L6 JEV 决策客户端指标 ────────────────────────────────────────────────────
+
+JEV_CALL_TOTAL = Counter(
+    name="jev_call_total",
+    namespace=NAMESPACE,
+    subsystem="jev",
+    documentation="JEV 决策调用总次数（按结果分类）",
+    labelnames=["outcome"],  # success | empty | error
+)
+
+JEV_CALL_LATENCY_SECONDS = Histogram(
+    name="jev_call_latency_seconds",
+    namespace=NAMESPACE,
+    subsystem="jev",
+    documentation="JEV 决策调用客户端观测耗时",
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+)
+
+JEV_QUESTIONS_TOTAL = Counter(
+    name="jev_questions_total",
+    namespace=NAMESPACE,
+    subsystem="jev",
+    documentation="JEV 决策调用发送的问题数（按问题类型分类）",
+    labelnames=["type"],  # noul | choice | score
+)
+
+
 def _state_value(state_str: str) -> int:
     """熔断器状态 → Prometheus gauge 数值"""
     return {"closed": 0, "half_open": 1, "open": 2}.get(state_str, 0)

@@ -5,6 +5,7 @@ JEV 决策服务客户端与原语单测
 from unittest.mock import MagicMock, patch
 
 import pytest
+from prometheus_client import REGISTRY
 
 from app.infra.jev_client import JEVClient, get_jev_client
 
@@ -49,6 +50,79 @@ async def test_jev_client_system_one_call():
         assert client._client is not None
         await client.aclose()
         assert client._client is None
+
+
+def _reset_jev_breaker() -> None:
+    from app.infra.circuit_breaker import CircuitState
+    from app.infra.jev_client import _jev_breaker
+
+    _jev_breaker._state = CircuitState.CLOSED
+    _jev_breaker._failure_count = 0
+
+
+def _sample(name: str, labels: dict[str, str] | None = None) -> float:
+    return REGISTRY.get_sample_value(name, labels) or 0.0
+
+
+@pytest.mark.asyncio
+async def test_jev_client_success_metrics():
+    _reset_jev_breaker()
+    client = JEVClient()
+    with patch("httpx.AsyncClient.post") as mock_post:
+        mock_resp_obj = MagicMock()
+        mock_resp_obj.json.return_value = {"answers": {"a": {"noul": 1.0}}}
+        mock_resp_obj.raise_for_status.return_value = None
+        mock_post.return_value = mock_resp_obj
+
+        before_success = _sample("safety_jev_jev_call_total", {"outcome": "success"})
+        before_latency = _sample("safety_jev_jev_call_latency_seconds_count")
+        before_noul = _sample("safety_jev_jev_questions_total", {"type": "noul"})
+        before_choice = _sample("safety_jev_jev_questions_total", {"type": "choice"})
+        before_score = _sample("safety_jev_jev_questions_total", {"type": "score"})
+
+        res = await client.system_one(
+            state="s",
+            questions={
+                "is_safe": {"type": "noul"},
+                "intent": {"type": "choice"},
+                "quality": {"type": "score"},
+            },
+        )
+        await client.aclose()
+
+    assert res == {"a": {"noul": 1.0}}
+    assert _sample("safety_jev_jev_call_total", {"outcome": "success"}) == before_success + 1
+    assert _sample("safety_jev_jev_call_latency_seconds_count") == before_latency + 1
+    assert _sample("safety_jev_jev_questions_total", {"type": "noul"}) == before_noul + 1
+    assert _sample("safety_jev_jev_questions_total", {"type": "choice"}) == before_choice + 1
+    assert _sample("safety_jev_jev_questions_total", {"type": "score"}) == before_score + 1
+
+
+@pytest.mark.asyncio
+async def test_jev_client_empty_questions_metric():
+    _reset_jev_breaker()
+    client = JEVClient()
+    before_empty = _sample("safety_jev_jev_call_total", {"outcome": "empty"})
+
+    res = await client.system_one(state="test", questions={})
+
+    assert res == {}
+    assert _sample("safety_jev_jev_call_total", {"outcome": "empty"}) == before_empty + 1
+
+
+@pytest.mark.asyncio
+async def test_jev_client_error_metrics():
+    _reset_jev_breaker()
+    import httpx
+
+    client = JEVClient()
+    before_error = _sample("safety_jev_jev_call_total", {"outcome": "error"})
+    with patch("httpx.AsyncClient.post", side_effect=httpx.ConnectError("boom")):
+        with pytest.raises(httpx.ConnectError):
+            await client.system_one(state="s", questions={"q": {"type": "noul"}})
+        await client.aclose()
+
+    assert _sample("safety_jev_jev_call_total", {"outcome": "error"}) == before_error + 1
 
 
 def test_jev_schemas():
