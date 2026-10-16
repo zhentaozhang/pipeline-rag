@@ -23,6 +23,12 @@ class JEVSettings(BaseSettings):
     answer_correctness_enabled: bool = True  # M8b: 答案正确性评测
     context_precision_enabled: bool = True  # M9: 检索精度评测
     context_recall_enabled: bool = True  # M9: 检索召回评测
+    structure_ambiguity_enabled: bool = True  # 文档结构歧义消解（choice）
+    evidence_sufficiency_enabled: bool = True  # 纠错检索：证据充分性判定（noul）
+    quality_eval_enabled: bool = True  # 回答质量审核（score）
+    injection_semantic_enabled: bool = True  # 语义注入补充检测（noul）
+    output_semantic_enabled: bool = True  # 输出语义泄露/有害补充检测（noul）
+    tool_risk_semantic_enabled: bool = True  # 工具调用参数级风险（noul）
 
     # 关键判定阈值
     safe_threshold: float = 0.50  # 安全判断阈值 (>= 视为安全)
