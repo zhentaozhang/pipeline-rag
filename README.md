@@ -28,8 +28,6 @@
 
 面向知识库问答与复杂任务处理场景的 AI Agent 平台。系统基于 FastAPI 与 LangGraph 构建，围绕上下文精度、任务分解、记忆连续性三个问题，整合 PGVector + Elasticsearch 双通道召回、泛型 Pipeline 对话编排、Supervisor 任务分解、结构化摘要记忆等组件，并提供一套本地部署的 JEV 判断决策层替代大模型的判断类调用。
 
-技术细节见 [`docs/`](docs/)。
-
 ## 核心能力
 
 | 维度 | 能力 |
