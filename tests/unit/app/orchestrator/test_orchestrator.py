@@ -24,10 +24,10 @@ def make_doc(document_id="7", name="部署手册", score="0.9", task_id="t1"):
     )
 
 
-def make_settings():
+def make_settings(rag_enabled=True):
     return types.SimpleNamespace(
         rag=types.SimpleNamespace(
-            enabled=True,
+            enabled=rag_enabled,
             no_evidence_reply="未找到相关文档",
             planning_history_max_chars=2000,
             answer_history_max_chars=1500,
@@ -284,3 +284,38 @@ class TestAutoDocumentFlow:
         assert plan.mode.value == "GRAPH_ONLY"
         assert plan.navigation_decision is not None
         assert plan.retrieval_question == "改写后问题"
+
+
+class TestRagDisabled:
+    """回归（审查报告 D2）：RAG 关闭时的分模式行为。
+
+    ValidationStage 原本无 .when() 守卫、且排在 OpenChatShortcutStage 之前，
+    因此 OPEN_CHAT 模式会被"文档问答未启用"拦下，RuntimeError 穿出 prepare()，
+    整轮被标记 FAILED。闲聊不依赖 RAG，必须放行。
+    """
+
+    @pytest.mark.asyncio
+    async def test_open_chat_survives_rag_disabled(self, monkeypatch):
+        install_fakes(monkeypatch, settings=make_settings(rag_enabled=False))
+        plan = await orchestrator_module.prepare(
+            "你好", "c1", MemoryContext(), chat_mode="open_chat"
+        )
+        assert plan.mode.value == "REACT_AGENT"
+        assert plan.chat_mode == ChatQueryMode.OPEN_CHAT
+
+    @pytest.mark.asyncio
+    async def test_auto_document_rag_disabled_terminates_with_plan(self, monkeypatch):
+        """文档模式仍需 RAG，但不该抛异常——改为 TERMINATE 出可读提示计划。"""
+        install_fakes(monkeypatch, settings=make_settings(rag_enabled=False))
+        plan = await orchestrator_module.prepare("部署手册怎么用", "c1", MemoryContext())
+        assert plan.mode.value == "REFUSAL"
+        assert "RAG_ENABLED=false" in (plan.refusal_reply or "")
+        assert plan.refusal_thinking, "能力不可用的思考提示须与安全拦截区分"
+
+    @pytest.mark.asyncio
+    async def test_safety_refusal_keeps_default_thinking(self, monkeypatch):
+        """安全拦截仍走默认思考提示，未被能力不可用场景污染。"""
+        install_fakes(monkeypatch, guardrail=FakeGuardrailService(is_safe=False, reason="越权"))
+        plan = await orchestrator_module.prepare("询问薪资", "c1", MemoryContext())
+        assert plan.mode.value == "REFUSAL"
+        assert plan.refusal_thinking is None

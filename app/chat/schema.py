@@ -176,6 +176,9 @@ class ExecutionPlan(BaseModel):
     context_summary: str = ""  # 当前轮记忆上下文摘要
     clarification_reply: str = ""
     refusal_reply: str | None = None
+    # REFUSAL 执行器的思考提示语；None 时用安全拦截默认文案。
+    # 区分"安全拦截"与"能力不可用"两类终止，避免后者显示误导性提示。
+    refusal_thinking: str | None = None
     clarification_options: list[str] = Field(default_factory=list)
     selected_document_id: str | None = None  # 选中的主文档（路由结果）
     navigation_decision: DocumentNavigationDecision | None = None  # 导航决策（对应图谱模式）
