@@ -37,7 +37,7 @@ class ElasticsearchDocumentNavigationIndexService:
         if not query_texts:
             return []
         es = get_es()
-        should_clauses = []
+        should_clauses: list[dict[str, Any]] = []
         for qt in query_texts:
             should_clauses.append({"match_phrase": {"title": {"query": qt, "boost": 20.0}}})
             should_clauses.append({"match_phrase": {"sectionPath": {"query": qt, "boost": 15.0}}})
@@ -50,7 +50,7 @@ class ElasticsearchDocumentNavigationIndexService:
                     }
                 }
             )
-        body = {
+        body: dict[str, Any] = {
             "query": {
                 "bool": {
                     "filter": [
@@ -130,9 +130,8 @@ class ElasticsearchKnowledgeRouteIndexService:
         删除指定文档的所有路由快照。
         删除知识路由索引：按 entityType=document + documentId 过滤。
         """
-        from app.infra.route_indexer import ROUTE_INDEX as _RI
-
         from app.common.utils import safe_int
+        from app.infra.route_indexer import ROUTE_INDEX as _RI
 
         doc_internal_id = safe_int(doc_id, default=0)
         if not doc_internal_id:

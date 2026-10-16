@@ -51,6 +51,14 @@ class ChatQueryMode(IntEnum):
     AUTO_DOCUMENT = 3
 
 
+# 面向「字符串边界」的规范化标签（响应缓存键、SSE 载荷、DB 写入、日志）。
+# 与 app/chat/response_cache.py 的 _CACHEABLE_MODES = {"auto", "retrieval"} 对齐。
+_CHAT_MODE_LABELS: dict[ChatQueryMode, str] = {
+    ChatQueryMode.AUTO_DOCUMENT: "auto",
+    ChatQueryMode.DOCUMENT: "retrieval",
+    ChatQueryMode.OPEN_CHAT: "open_chat",
+}
+
 _CHAT_MODE_ALIASES: dict[str, ChatQueryMode] = {
     "auto": ChatQueryMode.AUTO_DOCUMENT,
     "auto_document": ChatQueryMode.AUTO_DOCUMENT,
@@ -58,6 +66,7 @@ _CHAT_MODE_ALIASES: dict[str, ChatQueryMode] = {
     "openchat": ChatQueryMode.OPEN_CHAT,
     "document": ChatQueryMode.DOCUMENT,
     "doc": ChatQueryMode.DOCUMENT,
+    "retrieval": ChatQueryMode.DOCUMENT,
 }
 
 
@@ -69,6 +78,22 @@ def normalize_chat_mode(value: str) -> ChatQueryMode:
     if mode is None:
         raise ValueError(f"Invalid chat mode: {value!r}")
     return mode
+
+
+def chat_mode_label(mode: ChatQueryMode | str) -> str:
+    """把 chat_mode 归一为稳定字符串标签。
+
+    必须使用本函数、而不是直接传 ``ChatQueryMode`` 到字符串位置：
+    ``ChatQueryMode`` 是 ``IntEnum``，直接与字符串比较（如
+    ``mode in {"auto"}``）恒为 False，f-string 也会渲染成数字（"3"）。
+    历史缺陷：响应缓存收到枚举后 ``is_cacheable`` 恒 False，缓存永久不命中。
+    """
+    if isinstance(mode, ChatQueryMode):
+        return _CHAT_MODE_LABELS[mode]
+    try:
+        return _CHAT_MODE_LABELS[normalize_chat_mode(mode)]
+    except ValueError:
+        return mode.strip().lower()
 
 
 class ExecutionMode(StrEnum):

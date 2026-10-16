@@ -20,6 +20,7 @@ from typing import Any
 
 import structlog
 
+from app.common.enums import ChatQueryMode, chat_mode_label
 from app.config import get_settings
 from app.infra.redis_lease import get_redis
 
@@ -40,16 +41,22 @@ def _normalize_question(question: str) -> str:
     return "".join(question.lower().split())
 
 
-def build_cache_key(question: str, chat_mode: str, doc_ids: list[str]) -> str:
-    """缓存键：规范化问题 + 模式 + 文档集（跨会话复用）"""
-    raw = f"{_normalize_question(question)}|{chat_mode}|{','.join(sorted(doc_ids))}"
+def build_cache_key(question: str, chat_mode: ChatQueryMode | str, doc_ids: list[str]) -> str:
+    """缓存键：规范化问题 + 规范化模式 + 文档集（跨会话复用）。
+
+    ChatQueryMode 是 IntEnum；若直接 f-string 会写入数字标签，且与 str 标签
+    的缓存键不一致。先统一转为 ``auto`` / ``retrieval`` / ``open_chat``。
+    """
+    mode = chat_mode_label(chat_mode)
+    raw = f"{_normalize_question(question)}|{mode}|{','.join(sorted(doc_ids))}"
     digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()
     return f"{_KEY_PREFIX}:{digest}"
 
 
-def is_cacheable(chat_mode: str, has_history: bool) -> bool:
-    """仅确定性问答且无历史上下文时可缓存"""
-    return chat_mode in _CACHEABLE_MODES and not has_history
+def is_cacheable(chat_mode: ChatQueryMode | str, has_history: bool) -> bool:
+    """仅确定性问答且无历史上下文时可缓存。"""
+    mode = chat_mode_label(chat_mode)
+    return mode in _CACHEABLE_MODES and not has_history
 
 
 async def has_history(db: Any, conversation_id: str) -> bool:
@@ -71,7 +78,9 @@ async def has_history(db: Any, conversation_id: str) -> bool:
     return result.first() is not None
 
 
-async def lookup(db: Any, conversation_id: str, question: str, chat_mode: str, doc_ids: list[str]) -> CacheHit | None:
+async def lookup(
+    db: Any, conversation_id: str, question: str, chat_mode: str, doc_ids: list[str]
+) -> CacheHit | None:
     """缓存查询：命中返回可回放事件；否则 None。Redis 异常静默降级（不阻断）"""
     if not is_cacheable(chat_mode, await has_history(db, conversation_id)):
         return None
@@ -139,7 +148,7 @@ async def invalidate_cache(doc_id: str | None = None) -> int:
         redis = get_redis()
         deleted = 0
         if doc_id:
-            keys_to_del = set()
+            keys_to_del: set[str] = set()
             # 1. 该文档对应的缓存键
             doc_key = f"{_KEY_PREFIX}:doc_keys:{doc_id}"
             keys = await redis.smembers(doc_key)
@@ -159,15 +168,15 @@ async def invalidate_cache(doc_id: str | None = None) -> int:
             # 清理反向映射 set
             await redis.delete(doc_key, all_key)
         else:
-            # 全量模糊匹配清除
-            keys_to_del = []
+            # 全量模糊匹配清除（SCAN 结果需分批删除，避免单次 DELETE 参数过多）
+            scanned_keys: list[str] = []
             async for k in redis.scan_iter(f"{_KEY_PREFIX}:*"):
-                keys_to_del.append(k)
-            if keys_to_del:
+                scanned_keys.append(str(k))
+            if scanned_keys:
                 chunk_size = 500
-                for i in range(0, len(keys_to_del), chunk_size):
-                    await redis.delete(*keys_to_del[i : i + chunk_size])
-                deleted = len(keys_to_del)
+                for i in range(0, len(scanned_keys), chunk_size):
+                    await redis.delete(*scanned_keys[i : i + chunk_size])
+                deleted = len(scanned_keys)
 
         with contextlib.suppress(Exception):
             from app.rag.parent_block import clear_parent_block_cache

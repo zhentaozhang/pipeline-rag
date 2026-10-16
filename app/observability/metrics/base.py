@@ -11,13 +11,19 @@ from pydantic import BaseModel, Field
 _MARKDOWN_FENCE = re.compile(r"^```(?:json)?\s*|```$")
 
 
-def parse_json_safe(text: str, default: Any = None) -> dict[str, Any] | list[Any] | None:
+def parse_json_safe(
+    text: str, default: dict[str, Any] | list[Any] | None = None
+) -> dict[str, Any] | list[Any] | None:
     """Parse JSON from LLM output, stripping markdown fences if present.
 
     Handles:
       - raw JSON: {"key": "value"}
       - markdown-wrapped: ```json\n{"key": "value"}\n```
       - extra text before/after: Sure! Here is the data: {"key": "value"}
+
+    返回值语义（保持既有行为，勿轻易改动）：
+      - 未找到任何 JSON 候选片段 → ``None``
+      - 找到候选但解析结果不是 dict/list → ``default``（默认 ``{}``）
     """
     if default is None:
         default = {}
@@ -44,6 +50,9 @@ def parse_json_safe(text: str, default: Any = None) -> dict[str, Any] | list[Any
         except json.JSONDecodeError:
             continue
         return default
+
+    # 无任何候选片段：显式返回 None（此前依赖隐式落空返回，语义相同）
+    return None
 
 
 class MetricResult(BaseModel):

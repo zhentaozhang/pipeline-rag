@@ -3,6 +3,7 @@
 import pytest
 
 from app.chat.response_cache import _normalize_question, build_cache_key, is_cacheable
+from app.common.enums import ChatQueryMode
 
 
 def test_normalize_question():
@@ -22,6 +23,21 @@ def test_cache_key_stable_and_scoped():
     assert k1 != k4
     # 跨会话复用：不含 conversation_id
     assert "conv" not in k1
+
+
+def test_chat_mode_enum_is_normalized_before_cache_check_and_keying():
+    """IntEnum 模式不能直接和字符串模式比较或拼入缓存 key。"""
+    assert is_cacheable(ChatQueryMode.AUTO_DOCUMENT, has_history=False) is True
+    assert is_cacheable(ChatQueryMode.DOCUMENT, has_history=False) is True
+    assert is_cacheable(ChatQueryMode.OPEN_CHAT, has_history=False) is False
+
+    # API 传入字符串 alias 或 orchestration 传入枚举，应得到相同缓存键。
+    assert build_cache_key("问题", ChatQueryMode.AUTO_DOCUMENT, []) == build_cache_key(
+        "问题", "auto", []
+    )
+    assert build_cache_key("问题", ChatQueryMode.DOCUMENT, []) == build_cache_key(
+        "问题", "retrieval", []
+    )
 
 
 def test_is_cacheable_rules():
@@ -52,6 +68,7 @@ async def test_lookup_and_store_roundtrip(monkeypatch):
     import app.chat.response_cache as rc
 
     monkeypatch.setattr(rc, "get_redis", lambda: _FakeRedis())
+
     async def _no_history(db, cid):
         return False
 
@@ -65,7 +82,11 @@ async def test_lookup_and_store_roundtrip(monkeypatch):
     assert calls["get"] is not None
 
     await store(
-        _FakeDb(), "c1", "什么是 RAG", "auto", [],
+        _FakeDb(),
+        "c1",
+        "什么是 RAG",
+        "auto",
+        [],
         ['data: {"type": "text", "content": "答案"}', 'data: {"type": "done"}'],
         "答案",
     )
@@ -88,6 +109,7 @@ async def test_lookup_skips_when_history_exists(monkeypatch):
             return None
 
     monkeypatch.setattr(rc, "get_redis", lambda: _FakeRedis())
+
     async def _has_history(db, cid):
         return True
 

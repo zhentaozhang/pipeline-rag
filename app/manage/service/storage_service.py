@@ -57,10 +57,11 @@ async def delete_objects(object_name_list: list[str]) -> None:
         return
     if not await bucket_exists(settings.minio.bucket):
         return
-    import asyncio as _asyncio
-
+    # delete_object 本身已是 async 且内部用 to_thread 包裹阻塞调用；
+    # 早前写成 asyncio.to_thread(delete_object, ...) 会把协程对象丢进线程池，
+    # 返回值被丢弃 → 删除静默不生效（mypy unused-coroutine 已捕获）。
     for object_name in valid_names:
-        await _asyncio.to_thread(delete_object, object_name)
+        await delete_object(object_name)
 
 
 def _build_object_url(object_name: str) -> str:

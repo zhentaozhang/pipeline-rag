@@ -72,7 +72,6 @@ async def test_manage_middleware_passes_through_non_manage_paths():
 
 @pytest.mark.asyncio
 async def test_manage_middleware_rejects_revoked_token(monkeypatch):
-    from app.api.admin_auth import is_token_revoked
 
     token = create_access_token("admin")
 
@@ -111,10 +110,13 @@ async def test_is_token_revoked_fail_closed(monkeypatch):
 @pytest.mark.asyncio
 async def test_login_with_malformed_password_hash(monkeypatch):
     import types
+
     from app.api.admin_auth import LoginRequest, login
     from app.common.exceptions import PipelineRAGFrameException
 
-    fake_user = types.SimpleNamespace(username="admin", password="plain_or_corrupted_hash", is_active=True)
+    fake_user = types.SimpleNamespace(
+        username="admin", password="plain_or_corrupted_hash", is_active=True
+    )
 
     async def _get_admin_user(db, username):
         return fake_user
@@ -126,5 +128,3 @@ async def test_login_with_malformed_password_hash(monkeypatch):
 
     assert exc_info.value.code == 401
     assert "账号或密码不正确" in str(exc_info.value.message)
-
-

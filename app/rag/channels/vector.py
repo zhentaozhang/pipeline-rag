@@ -5,6 +5,8 @@
 基于 cosine similarity 过滤并排序。
 """
 
+from typing import Any
+
 import structlog
 
 from app.chat.schema import Evidence, SubQuestion
@@ -46,7 +48,8 @@ class VectorRetrievalChannel:
             WHERE 1=1
         """
 
-        args = [embedding_str]
+        # args 混装 str / int / list，显式标注为 list[Any]
+        args: list[Any] = [embedding_str]
         param_idx = 2
 
         if sub_q.tenant_id:
@@ -139,7 +142,7 @@ class VectorRetrievalChannel:
 
         from app.infra.pg import fetch as _pg_fetch
 
-        evidences = []
+        evidences: list[Evidence] = []
 
         try:
             rows = await _pg_fetch(sql, *args)

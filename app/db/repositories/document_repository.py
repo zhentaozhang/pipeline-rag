@@ -23,7 +23,9 @@ from app.db.models.task_log import DocumentTaskLog
 class DocumentRepository:
     @staticmethod
     async def get_by_doc_id(db: AsyncSession, doc_id: str) -> Document | None:
-        return await db.scalar(select(Document).where(Document.doc_id == doc_id))
+        # db.scalar 返回 Any，显式标注局部变量以收敛返回类型
+        doc: Document | None = await db.scalar(select(Document).where(Document.doc_id == doc_id))
+        return doc
 
     @staticmethod
     async def get_by_internal_id(db: AsyncSession, internal_id: int) -> Document | None:
@@ -52,7 +54,7 @@ class DocumentRepository:
             .limit(size)
         )
         result = await db.execute(stmt)
-        return result.scalars().all(), total or 0
+        return list(result.scalars().all()), total or 0
 
     @staticmethod
     async def get_by_doc_ids(db: AsyncSession, doc_ids: list[str]) -> dict[str, Document]:
@@ -83,7 +85,7 @@ class DocumentRepository:
         total = await db.scalar(select(func.count()).select_from(query.subquery()))
         stmt = query.order_by(asc(DocumentChunk.chunk_no)).offset((page - 1) * size).limit(size)
         result = await db.execute(stmt)
-        return result.scalars().all(), total or 0
+        return list(result.scalars().all()), total or 0
 
     @staticmethod
     async def get_sibling_chunks(
@@ -186,8 +188,9 @@ class DocumentRepository:
         )
         result: dict[int, PipelineRAGDocumentTask] = {}
         for task in (await db.execute(stmt)).scalars().all():
-            if task.document_id not in result:
-                result[task.document_id] = task
+            task_doc_id = task.document_id
+            if task_doc_id is not None and task_doc_id not in result:
+                result[task_doc_id] = task
         return result
 
     @staticmethod

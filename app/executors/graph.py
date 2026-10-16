@@ -38,7 +38,7 @@ class GraphExecutor(ConversationExecutor):
 
     async def execute(self, plan: ExecutionPlan) -> AsyncIterator[str]:
         from app.observability import SpanKind
-        from app.observability.tracer import _DummySpan as _NoopSpan
+        from app.observability.tracer import span_of
         from app.rag.graph.graph_engine import StructureGraphQueryEngine
         from app.rag.graph_renderer import GraphAnswerRenderer
 
@@ -53,6 +53,7 @@ class GraphExecutor(ConversationExecutor):
             or not nav_decision
             or not nav_decision.structure_anchor
             or not nav_decision.structure_anchor.structure_node_id
+            or plan.selected_document_id is None
         ):
             logger.info(
                 "GRAPH_ONLY 执行器直接返回无证据: planPresent=%s, decisionPresent=%s, structureNodeId=%s",
@@ -67,8 +68,8 @@ class GraphExecutor(ConversationExecutor):
 
         yield self._emit(SSEEventType.THINKING, "正在通过结构图直接查询章节关系。")
         self.task.thinking_steps.append("正在通过结构图直接查询章节关系。")
-        doc_id = plan.selected_document_id
-        section_node_id = nav_decision.structure_anchor.structure_node_id
+        doc_id = str(plan.selected_document_id)
+        section_node_id = str(nav_decision.structure_anchor.structure_node_id)
 
         engine = StructureGraphQueryEngine()
         renderer = GraphAnswerRenderer()
@@ -81,21 +82,21 @@ class GraphExecutor(ConversationExecutor):
             nav_decision.summary_text,
         )
 
-        async with tracer.span("graph_query", kind=SpanKind.RETRIEVAL) if tracer else _NoopSpan():
+        async with span_of(tracer, "graph_query", SpanKind.RETRIEVAL):
             graph_result: GraphQueryResult
             if nav_decision.action == NAV_ACTION_ADJACENCY:
-                result = await engine.find_section_with_siblings(doc_id, section_node_id)
+                sibling_result = await engine.find_section_with_siblings(doc_id, section_node_id)
                 graph_result = GraphQueryResult(
-                    target_section=result.section,
-                    parent_section=result.parent,
-                    prev_sibling=result.previous_sibling,
-                    next_sibling=result.next_sibling,
+                    target_section=sibling_result.section,
+                    parent_section=sibling_result.parent,
+                    prev_sibling=sibling_result.previous_sibling,
+                    next_sibling=sibling_result.next_sibling,
                 )
             else:
-                result = await engine.find_section_with_children(doc_id, section_node_id)
+                children_result = await engine.find_section_with_children(doc_id, section_node_id)
                 graph_result = GraphQueryResult(
-                    target_section=result.section,
-                    children=result.children,
+                    target_section=children_result.section,
+                    children=children_result.children,
                 )
 
             target_section = graph_result.target_section
@@ -160,7 +161,7 @@ class GraphThenEvidenceExecutor(ConversationExecutor):
 
     async def execute(self, plan: ExecutionPlan) -> AsyncIterator[str]:
         from app.observability import SpanKind
-        from app.observability.tracer import _DummySpan as _NoopSpan
+        from app.observability.tracer import span_of
         from app.rag.graph.graph_engine import StructureGraphQueryEngine
         from app.rag.graph_renderer import GraphAnswerRenderer
 
@@ -175,6 +176,7 @@ class GraphThenEvidenceExecutor(ConversationExecutor):
             or not nav_decision
             or not nav_decision.structure_anchor
             or not nav_decision.structure_anchor.structure_node_id
+            or plan.selected_document_id is None
         ):
             logger.info(
                 "GRAPH_THEN_EVIDENCE 执行器直接返回无证据: planPresent=%s, decisionPresent=%s, structureNodeId=%s",
@@ -189,8 +191,8 @@ class GraphThenEvidenceExecutor(ConversationExecutor):
 
         yield self._emit(SSEEventType.THINKING, "正在通过结构图定位目标章节和编号项。")
         self.task.thinking_steps.append("正在通过结构图定位目标章节和编号项。")
-        doc_id = plan.selected_document_id
-        section_node_id = nav_decision.structure_anchor.structure_node_id
+        doc_id = str(plan.selected_document_id)
+        section_node_id = str(nav_decision.structure_anchor.structure_node_id)
 
         item_anchor = nav_decision.item_anchor
         item_index = item_anchor.item_index if item_anchor else None
@@ -205,7 +207,7 @@ class GraphThenEvidenceExecutor(ConversationExecutor):
         )
 
         engine = StructureGraphQueryEngine()
-        async with tracer.span("graph_query", kind=SpanKind.RETRIEVAL) if tracer else _NoopSpan():
+        async with span_of(tracer, "graph_query", SpanKind.RETRIEVAL):
             graph_result = await engine.build_graph_result(
                 doc_id=doc_id,
                 target_section_node_id=section_node_id,

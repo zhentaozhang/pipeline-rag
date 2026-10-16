@@ -6,7 +6,7 @@
 import json
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, ClassVar
 
 from app.chat.schema import ExecutionPlan, WorkerResult
 from app.common.enums import ExecutionMode
@@ -16,7 +16,8 @@ from app.common.sse import sse_event
 class ConversationExecutor(ABC):
     """所有执行器必须实现的标准接口"""
 
-    mode: ExecutionMode
+    # 声明为 ClassVar：注册表通过 `cls.mode` 在类上读取，而非实例属性
+    mode: ClassVar[ExecutionMode]
     # execute_structured（Worker 结构化执行）会被置为 True，
     # 供执行器区分「顶层流式输出」与「并行 Worker 内部执行」。
     _worker_execution: bool = False

@@ -10,13 +10,12 @@ Redis 滑动窗口限流器 + FastAPI ASGI 中间件
 """
 
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 import structlog
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from app.common.exceptions import RateLimitException
 from app.config import get_settings
 from app.infra.metrics import RATE_LIMIT_HITS_TOTAL
 from app.infra.redis_lease import _redis as _redis_client
@@ -77,10 +76,7 @@ def _client_identity(request: Request) -> str:
         # 仅信任配置层数的反代：从右侧数第 trust_proxy_count+1 个地址为真实客户端
         ips = [p.strip() for p in forwarded.split(",")]
         idx = len(ips) - get_settings().rate_limit.trust_proxy_count - 1
-        if idx >= 0 and ips[idx]:
-            ip = ips[idx]
-        else:
-            ip = forwarded.split(",")[0].strip()
+        ip = ips[idx] if idx >= 0 and ips[idx] else forwarded.split(",")[0].strip()
     elif request.client:
         ip = request.client.host
 
@@ -123,7 +119,7 @@ def _route_group(path: str) -> str | None:
 
 
 async def rate_limit_middleware(
-    request: Request, call_next: Callable[[Request], Response]
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
     settings = get_settings()
     if not settings.rate_limit.enabled:

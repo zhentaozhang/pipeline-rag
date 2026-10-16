@@ -22,7 +22,7 @@ class CompositeGraphService:
         self.neo4j_service = Neo4jGraphService()
         self.mysql_service = MysqlGraphService()
 
-    async def _delegate(self, doc_id: str):
+    async def _delegate(self, doc_id: str) -> Neo4jGraphService | MysqlGraphService:
         """检查 Neo4j 是否可用，可用则返回图服务，否则降级到 MySQL。"""
         try:
             if await self.neo4j_service.is_graph_available(doc_id):

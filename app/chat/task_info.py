@@ -74,6 +74,9 @@ class ChatTaskInfo(BaseModel):
     # ── P1-c：与质量自审并发预跑的引用校验任务 ───────────────────────────
     _citation_task: Any | None = None
 
+    # ── P1：RAG 在线评估的待提交参数（由 RagChatExecutor 采样后写入）──────
+    _pending_eval: dict[str, Any] | None = None
+
     # ── 终态保护 ────────────────────────────────────────────────────────
     finalized: bool = False
 
@@ -199,8 +202,40 @@ class ChatRuntimeRegistry:
 
     @classmethod
     def is_running(cls, conversation_id: str) -> bool:
+        """仅本进程视角的运行判定（保留原语义，供单进程内部快速路径使用）。"""
         return conversation_id in cls._registry
 
     @classmethod
+    async def is_running_cluster(cls, conversation_id: str) -> bool:
+        """跨 worker 的运行判定：本地注册表命中，或集群内该会话租约仍存在。
+
+        多 worker 部署下 /api/chat 请求可能被路由到任意 worker，仅查本地注册表
+        会把「正在别的 worker 上生成」误判为未运行（状态查询、会话列表 running
+        标记随之失真）。租约键由 BusinessChatService 在整段生成期间持有，
+        可作为集群级权威信号。
+        """
+        if cls.is_running(conversation_id):
+            return True
+        from app.infra.redis_lease import conversation_lease_exists
+
+        return await conversation_lease_exists(conversation_id)
+
+    @classmethod
+    async def running_ids_cluster(cls) -> set[str]:
+        """集群内活跃会话 ID 集合 = 本地注册表 ∪ Redis 租约键。
+
+        供会话列表等「一次查询批量判定」的场景使用，避免逐条打 Redis。
+        """
+        from app.infra.redis_lease import active_conversation_ids
+
+        return set(cls._registry.keys()) | await active_conversation_ids()
+
+    @classmethod
     def active_count(cls) -> int:
+        """本进程活跃会话数。"""
         return len([v for v in cls._registry.values() if v is not None])
+
+    @classmethod
+    async def active_count_cluster(cls) -> int:
+        """集群活跃会话数（本地与 Redis 取较大值，Redis 不可用时降级为本地值）。"""
+        return max(cls.active_count(), len(await cls.running_ids_cluster()))

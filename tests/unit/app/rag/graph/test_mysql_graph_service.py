@@ -69,9 +69,16 @@ def fake_db(monkeypatch):
     def install(queue):
         holder["queue"] = list(queue)
         holder["session"] = FakeSession(holder["queue"])
+
+        # 服务端改为「惰性解析」session factory（_get_session_factory() 每次调用
+        # 重新读取 app.db.session 的当前值，避免 import 时捕获到 None）。
+        # 因此这里 patch 的是 _get_session_factory，其返回值再被调用得到 session。
+        def _session_factory():
+            return holder["session"]
+
         monkeypatch.setattr(
-            "app.rag.graph.mysql_graph_service.async_session_maker",
-            lambda: holder["session"],
+            "app.rag.graph.mysql_graph_service._get_session_factory",
+            lambda: _session_factory,
         )
         return holder["session"]
 

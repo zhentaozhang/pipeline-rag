@@ -1,5 +1,6 @@
 """管理员认证 API — /admin/auth/*  +  /manage/** 全局中间件"""
 
+import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 
@@ -10,8 +11,6 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-
-import uuid
 
 from app.api.schemas.response import ApiResponse
 from app.common.exceptions import AuthException, PipelineRAGFrameException
@@ -69,7 +68,9 @@ async def is_token_revoked(jti: str | None) -> bool:
             if getattr(settings.jwt, "deny_on_redis_error", False):
                 import structlog as _slog
 
-                _slog.get_logger(__name__).error("redis unavailable, fail-closed token revocation check", jti=jti)
+                _slog.get_logger(__name__).error(
+                    "redis unavailable, fail-closed token revocation check", jti=jti
+                )
                 return True
             return False
         exists = await r.exists(f"{JWT_DENYLIST_PREFIX}{jti}")
@@ -77,10 +78,10 @@ async def is_token_revoked(jti: str | None) -> bool:
     except Exception as e:
         import structlog as _slog
 
-        _slog.get_logger(__name__).error("failed to check token revocation in redis", error=str(e), jti=jti)
-        if getattr(settings.jwt, "deny_on_redis_error", False):
-            return True
-        return False
+        _slog.get_logger(__name__).error(
+            "failed to check token revocation in redis", error=str(e), jti=jti
+        )
+        return bool(getattr(settings.jwt, "deny_on_redis_error", False))
 
 
 async def revoke_token(token: str) -> None:
@@ -173,7 +174,9 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> di
     pw_valid = False
     try:
         if user and getattr(user, "password", None):
-            pw_valid = bcrypt.checkpw(request.password.encode("utf-8"), user.password.encode("utf-8"))
+            pw_valid = bcrypt.checkpw(
+                request.password.encode("utf-8"), user.password.encode("utf-8")
+            )
     except (ValueError, TypeError) as ex:
         import structlog as _slog
 
@@ -208,9 +211,7 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> di
 )
 async def logout(
     request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(
-        HTTPBearer(auto_error=False)
-    ),
+    credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
 ) -> dict:
     """POST /admin/auth/logout（加入 Redis 黑名单）"""
     token = None

@@ -215,7 +215,9 @@ class ConversationArchiveStore:
         if not existing:
             return
 
-        values: dict[str, Any] = {
+        # SQLAlchemy Core values 映射允许 ColumnElement 作为键；mypy 此处以普通 dict[str, Any]
+        # 推断会误报 InstrumentedAttribute。values() 需接受 ORM 列对象作为键，故用 Any 键。
+        values: dict[Any, Any] = {
             ConversationExchange.answer: answer,
             ConversationExchange.turn_status: turn_status,
             ConversationExchange.updated_at: func.now(),

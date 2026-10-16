@@ -8,7 +8,10 @@ Parent-Block 提升（Parent-Child 块聚合）
 from __future__ import annotations
 
 import contextlib
+import threading
+from collections import OrderedDict
 from collections.abc import AsyncIterator
+from typing import Any
 
 import structlog
 from sqlalchemy import select
@@ -16,10 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.chat.schema import Evidence
 from app.config import get_settings
-
-from collections import OrderedDict
-import threading
-from typing import Any
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
@@ -110,7 +109,9 @@ class ParentBlockElevator:
         # 2. 对未命中的 chunk_id 批量查库并回填
         if missing_chunk_ids:
             query_cids = [
-                int(cid) if isinstance(cid, int) or (isinstance(cid, str) and str(cid).isdigit()) else cid
+                int(cid)
+                if isinstance(cid, int) or (isinstance(cid, str) and str(cid).isdigit())
+                else cid
                 for cid in missing_chunk_ids
             ]
             async with _ensure_session(session) as s:
@@ -133,6 +134,7 @@ class ParentBlockElevator:
                 if unfound_cids:
                     try:
                         from app.infra.pg import get_pg_pool
+
                         pool = get_pg_pool()
                         if pool:
                             async with pool.acquire() as pg_conn:
@@ -142,7 +144,9 @@ class ParentBlockElevator:
                                 )
                                 for r in pg_rows:
                                     cid_str = str(r["chunk_id"])
-                                    pid_str = str(r["parent_chunk_id"]) if r["parent_chunk_id"] else None
+                                    pid_str = (
+                                        str(r["parent_chunk_id"]) if r["parent_chunk_id"] else None
+                                    )
                                     parent_map[cid_str] = pid_str
                                     found_cids.add(cid_str)
                                     _CHUNK_PARENT_CACHE.set(cid_str, pid_str or "__none__")
@@ -174,7 +178,9 @@ class ParentBlockElevator:
         # 4. 仅对未命中内容缓存的 parent_id 查库并回填
         if parent_ids_to_fetch:
             p_query_ids = [
-                int(pid) if isinstance(pid, int) or (isinstance(pid, str) and str(pid).isdigit()) else pid
+                int(pid)
+                if isinstance(pid, int) or (isinstance(pid, str) and str(pid).isdigit())
+                else pid
                 for pid in parent_ids_to_fetch
             ]
             async with _ensure_session(session) as s:
@@ -186,7 +192,9 @@ class ParentBlockElevator:
                     ).where(DocumentParentBlock.id.in_(p_query_ids))
                 )
                 for prow in p_result.all():
-                    parent_text = getattr(prow, "parent_text", None) or getattr(prow, "chunk_text", "")
+                    parent_text = getattr(prow, "parent_text", None) or getattr(
+                        prow, "chunk_text", ""
+                    )
                     content_dict = {
                         "text": parent_text or "",
                         "path": getattr(prow, "section_path", "") or "",
@@ -195,10 +203,13 @@ class ParentBlockElevator:
                     _PARENT_CONTENT_CACHE.set(str(prow.id), content_dict)
 
             # 兼容兜底：对于在 DocumentParentBlock 中未查到的 parent_id，尝试查 PG public.document_chunk 表
-            unfound_pids = [str(pid) for pid in parent_ids_to_fetch if str(pid) not in parent_contents]
+            unfound_pids = [
+                str(pid) for pid in parent_ids_to_fetch if str(pid) not in parent_contents
+            ]
             if unfound_pids:
                 try:
                     from app.infra.pg import get_pg_pool
+
                     pool = get_pg_pool()
                     if pool:
                         async with pool.acquire() as pg_conn:
@@ -214,7 +225,9 @@ class ParentBlockElevator:
                                 parent_contents[str(r["chunk_id"])] = content_dict
                                 _PARENT_CONTENT_CACHE.set(str(r["chunk_id"]), content_dict)
                 except Exception as pg_err:
-                    logger.debug("fallback to pg document_chunk for parent text failed", error=str(pg_err))
+                    logger.debug(
+                        "fallback to pg document_chunk for parent text failed", error=str(pg_err)
+                    )
 
         # 2. 按 Parent ID 分组聚合
         parent_groups: dict[str, list[Evidence]] = {}
@@ -232,18 +245,18 @@ class ParentBlockElevator:
                 parent_groups[parent_id].append(ev)
             else:
                 if parent_id:
-                    try:
+                    with contextlib.suppress(ValueError, TypeError):
                         ev.parent_block_id = int(parent_id)
-                    except (ValueError, TypeError):
-                        pass
                 elevated_evidences.append(ev)
 
         # 3. 聚合计算得分与合并文本
         for parent_id, children in parent_groups.items():
             best_child = max(children, key=lambda e: e.score)
 
-            content = parent_contents[parent_id]["text"]
-            path = parent_contents[parent_id]["path"]
+            # parent_contents 的值为 str | None（缓存与兜底查询都可能写入 None），
+            # 统一收敛为空串，避免下游 len()/切片/拼接遇到 None。
+            content = parent_contents[parent_id]["text"] or ""
+            path = parent_contents[parent_id]["path"] or ""
 
             final_content = f"【章节路径：{path}】\n{content}" if path else content
 
@@ -254,10 +267,8 @@ class ParentBlockElevator:
 
             # 复用 best_child 作为基座，更新内容但保持原始分数（不重新打分）
             best_child.content = final_content
-            try:
+            with contextlib.suppress(ValueError, TypeError):
                 best_child.parent_block_id = int(parent_id)
-            except (ValueError, TypeError):
-                pass
             # 保留最初始的 RRF 或 BM25 分数（original_score 默认为 0.0，非 None）
             if best_child.original_score == 0.0:
                 best_child.original_score = best_child.score

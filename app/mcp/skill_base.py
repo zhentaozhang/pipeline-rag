@@ -8,9 +8,8 @@ MCP Skill 抽象基类
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from app.safety.enums import ToolRisk
 
@@ -20,7 +19,10 @@ class SkillTool:
     """Skill 内部的工具描述"""
 
     name: str
-    fn: Callable
+    # 工具实现。既可能是普通可调用对象（async/sync 函数），
+    # 也可能是 langchain BaseTool（Runnable 形态，由 @tool 装饰器产出）——
+    # 后者无法被 mypy 静态判定为 Callable，故此处显式放宽为 Any。
+    fn: Any
     description: str = ""
     parameters: dict | None = field(default=None)
 

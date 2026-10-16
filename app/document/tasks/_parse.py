@@ -71,9 +71,10 @@ def task_parse_document(self, doc_id: str, file_path: str) -> dict:
         async def _execute_full_parse():
             result = await _download_and_parse()
 
-            from app.infra.minio import upload_file
             import os
             import tempfile
+
+            from app.infra.minio import upload_file
 
             text_path = f"{doc_id}/parsed.txt"
             with tempfile.NamedTemporaryFile(
@@ -89,9 +90,10 @@ def task_parse_document(self, doc_id: str, file_path: str) -> dict:
             logger.info("parsed text saved to storage", doc_id=doc_id, path=text_path)
 
             structure_node_count = 0
-            from app.manage.service.document_structure_node_service import save_nodes
             from sqlalchemy import update
+
             from app.db.models.document import Document as DocModel
+            from app.manage.service.document_structure_node_service import save_nodes
 
             async with _get_mysql_session() as session, session.begin():
                 if result.nodes:

@@ -13,7 +13,7 @@ import asyncio
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 import structlog
 
@@ -163,7 +163,13 @@ class CircuitBreaker:
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: Any,
-    ) -> bool:
+    ) -> Literal[False]:
+        """恒返回 False：熔断器只记录成败，绝不吞掉异常。
+
+        返回类型标注为 ``Literal[False]``（而非 ``bool``）让 mypy 明确知道异常
+        不会被抑制，从而 ``async with breaker: return ...`` 这类写法不会被误报
+        "Missing return statement"。
+        """
         elapsed = time.monotonic() - getattr(self, "_start_time", time.monotonic())
         if exc_type is not None:
             if issubclass(exc_type, asyncio.TimeoutError):

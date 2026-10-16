@@ -7,12 +7,22 @@ import re
 
 import structlog
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models.document import DocumentStructureNode
-from app.db.session import _session_factory as async_session_maker
 from app.rag.graph.models import GraphItem, GraphQueryResult, GraphSection
 
 logger = structlog.get_logger(__name__)
+
+
+def _get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """取图数据库服务使用的 MySQL session factory，未初始化时给出明确错误。"""
+    from app.db.session import get_session_factory
+
+    factory = get_session_factory()
+    if factory is None:
+        raise RuntimeError("MySQL session factory not initialized")
+    return factory
 
 
 def _normalize(text: str | None) -> str:
@@ -64,7 +74,7 @@ class MysqlGraphService:
         )
 
     async def get_document_tree(self, doc_id: str) -> GraphQueryResult | None:
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt = (
                 select(DocumentStructureNode)
                 .where(
@@ -82,7 +92,7 @@ class MysqlGraphService:
             )
 
     async def find_section_by_id(self, doc_id: str, section_node_id: str) -> GraphSection | None:
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt = select(DocumentStructureNode).where(
                 DocumentStructureNode.id == int(section_node_id),
                 DocumentStructureNode.document_id == doc_id,
@@ -92,7 +102,7 @@ class MysqlGraphService:
             return self._to_section(node) if node else None
 
     async def find_section_by_code(self, doc_id: str, node_code: str) -> GraphSection | None:
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt = (
                 select(DocumentStructureNode)
                 .where(
@@ -106,7 +116,7 @@ class MysqlGraphService:
             return self._to_section(node) if node else None
 
     async def find_section_by_title(self, doc_id: str, title: str) -> GraphSection | None:
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt = select(DocumentStructureNode).where(DocumentStructureNode.document_id == doc_id)
             res = await db.execute(stmt)
             nodes = res.scalars().all()
@@ -124,7 +134,7 @@ class MysqlGraphService:
     async def find_section_by_canonical_path(
         self, doc_id: str, canonical_path: str
     ) -> GraphSection | None:
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt = (
                 select(DocumentStructureNode)
                 .where(
@@ -141,7 +151,7 @@ class MysqlGraphService:
         normalized_topic = _normalize(topic)
         normalized_facet = _normalize(facet)
 
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt = select(DocumentStructureNode).where(DocumentStructureNode.document_id == doc_id)
             res = await db.execute(stmt)
             nodes = res.scalars().all()
@@ -177,7 +187,7 @@ class MysqlGraphService:
             return best_section if best_score > 0 else None
 
     async def list_sections(self, doc_id: str) -> list[GraphSection]:
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt = (
                 select(DocumentStructureNode)
                 .where(
@@ -191,7 +201,7 @@ class MysqlGraphService:
             return [self._to_section(n) for n in nodes]
 
     async def list_children(self, doc_id: str, section_node_id: str) -> list[GraphSection]:
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt = (
                 select(DocumentStructureNode)
                 .where(
@@ -206,7 +216,7 @@ class MysqlGraphService:
             return [self._to_section(n) for n in nodes]
 
     async def parent_section(self, doc_id: str, section_node_id: str) -> GraphSection | None:
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt1 = select(DocumentStructureNode.parent_node_id).where(
                 DocumentStructureNode.id == int(section_node_id)
             )
@@ -221,7 +231,7 @@ class MysqlGraphService:
             return self._to_section(parent_node) if parent_node else None
 
     async def previous_sibling(self, doc_id: str, section_node_id: str) -> GraphSection | None:
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt1 = select(DocumentStructureNode.prev_sibling_node_id).where(
                 DocumentStructureNode.id == int(section_node_id)
             )
@@ -236,7 +246,7 @@ class MysqlGraphService:
             return self._to_section(node) if node else None
 
     async def next_sibling(self, doc_id: str, section_node_id: str) -> GraphSection | None:
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt1 = select(DocumentStructureNode.next_sibling_node_id).where(
                 DocumentStructureNode.id == int(section_node_id)
             )
@@ -253,7 +263,7 @@ class MysqlGraphService:
     async def find_item_by_index(
         self, doc_id: str, section_node_id: str, item_index: int
     ) -> GraphItem | None:
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt = (
                 select(DocumentStructureNode)
                 .where(
@@ -270,7 +280,7 @@ class MysqlGraphService:
             return self._to_item(node) if node else None
 
     async def list_items(self, doc_id: str, section_node_id: str) -> list[GraphItem]:
-        async with async_session_maker() as db:
+        async with _get_session_factory()() as db:
             stmt = (
                 select(DocumentStructureNode)
                 .where(

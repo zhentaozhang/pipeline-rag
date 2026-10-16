@@ -31,6 +31,7 @@ from app.config import get_settings
 from app.executors.base import ConversationExecutor
 from app.executors.rag_stream import extract_text, run_output_filter, stream_llm_with_tools
 from app.observability import SpanKind
+from app.observability.tracer import span_of
 from app.rag.assembly import PromptAssemblyService
 from app.rag.engine import RagRetrievalEngine
 
@@ -158,7 +159,9 @@ class AnswerQualityChecker:
             json_str = json_str.rsplit("```", 1)[0]
         json_str = json_str.strip()
 
-        return json.loads(json_str)
+        parsed = json.loads(json_str)
+        # LLM 可能返回非对象（数组/标量），保持返回类型契约
+        return parsed if isinstance(parsed, dict) else {}
 
 
 class RagChatExecutor(ConversationExecutor):
@@ -222,7 +225,7 @@ class RagChatExecutor(ConversationExecutor):
         self.task.thinking_steps.append("正在根据问题规划知识检索范围。")
         yield self._emit(SSEEventType.THINKING, "正在根据问题规划知识检索范围。")
 
-        async with tracer.span("rag_retrieve", kind=SpanKind.RETRIEVAL):
+        async with span_of(tracer, "rag_retrieve", SpanKind.RETRIEVAL):
             engine = RagRetrievalEngine(db=self.db)
             sub_evidences = await engine.retrieve_with_correction(plan, tracer=self.task.tracer)
             sub_question_list = sub_evidences.sub_question_evidence_list
@@ -273,14 +276,14 @@ class RagChatExecutor(ConversationExecutor):
         yield self._emit(SSEEventType.THINKING, "证据整理完成，正在基于证据生成回答。")
 
         assembler = PromptAssemblyService()
-        async with tracer.span("evidence_budget", kind=SpanKind.RETRIEVAL):
+        async with span_of(tracer, "evidence_budget", SpanKind.RETRIEVAL):
             prompt_result = assembler.assemble(plan, sub_question_list)
             if self.task.debug_trace:
                 self.task.debug_trace.rag_system_prompt = prompt_result.system_prompt
                 self.task.debug_trace.rag_user_prompt = prompt_result.user_prompt
 
         _answer_blocked = False
-        async with tracer.span("answer_generate", kind=SpanKind.LLM):
+        async with span_of(tracer, "answer_generate", SpanKind.LLM):
             start_ts = time.time()
             async for chunk in stream_llm_with_tools(
                 self.task, prompt_result.system_prompt, prompt_result.user_prompt, self._emit

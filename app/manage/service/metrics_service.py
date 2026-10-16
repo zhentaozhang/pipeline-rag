@@ -92,7 +92,8 @@ class MetricsService:
 
         from app.chat.task_info import ChatRuntimeRegistry
 
-        active_conversations = ChatRuntimeRegistry.active_count()
+        # 4 worker 部署下本地注册表只反映 1/4 的活跃会话，需按集群口径统计
+        active_conversations = await ChatRuntimeRegistry.active_count_cluster()
 
         today_usage_stmt = select(
             sa_func.coalesce(sa_func.sum(ChatModelUsageTrace.total_tokens), 0),

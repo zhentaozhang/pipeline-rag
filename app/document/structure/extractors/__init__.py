@@ -93,7 +93,7 @@ class DocumentStructureSignalExtractor:
                 confidence=1.0,
             )
 
-        result = self._classify_noise(
+        result: DocumentStructureSignal | None = self._classify_noise(
             document_title, normalized, indent, line_frequency, line_no, raw_text
         )
         if result is not None:
@@ -354,7 +354,7 @@ class DocumentStructureSignalExtractor:
         title: str = "",
         level_hint: int | None = None,
         item_index: int | None = None,
-        reasons: list[str] = None,
+        reasons: list[str] | None = None,
         confidence: float = 1.0,
     ) -> DocumentStructureSignal:
         return DocumentStructureSignal(

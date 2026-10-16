@@ -113,7 +113,8 @@ async def download_bytes(object_name: str) -> bytes:
 
     try:
         async with _minio_breaker:
-            data = await asyncio.to_thread(_do_download)
+            # asyncio.to_thread 在本 typeshed 版本下推断为 Any，显式标注收敛返回类型
+            data: bytes = await asyncio.to_thread(_do_download)
     except Exception as e:
         logger.error(
             "minio download_bytes failed", object_name=object_name, error=str(e), exc_info=True
