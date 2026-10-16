@@ -159,11 +159,24 @@ class TimeSensitiveQueryHelper:
         if TimeSensitiveQueryHelper._looks_calendar_question(query):
             return False
         normalized = TimeSensitiveQueryHelper._normalize(query)
-        return TimeSensitiveQueryHelper._looks_current_info_domain(
-            normalized
-        ) or TimeSensitiveQueryHelper._contains_any(
-            normalized, ["最新", "实时", "当前", "现在", "目前", "刚刚"]
-        )
+        if TimeSensitiveQueryHelper._looks_current_info_domain(normalized):
+            return True
+        # 仅针对具备明显外部实时资讯/事件特征的询问判定为需要实时检索，
+        # 避免知识库内部制度/状态问答中的「最新/当前/现在/目前」被误判为联网搜索。
+        _dynamic_event_indicators = [
+            "发生什么",
+            "发生啥",
+            "出了什么",
+            "最新消息",
+            "最新动态",
+            "最新进展",
+            "最新资讯",
+            "实时新闻",
+            "实时热点",
+            "实时动态",
+            "刚刚发生",
+        ]
+        return TimeSensitiveQueryHelper._contains_any(normalized, _dynamic_event_indicators)
 
     @staticmethod
     def is_fresh_info_domain(query: str) -> bool:

@@ -153,7 +153,8 @@ async def test_review_node_falls_back_approved_on_llm_error(fake_llm):
         "review_status": "approved",
     }
     result = await review_node(state)
-    assert result["review_status"] == "approved"
+    assert result["review_status"] == "degraded"
+    assert "降级通过" in result["feedback"]
 
 
 async def test_graph_end_to_end_approved(fake_llm):

@@ -178,6 +178,7 @@ class ExecutionPlan(BaseModel):
     # ── 补齐字段 ──────────────────────────────────────────────────────────
     chat_mode: ChatQueryMode | None = None
     agent_question: str | None = None
+    enriched_question: str = ""
     rewrite_sub_questions: list[str] = Field(default_factory=list)
     retrieval_question: str | None = None
     retrieval_sub_questions: list[str] = Field(default_factory=list)

@@ -255,3 +255,27 @@ def test_inherit_scope_skipped_when_not_multi_agent():
 
     _inherit_plan_scope(plan)
     assert plan.sub_plans[0].doc_ids == []
+
+
+def test_validate_sub_plans_detects_cycles():
+    """审查报告 R13：_validate_sub_plans 必须在计划期拦截循环依赖。"""
+    from app.chat.schema import SubPlan
+    from app.orchestrator.supervisor import _validate_sub_plans
+
+    # A -> B, B -> A
+    cyclic_plans = [
+        SubPlan(id="1", mode=ExecutionMode.RETRIEVAL, question="q1", depends_on=["2"]),
+        SubPlan(id="2", mode=ExecutionMode.RETRIEVAL, question="q2", depends_on=["1"]),
+    ]
+    valid, errors = _validate_sub_plans(cyclic_plans)
+    assert valid is False
+    assert any("循环依赖" in err for err in errors)
+
+    # 正常无环依赖
+    acyclic_plans = [
+        SubPlan(id="1", mode=ExecutionMode.RETRIEVAL, question="q1", depends_on=[]),
+        SubPlan(id="2", mode=ExecutionMode.RETRIEVAL, question="q2", depends_on=["1"]),
+    ]
+    valid, errors = _validate_sub_plans(acyclic_plans)
+    assert valid is True
+    assert errors == []
