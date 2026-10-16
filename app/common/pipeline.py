@@ -8,14 +8,23 @@ Pipeline 模式基础设施 — 通用的管道编排抽象。
 - 条件执行 .when()（满足条件才执行）
 """
 
+import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum, auto
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
+
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 C = TypeVar("C")
 R = TypeVar("R")
+
+# 单阶段耗时超过该阈值时额外记一条结构化日志（用于定位延迟黑洞）。
+# 注意：指标埋点不受该阈值限制，见 Pipeline.run。
+_SLOW_STAGE_THRESHOLD_MS = 50
 
 
 class StageSignal(StrEnum):
@@ -36,9 +45,19 @@ class StageResult(Generic[C, R]):
 
 
 class Stage(ABC, Generic[C, R]):
-    """管道中单个处理阶段的抽象基类"""
+    """管道中单个处理阶段的抽象基类。
+
+    ``name`` 供日志与指标使用：子类未显式声明时自动取类名，
+    因此 Pipeline 不再需要用 getattr 链去猜测阶段名。
+    """
 
     name: str = ""
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        # 显式声明优先；未声明则用类名兜底（测试桩常在 __init__ 里覆盖实例属性）
+        if not cls.__dict__.get("name"):
+            cls.name = cls.__name__
 
     @abstractmethod
     async def process(self, ctx: C) -> StageResult[C, R]: ...
@@ -50,6 +69,11 @@ class PipelineStage(Generic[C, R]):
 
     handler: Stage[C, R]
     condition: Callable[[C], bool] | None = None
+
+    @property
+    def name(self) -> str:
+        """阶段名（来自 handler），供日志与指标统一取用。"""
+        return self.handler.name
 
     def when(self, cond: Callable[[C], bool]) -> "PipelineStage[C, R]":
         self.condition = cond
@@ -76,46 +100,30 @@ class Pipeline(Generic[C, R]):
         self.stages = stages or []
 
     async def run(self, ctx: C) -> R:
-        import time as _time
-
-        import structlog as _slog
-
-        _logger = _slog.get_logger(__name__)
         for stage_wrapper in self.stages:
             # 条件检查：不满足则跳过
             if stage_wrapper.condition is not None and not stage_wrapper.condition(ctx):
                 continue
 
-            _t0 = _time.monotonic()
-            result = await stage_wrapper.handler.process(ctx)
-            _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            if _elapsed_ms >= 50:  # 只记录 >50ms 的 stage（定位延迟黑洞，P0）
-                _stage_name = (
-                    getattr(stage_wrapper, "name", None)
-                    or getattr(stage_wrapper.handler, "name", None)
-                    or type(stage_wrapper.handler).__name__
-                )
-                _logger.info(
-                    "stage timing",
-                    stage=_stage_name,
-                    elapsed_ms=round(_elapsed_ms, 1),
-                )
-                # 019 审查：STAGE_DURATION_SECONDS 指标此前存在但从未被 observe（观测死代码）
-                try:
-                    from app.observability.tracer import STAGE_DURATION_SECONDS
+            stage_name = stage_wrapper.name
 
-                    STAGE_DURATION_SECONDS.labels(
-                        kind="stage", name=_stage_name, status="ok"
-                    ).observe(_elapsed_ms / 1000.0)
-                except Exception:
-                    pass
+            _t0 = time.monotonic()
+            try:
+                result = await stage_wrapper.handler.process(ctx)
+            except Exception:
+                _elapsed_ms = (time.monotonic() - _t0) * 1000
+                self._record_stage_duration(stage_name, _elapsed_ms, status="error")
+                self._log_slow_stage(stage_name, _elapsed_ms, status="error")
+                raise
+
+            _elapsed_ms = (time.monotonic() - _t0) * 1000
+            self._record_stage_duration(stage_name, _elapsed_ms, status="ok")
+            self._log_slow_stage(stage_name, _elapsed_ms, status="ok")
 
             if result.signal == StageSignal.TERMINATE:
                 if result.plan is not None:
                     return result.plan
-                raise PipelineError(
-                    f"Stage '{stage_wrapper.handler.name}' 返回 TERMINATE 信号但未提供 plan"
-                )
+                raise PipelineError(f"Stage '{stage_name}' 返回 TERMINATE 信号但未提供 plan")
 
             if result.signal == StageSignal.CONTINUE and result.context is not None:
                 ctx = result.context
@@ -123,6 +131,29 @@ class Pipeline(Generic[C, R]):
             # SKIP: 不做任何操作，继续下一 stage
 
         raise PipelineError("管道执行完毕但未产生结果：所有 Stage 均返回 CONTINUE")
+
+    @staticmethod
+    def _record_stage_duration(stage_name: str, elapsed_ms: float, status: str) -> None:
+        """记录所有执行阶段（包含快速成功与失败阶段）的完整时延样本。"""
+        try:
+            from app.observability.tracer import STAGE_DURATION_SECONDS
+
+            STAGE_DURATION_SECONDS.labels(kind="stage", name=stage_name, status=status).observe(
+                elapsed_ms / 1000.0
+            )
+        except Exception:
+            # 指标系统故障不得阻断业务管道。
+            pass
+
+    @staticmethod
+    def _log_slow_stage(stage_name: str, elapsed_ms: float, status: str) -> None:
+        if elapsed_ms >= _SLOW_STAGE_THRESHOLD_MS:
+            logger.info(
+                "stage timing",
+                stage=stage_name,
+                elapsed_ms=round(elapsed_ms, 1),
+                status=status,
+            )
 
     def add_stage(self, stage: PipelineStage[C, R]) -> "Pipeline[C, R]":
         self.stages.append(stage)

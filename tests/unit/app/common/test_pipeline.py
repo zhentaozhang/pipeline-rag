@@ -122,6 +122,86 @@ class TestPipeline:
         with pytest.raises(PipelineError, match="未产生结果"):
             await pipeline.run("start")
 
+    def test_stage_name_defaults_to_class_name(self):
+        class NamedStage(Stage):
+            async def process(self, ctx):
+                return StageResult(signal=StageSignal.TERMINATE, plan="done")
+
+        assert NamedStage.name == "NamedStage"
+        assert PipelineStage(NamedStage()).name == "NamedStage"
+
+    async def test_fast_stage_is_observed_in_histogram(self, monkeypatch):
+        """所有阶段都进 Histogram；50ms 门槛只用于慢阶段日志，不用于埋点。"""
+        import app.common.pipeline as pipeline_module
+        import app.observability.tracer as tracer_module
+
+        class FakeHistogram:
+            def __init__(self):
+                self.label_values = []
+                self.observations = []
+
+            def labels(self, **kwargs):
+                self.label_values.append(kwargs)
+                return self
+
+            def observe(self, value):
+                self.observations.append(value)
+
+        histogram = FakeHistogram()
+        monkeypatch.setattr(tracer_module, "STAGE_DURATION_SECONDS", histogram)
+        # 通过固定时钟保证耗时为 1ms（远小于原来的 50ms 采样门槛）。
+        clock_calls = 0
+
+        def clock():
+            nonlocal clock_calls
+            clock_calls += 1
+            return 1.0 if clock_calls == 1 else 1.001
+
+        monkeypatch.setattr(pipeline_module.time, "monotonic", clock)
+
+        stage = DummyStage("fast-stage", StageResult(signal=StageSignal.TERMINATE, plan="done"))
+        result = await Pipeline([PipelineStage(stage)]).run("ctx")
+
+        assert result == "done"
+        assert histogram.label_values == [{"kind": "stage", "name": "fast-stage", "status": "ok"}]
+        assert histogram.observations == pytest.approx([0.001])
+
+    async def test_failed_stage_is_observed_with_error_status(self, monkeypatch):
+        import app.common.pipeline as pipeline_module
+        import app.observability.tracer as tracer_module
+
+        class FakeHistogram:
+            def __init__(self):
+                self.label_values = []
+                self.observations = []
+
+            def labels(self, **kwargs):
+                self.label_values.append(kwargs)
+                return self
+
+            def observe(self, value):
+                self.observations.append(value)
+
+        histogram = FakeHistogram()
+        monkeypatch.setattr(tracer_module, "STAGE_DURATION_SECONDS", histogram)
+        clock_calls = 0
+
+        def clock():
+            nonlocal clock_calls
+            clock_calls += 1
+            return 2.0 if clock_calls == 1 else 2.001
+
+        monkeypatch.setattr(pipeline_module.time, "monotonic", clock)
+        stage = DummyStage("failed-stage", raises=ValueError("stage failed"))
+
+        with pytest.raises(ValueError, match="stage failed"):
+            await Pipeline([PipelineStage(stage)]).run("ctx")
+
+        assert histogram.label_values == [
+            {"kind": "stage", "name": "failed-stage", "status": "error"}
+        ]
+        assert histogram.observations == pytest.approx([0.001])
+
 
 class TestStageResult:
     def test_defaults(self):
