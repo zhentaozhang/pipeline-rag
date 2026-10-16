@@ -16,6 +16,21 @@ class EvalQuestion(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class DecisionSample(BaseModel):
+    """一条"判断型"任务标注样本（用于 JEV vs 旧方案的 P/R/F1 A-B 对比）
+
+    - input：待判定的主文本（问题 / 用户提问）
+    - label：正样本真值（True = 正类，如"相关"/"不安全"）
+    - context：可选的第二文本（如检索片段），用于 context_relevance 类任务
+    """
+
+    id: str
+    input: str
+    label: bool
+    context: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class EvalResult(BaseModel):
     """单条测试的评估结果"""
 
