@@ -109,6 +109,7 @@ class RAGSettings(BaseSettings):
     quality_check_timeout_seconds: float = 5.0
     corrective_retrieval_enabled: bool = True
     corrective_retrieval_max_rounds: int = 1
+    sub_question_max_concurrency: int = 3
 
     model_config = SettingsConfigDict(env_prefix="RAG_", env_file=_ENV_FILE, extra="ignore")
 

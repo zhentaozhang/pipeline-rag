@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import threading
+import time
 from collections import OrderedDict
 from collections.abc import AsyncIterator
 from typing import Any
@@ -25,23 +26,28 @@ settings = get_settings()
 
 
 class _LRUCache:
-    """线程安全的内存级 LRU 缓存"""
+    """线程安全的内存级 LRU 缓存，带 TTL 超时失效机制"""
 
-    def __init__(self, maxsize: int = 2048) -> None:
+    def __init__(self, maxsize: int = 2048, ttl_seconds: float = 600.0) -> None:
         self._maxsize = maxsize
-        self._cache: OrderedDict[str, Any] = OrderedDict()
+        self._ttl = ttl_seconds
+        self._cache: OrderedDict[str, tuple[float, Any]] = OrderedDict()
         self._lock = threading.Lock()
 
     def get(self, key: str) -> Any:
         with self._lock:
             if key not in self._cache:
                 return None
+            ts, val = self._cache[key]
+            if time.monotonic() - ts > self._ttl:
+                del self._cache[key]
+                return None
             self._cache.move_to_end(key)
-            return self._cache[key]
+            return val
 
     def set(self, key: str, value: Any) -> None:
         with self._lock:
-            self._cache[key] = value
+            self._cache[key] = (time.monotonic(), value)
             self._cache.move_to_end(key)
             if len(self._cache) > self._maxsize:
                 self._cache.popitem(last=False)
@@ -51,8 +57,8 @@ class _LRUCache:
             self._cache.clear()
 
 
-_CHUNK_PARENT_CACHE = _LRUCache(maxsize=4096)
-_PARENT_CONTENT_CACHE = _LRUCache(maxsize=2048)
+_CHUNK_PARENT_CACHE = _LRUCache(maxsize=4096, ttl_seconds=600.0)
+_PARENT_CONTENT_CACHE = _LRUCache(maxsize=2048, ttl_seconds=600.0)
 
 
 def clear_parent_block_cache() -> None:
@@ -87,7 +93,12 @@ class ParentBlockElevator:
 
         @contextlib.asynccontextmanager
         async def _ensure_session(s: AsyncSession | None) -> AsyncIterator[AsyncSession]:
-            if s is not None:
+            if (
+                s is not None
+                and hasattr(s, "execute")
+                and getattr(s, "is_active", True)
+                and getattr(getattr(s, "sync_session", None), "is_active", True)
+            ):
                 yield s
             else:
                 logger.debug("parent_block_elevator_using_managed_session", stacklevel=4)

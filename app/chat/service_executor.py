@@ -1,4 +1,6 @@
+import asyncio
 import json
+import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
@@ -43,6 +45,8 @@ async def execute_stream(
 
     _settings = _get_settings()
     _chunk_count: int = 0
+    _last_lease_check_time = time.monotonic()
+    _LEASE_CHECK_SECONDS = 3.0
     from app.config import get_settings
 
     settings = get_settings()
@@ -231,9 +235,6 @@ async def execute_stream(
         conversation_id=conversation_id,
         exchange_id=temp_exchange_id,
     )
-    from app.executors.registry import ExecutorRegistry
-
-    registry = ExecutorRegistry(db=db, task=task)
     task.sm.transition(ConversationState.EXECUTING)
     # 零持有数据库连接保障：进入执行器前，若存在显式传入的 db，显式 commit 并 close 释放连接；
     # 走 get_session 模式时前置步骤已在短事务退出后自动归还连接池，流式生成周期全程零持有连接。
@@ -245,6 +246,11 @@ async def execute_stream(
                 await db.close()
         except Exception:
             pass
+        db = None
+
+    from app.executors.registry import ExecutorRegistry
+
+    registry = ExecutorRegistry(db=db, task=task)
 
     async for chunk in registry.dispatch(plan):
         if task.cancelled:
@@ -271,7 +277,9 @@ async def execute_stream(
         yield chunk
 
         _chunk_count += 1
-        if _chunk_count % _LEASE_CHECK_INTERVAL == 0:
+        now_mono = time.monotonic()
+        if lease_mgr is not None and now_mono - _last_lease_check_time >= _LEASE_CHECK_SECONDS:
+            _last_lease_check_time = now_mono
             still_owned = await lease_mgr.is_owned()
             if not still_owned:
                 logger.warning(
@@ -429,12 +437,17 @@ async def execute_stream(
                 _base_answer = _answer_full
                 _parallel = False
                 if _task is not None:
-                    try:
-                        _t_base, _verified, _bad_refs, _vmeta = await _task
-                        if _t_base == _answer_full:
-                            _base_answer, _parallel = _t_base, True
-                    except Exception as _e:
-                        logger.warning("citation verify task failed", error=str(_e)[:120])
+                    _task_cancelled = (
+                        getattr(_task, "cancelling", lambda: 0)() > 0
+                        or getattr(_task, "cancelled", lambda: False)()
+                    )
+                    if not _task_cancelled:
+                        try:
+                            _t_base, _verified, _bad_refs, _vmeta = await _task
+                            if _t_base == _answer_full:
+                                _base_answer, _parallel = _t_base, True
+                        except (asyncio.CancelledError, Exception) as _e:
+                            logger.warning("citation verify task failed", error=str(_e)[:120])
                 if not _parallel:
                     async with tracer.span(
                         "citation_verify",
@@ -449,11 +462,16 @@ async def execute_stream(
                             "has_content": any(r.get("content") for r in _ref_input[:3]),
                         },
                     ):
+                        effective_verify_q = (
+                            plan.rewritten_question or plan.original_question or question
+                            if plan
+                            else question
+                        )
                         _verified, _bad_refs, _vmeta = await verify_citations(
                             fallback=_fallback,
                             answer=_answer_full,
                             references=_ref_input,
-                            question=question,
+                            question=effective_verify_q,
                         )
                 tracer.attach_score(
                     "citation_accuracy",

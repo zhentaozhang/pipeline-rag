@@ -50,7 +50,7 @@ async def init_db() -> None:
         pool_size=settings.mysql.pool_size,
         max_overflow=settings.mysql.max_overflow,
         pool_pre_ping=False,  # aiomysql 的 ping() 签名不兼容 SQLAlchemy 的 do_ping
-        pool_recycle=3600,  # 1 小时回收连接，替代 pre_ping
+        pool_recycle=300,  # 5 分钟回收连接，避免云环境 NAT/LB 在 5-15 分钟切断导致 2006 报错
         echo=settings.app.debug,
     )
 

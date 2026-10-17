@@ -256,7 +256,10 @@ class RagChatExecutor(ConversationExecutor):
                 )
             return answer, verified, bad_refs, meta
 
-        self.task._citation_task = asyncio.create_task(_run())
+        bg_task = asyncio.create_task(_run())
+        if hasattr(self.task, "track_background_task"):
+            self.task.track_background_task(bg_task)
+        self.task._citation_task = bg_task
 
     async def execute(self, plan: ExecutionPlan) -> AsyncIterator[str]:
         tracer = self.task.tracer
@@ -354,8 +357,10 @@ class RagChatExecutor(ConversationExecutor):
                     blocked,
                 )
 
+        effective_question = plan.rewritten_question or plan.original_question or ""
+
         # P1-c：引用校验与质量自审并发预跑（结果由 service_executor 复用）
-        self._start_citation_task("".join(self.task.answer_buffer), plan.original_question)
+        self._start_citation_task("".join(self.task.answer_buffer), effective_question)
 
         # ── 回答质量审核（自审 + 可选重生成）─────────────────────────
         # P0-1d: 简短回答（<30 字）跳过评审——自审对短答复区分度低，省一次 LLM 调用
@@ -363,7 +368,7 @@ class RagChatExecutor(ConversationExecutor):
         if not _answer_blocked and len(_reviewable_answer) >= 30:
             quality_checker = AnswerQualityChecker(tracer=self.task.tracer)
             quality_result = await quality_checker.check(
-                question=plan.original_question,
+                question=effective_question,
                 answer=_reviewable_answer,
                 reference_titles=[r.get("title", "") for r in self.task.references],
             )
@@ -392,10 +397,15 @@ class RagChatExecutor(ConversationExecutor):
                 )
                 yield self._emit(SSEEventType.CLEAR_ANSWER, "")
 
+                from app.common.text_utils import clip_tail
+
+                feedback_clean = (quality_result.feedback or "").strip()
+                if len(feedback_clean) > 500:
+                    feedback_clean = clip_tail(feedback_clean, 500)
+
                 improved_system = (
                     prompt_result.system_prompt
-                    + "\n\n## 前一轮回答的问题\n"
-                    + quality_result.feedback
+                    + f"\n\n## 上一轮回答待改进要点（请重点针对修正）：\n{feedback_clean}"
                 )
 
                 self.task.answer_buffer.clear()
@@ -419,7 +429,7 @@ class RagChatExecutor(ConversationExecutor):
                     break
 
                 quality_result = await quality_checker.check(
-                    question=plan.original_question,
+                    question=effective_question,
                     answer="".join(self.task.answer_buffer),
                     reference_titles=[r.get("title", "") for r in self.task.references],
                 )

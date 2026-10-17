@@ -122,7 +122,7 @@ class RagRetrievalEngine:
 
         _collected_spans: list[SpanContext] = []
 
-        async def _retrieve_with_timeout(sq: SubQuestion, idx: int):
+        async def _retrieve_with_timeout(sq: SubQuestion, idx: int) -> SubQuestionEvidence:
             try:
                 return await asyncio.wait_for(
                     self._retrieve_one(
@@ -158,7 +158,16 @@ class RagRetrievalEngine:
                     reranked_candidate_count=0,
                 )
 
-        tasks = [_retrieve_with_timeout(sq, i) for i, sq in enumerate(sub_questions)]
+        max_concurrency = max(1, getattr(settings.rag, "sub_question_max_concurrency", 3))
+        semaphore = asyncio.Semaphore(max_concurrency)
+
+        async def _throttled_retrieve_with_timeout(
+            sq: SubQuestion, idx: int
+        ) -> SubQuestionEvidence:
+            async with semaphore:
+                return await _retrieve_with_timeout(sq, idx)
+
+        tasks = [_throttled_retrieve_with_timeout(sq, i) for i, sq in enumerate(sub_questions)]
         evidence_list = await asyncio.gather(*tasks)
 
         # 把并行阶段收集的 span 挂到 tracer 上（此时不再并发）

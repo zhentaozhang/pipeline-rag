@@ -96,12 +96,14 @@ class ChatTaskInfo(BaseModel):
     tracer: Any | None = Field(default=None, exclude=True)
     _cancel_event: asyncio.Event | None = None
     _state_machine: ConversationStateMachine | None = None
+    _background_tasks: set[asyncio.Task[Any]] | None = None
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
         self._cancel_event = asyncio.Event()
         self._lock = threading.Lock()
         self._state_machine = ConversationStateMachine()
+        self._background_tasks = set()
 
     @property
     def sm(self) -> ConversationStateMachine:
@@ -113,12 +115,33 @@ class ChatTaskInfo(BaseModel):
     def conv_state(self) -> ConversationState:
         return self.sm.state
 
+    def track_background_task(self, task: asyncio.Task[Any]) -> asyncio.Task[Any]:
+        """注册并跟踪生命周期内的后台并发任务"""
+        if self._background_tasks is None:
+            self._background_tasks = set()
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        return task
+
+    def cancel_background_tasks(self) -> None:
+        """取消并清理所有未完成的后台任务"""
+        if self._background_tasks:
+            for t in list(self._background_tasks):
+                if not t.done():
+                    t.cancel()
+            self._background_tasks.clear()
+        if self._citation_task is not None:
+            if hasattr(self._citation_task, "done") and not self._citation_task.done():
+                self._citation_task.cancel()
+            self._citation_task = None
+
     def finalize(self) -> bool:
         """带锁确保只执行一次终结（CAS 语义）"""
         with self._lock:
             if self.finalized:
                 return False
             self.finalized = True
+            self.cancel_background_tasks()
             return True
 
     def add_token_usage(self, prompt: int, completion: int) -> None:
@@ -145,6 +168,7 @@ class ChatTaskInfo(BaseModel):
         self.cancelled = True
         if self._cancel_event:
             self._cancel_event.set()
+        self.cancel_background_tasks()
 
     @property
     def is_cancelled(self) -> bool:
