@@ -1,11 +1,10 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
-from app.chat.schema import Evidence, ExecutionPlan, SubQuestion, SubQuestionEvidence
+from app.chat.citation_verifier import _reference_content
+from app.chat.schema import Evidence
+from app.rag.assembly import PromptAssemblyService, PromptBudget
 from app.rag.engine import RagRetrievalEngine, RetrievalChannelResult
 from app.rag.parent_block import ParentBlockElevator
-from app.rag.assembly import PromptAssemblyService, PromptBudget
-from app.chat.citation_verifier import _reference_content, extract_citations
 
 
 class TestMultiUserAndEngineV2:
@@ -15,9 +14,15 @@ class TestMultiUserAndEngineV2:
         engine = RagRetrievalEngine()
 
         # 模拟 3 个 child chunks，分属两个 parent
-        c1 = Evidence(chunk_id="c1", doc_id="d1", title="Doc1", content="child 1 content", score=0.6)
-        c2 = Evidence(chunk_id="c2", doc_id="d1", title="Doc1", content="child 2 content", score=0.8)
-        c3 = Evidence(chunk_id="c3", doc_id="d2", title="Doc2", content="child 3 content", score=0.7)
+        c1 = Evidence(
+            chunk_id="c1", doc_id="d1", title="Doc1", content="child 1 content", score=0.6
+        )
+        c2 = Evidence(
+            chunk_id="c2", doc_id="d1", title="Doc1", content="child 2 content", score=0.8
+        )
+        c3 = Evidence(
+            chunk_id="c3", doc_id="d2", title="Doc2", content="child 3 content", score=0.7
+        )
 
         # 模拟 rerank
         async def fake_rerank(query, candidates):
@@ -72,8 +77,22 @@ class TestMultiUserAndEngineV2:
 
         # 场景 1: 分数 0.45 (>= 0.50 * 0.85 = 0.425)，触发软兜底
         docs = [
-            Evidence(chunk_id="c1", doc_id="d1", title="D1", content="t1", score=0.45, original_score=0.45),
-            Evidence(chunk_id="c2", doc_id="d1", title="D1", content="t2", score=0.30, original_score=0.30),
+            Evidence(
+                chunk_id="c1",
+                doc_id="d1",
+                title="D1",
+                content="t1",
+                score=0.45,
+                original_score=0.45,
+            ),
+            Evidence(
+                chunk_id="c2",
+                doc_id="d1",
+                title="D1",
+                content="t2",
+                score=0.30,
+                original_score=0.30,
+            ),
         ]
         result = RetrievalChannelResult(channel_name="vector", documents=docs)
         filtered = engine._apply_evidence_gate(result)
@@ -83,7 +102,14 @@ class TestMultiUserAndEngineV2:
 
         # 场景 2: 分数 0.35 (< 0.425)，不触发兜底，全部过滤
         docs2 = [
-            Evidence(chunk_id="c3", doc_id="d1", title="D1", content="t3", score=0.35, original_score=0.35),
+            Evidence(
+                chunk_id="c3",
+                doc_id="d1",
+                title="D1",
+                content="t3",
+                score=0.35,
+                original_score=0.35,
+            ),
         ]
         result2 = RetrievalChannelResult(channel_name="vector", documents=docs2)
         filtered2 = engine._apply_evidence_gate(result2)
@@ -91,7 +117,11 @@ class TestMultiUserAndEngineV2:
 
     def test_citation_verifier_child_chunk_priority(self):
         """测试引用文本提取优先包含 child_chunk_text，且突破 280 限制至 1200"""
-        long_body = "第一章 考勤管理规则详细内容。" + ("补充规定描述文本。" * 40) + "试用期离职需提前3天通知，正式员工提前30天通知。"
+        long_body = (
+            "第一章 考勤管理规则详细内容。"
+            + ("补充规定描述文本。" * 40)
+            + "试用期离职需提前3天通知，正式员工提前30天通知。"
+        )
         ref_entry = {
             "id": 1,
             "title": "员工手册",
@@ -109,7 +139,9 @@ class TestMultiUserAndEngineV2:
         budget = PromptBudget(total_budget=500, per_sub_question_budget=500)
 
         child_snippet = "关键核心条款：违规赔偿两倍月薪。"
-        long_parent = "背景前言：" + ("无用背景信息。" * 80) + child_snippet + ("后续条款补充。" * 80)
+        long_parent = (
+            "背景前言：" + ("无用背景信息。" * 80) + child_snippet + ("后续条款补充。" * 80)
+        )
 
         ev = Evidence(
             chunk_id="c1",

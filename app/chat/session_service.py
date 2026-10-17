@@ -202,9 +202,7 @@ async def get_session_detail(
     return vo.model_dump(by_alias=True)
 
 
-async def reset_session(
-    db: AsyncSession, cid: str, user_id: str | None = None
-) -> dict[str, Any]:
+async def reset_session(db: AsyncSession, cid: str, user_id: str | None = None) -> dict[str, Any]:
     from app.db.models.conversation import ConversationSession
 
     archive_store = ConversationArchiveStore(db)
@@ -277,9 +275,7 @@ async def rename_session(
     return {"conversationId": cid, "title": title}
 
 
-async def recover_session(
-    db: AsyncSession, cid: str, user_id: str | None = None
-) -> dict[str, Any]:
+async def recover_session(db: AsyncSession, cid: str, user_id: str | None = None) -> dict[str, Any]:
     if user_id:
         archive_store = ConversationArchiveStore(db)
         session = await archive_store.get_session(cid)

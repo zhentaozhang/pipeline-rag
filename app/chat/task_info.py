@@ -148,11 +148,7 @@ class ChatTaskInfo(BaseModel):
 
     @property
     def is_cancelled(self) -> bool:
-        if self.cancelled:
-            return True
-        if self._cancel_event and self._cancel_event.is_set():
-            return True
-        return False
+        return bool(self.cancelled or (self._cancel_event and self._cancel_event.is_set()))
 
     @property
     def cancel_event(self) -> asyncio.Event:

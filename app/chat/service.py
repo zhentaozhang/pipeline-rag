@@ -275,7 +275,9 @@ class BusinessChatService:
                     timeout=timeout,
                 ):
                     if '"type": "clear_answer"' in event or '"type": "review"' in event:
-                        collected_events = [e for e in collected_events if '"type": "text"' not in e]
+                        collected_events = [
+                            e for e in collected_events if '"type": "text"' not in e
+                        ]
                     collected_events.append(event)
                     yield event
 

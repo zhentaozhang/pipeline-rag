@@ -30,15 +30,8 @@ def upgrade() -> None:
         ["user_id"],
         unique=False,
     )
-    op.create_index(
-        "ix_session_tenant_user",
-        "conversation_session",
-        ["tenant_id", "user_id", "is_deleted"],
-        unique=False,
-    )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_session_tenant_user", table_name="conversation_session")
     op.drop_index(op.f("ix_conversation_session_user_id"), table_name="conversation_session")
     op.drop_column("conversation_session", "user_id")

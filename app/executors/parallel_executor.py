@@ -60,7 +60,9 @@ class ParallelExecutor(ConversationExecutor):
 
     mode = ExecutionMode.MULTI_AGENT
 
-    def __init__(self, db: AsyncSession, task: ChatTaskInfo, registry: ExecutorRegistry) -> None:
+    def __init__(
+        self, db: AsyncSession | None, task: ChatTaskInfo, registry: ExecutorRegistry
+    ) -> None:
         self.db = db
         self.task = task
         self.registry = registry

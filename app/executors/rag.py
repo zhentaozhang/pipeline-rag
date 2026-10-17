@@ -26,7 +26,7 @@ from app.chat.task_info import ChatTaskInfo
 from app.common.enums import ExecutionMode
 from app.common.jinja import jinja_env
 from app.common.llm_client import get_chat_client
-from app.common.sse import SSEEventType, sse_event
+from app.common.sse import SSEEventType
 from app.config import get_settings
 from app.executors.base import ConversationExecutor
 from app.executors.rag_stream import extract_text, run_output_filter, stream_llm_with_tools
