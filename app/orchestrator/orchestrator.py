@@ -2,9 +2,9 @@
 Pre-Orchestrator 主编排器
 
 处理流程（Pipeline 声明式）：
-1. HistoryBuildingStage      — 历史上下文构建
-2. TimeSensitivityStage      — 时间感知查询检测
-3. GuardrailStage            — 企业意图护栏拦截（可短路 → REFUSAL）
+1. GuardrailStage            — 企业意图护栏拦截（可短路 → REFUSAL）
+2. HistoryBuildingStage      — 历史上下文构建
+3. TimeSensitivityStage      — 时间感知查询检测
 4. ValidationStage           — RAG 启停 + DOCUMENT 模式校验
 5. OpenChatShortcutStage     — OPEN_CHAT 早期短路（可短路 → REACT_AGENT）
 6. QueryRewriteStage         — 查询改写 + 意图分流
@@ -126,9 +126,9 @@ def _build_orchestrator_pipeline() -> Pipeline[PrepareContext, ExecutionPlan]:
     """编排器管道声明：stage 按序执行，条件跳转由 .when() 声明式控制"""
     return Pipeline(
         stages=[
+            PipelineStage(GuardrailStage()),
             PipelineStage(HistoryBuildingStage()),
             PipelineStage(TimeSensitivityStage()),
-            PipelineStage(GuardrailStage()),
             # OPEN_CHAT 不依赖 RAG，必须在 OpenChatShortcutStage 之前排除；
             # 否则 RAG_ENABLED=false 时闲聊请求会被"文档问答未启用"拦下并抛异常。
             PipelineStage(ValidationStage()).when(

@@ -34,8 +34,8 @@ class NavigationAnalysisStage(Stage[PrepareContext, ExecutionPlan]):
         route_text = f"{ctx.question} {ctx.rewritten_question}".strip()
         if not await has_navigation_intent_async(route_text):
             ctx.execution_mode = ExecutionMode.RETRIEVAL
-            ctx.retrieval_question = ctx.rewritten_question
-            ctx.retrieval_sub_questions = ctx.rewrite_sub_questions
+            ctx.retrieval_question = ctx.rewritten_question or ctx.question
+            ctx.retrieval_sub_questions = ctx.rewrite_sub_questions or [ctx.question]
             return StageResult(signal=StageSignal.CONTINUE, context=ctx)
 
         nav_rewrite = NavRewriteResult(
@@ -58,11 +58,11 @@ class NavigationAnalysisStage(Stage[PrepareContext, ExecutionPlan]):
             else:
                 ctx.execution_mode = ExecutionMode.RETRIEVAL
             ctx.navigation_decision = nav_result
-            ctx.retrieval_question = ctx.rewritten_question
-            ctx.retrieval_sub_questions = ctx.rewrite_sub_questions
+            ctx.retrieval_question = ctx.rewritten_question or ctx.question
+            ctx.retrieval_sub_questions = ctx.rewrite_sub_questions or [ctx.question]
         else:
             ctx.execution_mode = ExecutionMode.RETRIEVAL
-            ctx.retrieval_question = ctx.rewritten_question
-            ctx.retrieval_sub_questions = ctx.rewrite_sub_questions
+            ctx.retrieval_question = ctx.rewritten_question or ctx.question
+            ctx.retrieval_sub_questions = ctx.rewrite_sub_questions or [ctx.question]
 
         return StageResult(signal=StageSignal.CONTINUE, context=ctx)

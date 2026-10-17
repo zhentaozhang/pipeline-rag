@@ -47,6 +47,7 @@ class PlanBuilder:
             history_covered_exchange_id=getattr(ctx.memory_ctx, "covered_exchange_id", None),
             history_covered_exchange_count=getattr(ctx.memory_ctx, "covered_exchange_count", None),
             history_compression_count=getattr(ctx.memory_ctx, "compression_count", None),
+            keywords=list(ctx.keywords or []),
         )
 
     @staticmethod
@@ -98,6 +99,7 @@ class PlanBuilder:
         )
         routed_task_ids = ctx.top_task_ids or ([routed_task_id] if routed_task_id else [])
 
+        effective_sub_qs = ctx.retrieval_sub_questions or [ctx.rewritten_question or ctx.question]
         sub_questions = [
             SubQuestion(
                 index=i,
@@ -106,8 +108,9 @@ class PlanBuilder:
                 tenant_id=ctx.tenant_id,
                 scope_code=None,
                 doc_ids=routed_document_ids,
+                keywords=list(ctx.keywords or []),
             )
-            for i, sq in enumerate(ctx.retrieval_sub_questions)
+            for i, sq in enumerate(effective_sub_qs)
         ]
 
         chat_mode_out = (

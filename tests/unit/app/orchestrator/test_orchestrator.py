@@ -271,12 +271,13 @@ class TestAutoDocumentFlow:
         assert route_svc.auto_calls == []
 
     @pytest.mark.asyncio
-    async def test_document_mode_missing_doc_ids_raises(self, monkeypatch):
+    async def test_document_mode_missing_doc_ids_terminates_gracefully(self, monkeypatch):
         install_fakes(monkeypatch)
-        with pytest.raises(ValueError):
-            await orchestrator_module.prepare(
-                "文档里的配置", "c1", MemoryContext(), chat_mode="document"
-            )
+        plan = await orchestrator_module.prepare(
+            "文档里的配置", "c1", MemoryContext(), chat_mode="document"
+        )
+        assert plan.mode.value == "REFUSAL"
+        assert "未指定需要查询的文档范围" in (plan.refusal_reply or "")
 
     @pytest.mark.asyncio
     async def test_navigation_mode_flows_through(self, monkeypatch):

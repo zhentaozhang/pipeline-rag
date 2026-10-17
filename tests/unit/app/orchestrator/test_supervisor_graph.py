@@ -248,3 +248,31 @@ async def test_graph_review_exhausted_falls_back(fake_llm):
     )
     assert result["review_status"] == "rejected"
     assert result["review_retries"] == 3
+
+
+async def test_decompose_node_uses_rewritten_question(fake_llm):
+    """消解改写后的问题优先作为 decompose 的输入。"""
+    from app.orchestrator.supervisor_graph import SupervisorState, decompose_node
+
+    fake_llm.queue_json(
+        {
+            "decompose": True,
+            "reasoning": "ok",
+            "sub_plans": [
+                {"id": "1", "mode": "RETRIEVAL", "question": "子问题1", "depends_on": []},
+                {"id": "2", "mode": "RETRIEVAL", "question": "子问题2", "depends_on": []},
+            ],
+        }
+    )
+
+    plan = ExecutionPlan(
+        mode=ExecutionMode.RETRIEVAL,
+        original_question="它的核心功能是什么？",
+        rewritten_question="FastMCP 的核心功能是什么？",
+    )
+    state: SupervisorState = {"plan": plan, "feedback": ""}
+    await decompose_node(state)
+    assert len(fake_llm.calls) == 1
+    prompt = fake_llm.calls[0]["kwargs"]["messages"][1]["content"]
+    assert "FastMCP 的核心功能是什么？" in prompt
+    assert "它的核心功能是什么？" not in prompt

@@ -40,8 +40,9 @@ async def decompose_node(state: SupervisorState) -> dict:
     settings = get_settings()
     client = get_chat_client()
     template = jinja_env.get_template("supervisor_decompose.j2")
+    effective_question = plan.rewritten_question or plan.original_question or ""
     prompt = template.render(
-        question=plan.original_question,
+        question=effective_question,
         history_summary=plan.history_summary or "",
         feedback=state.get("feedback", ""),
     )
@@ -97,7 +98,8 @@ async def review_node(state: SupervisorState) -> dict:
     settings = get_settings()
     client = get_chat_client()
     template = jinja_env.get_template("supervisor_review.j2")
-    prompt = template.render(question=plan.original_question, sub_plans=sub_plans)
+    effective_question = plan.rewritten_question or plan.original_question or ""
+    prompt = template.render(question=effective_question, sub_plans=sub_plans)
     try:
         async with llm_breaker():
             response = await client.chat.completions.create(

@@ -47,6 +47,7 @@ class SubQuestion(BaseModel):
     # 查询增强字段
     retrieval_query: str = ""
     query_context_hints: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
 
 
 class StructureAnchor(BaseModel):
@@ -193,6 +194,7 @@ class ExecutionPlan(BaseModel):
     current_date_text: str = ""
     requires_fresh_search: bool = False
     requires_current_date_anchoring: bool = False
+    keywords: list[str] = Field(default_factory=list)
 
     # ── 用户事实记忆（P3 · Mem0 式，跨轮个性化）──────────────────────
     user_memory_context: list[str] = Field(default_factory=list)

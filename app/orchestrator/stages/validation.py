@@ -56,6 +56,13 @@ class ValidationStage(Stage[PrepareContext, "ExecutionPlan"]):
             and not ctx.original_doc_ids
             and not ctx.original_selected_document_id
         ):
-            raise ValueError("当前文档问答模式缺少有效的文档范围")
+            logger.warning(
+                "missing_document_scope_short_circuit",
+                conversation_id=ctx.conversation_id,
+            )
+            return StageResult(
+                signal=StageSignal.TERMINATE,
+                plan=PlanBuilder.build_unavailable_plan(ctx, MISSING_DOCUMENT_SCOPE_REPLY),
+            )
 
         return StageResult(signal=StageSignal.CONTINUE, context=ctx)

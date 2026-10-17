@@ -65,6 +65,7 @@ class DocumentRetrieveRequestFactory:
                     original=plan.original_question,
                     tenant_id=plan.tenant_id,
                     doc_ids=plan.retrieval_document_ids,
+                    keywords=list(plan.keywords or []),
                 )
                 for i, q in enumerate(plan.retrieval_sub_questions)
             ]
@@ -76,7 +77,7 @@ class DocumentRetrieveRequestFactory:
 
             # ── 1. QueryAugmentation：导航提示 + 历史上下文提示 + 搜索关键词 ──
             retrieval_query, query_context_hints = self._build_query_augmentation(
-                normalized_question, plan, sub_q.query_context_hints
+                normalized_question, plan, sub_q.query_context_hints, sub_q_keywords=sub_q.keywords
             )
             # Store augmented query in retrieval_query (and keep text synchronized)
             sub_q.retrieval_query = retrieval_query
@@ -116,10 +117,12 @@ class DocumentRetrieveRequestFactory:
         normalized_question: str,
         plan: ExecutionPlan,
         sub_q_hints: list[str] | None = None,
+        sub_q_keywords: list[str] | None = None,
     ) -> tuple[str, list[str]]:
         """构建检索查询增强：合并导航提示、历史上下文和搜索关键词。"""
-        # 搜索关键词（来自查询改写）
-        keyword_hints = [h.strip() for h in (sub_q_hints or []) if h.strip()]
+        # 搜索关键词（来自查询改写或 SubQuestion keywords）
+        raw_hints = list(sub_q_hints or []) + list(sub_q_keywords or []) + list(plan.keywords or [])
+        keyword_hints = [h.strip() for h in raw_hints if h.strip()]
         keyword_hints = list(dict.fromkeys(keyword_hints))[:5]
 
         # 导航提示

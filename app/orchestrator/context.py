@@ -50,6 +50,7 @@ class PrepareContext:
     # ── 改写结果（QueryRewriteStage 填充）───────────────────────────
     rewritten_question: str = ""
     rewrite_sub_questions: list[str] = field(default_factory=list)
+    keywords: list[str] = field(default_factory=list)
 
     # ── 路由结果（KnowledgeRoutingStage 填充）───────────────────────
     routed_document_id: str | None = None

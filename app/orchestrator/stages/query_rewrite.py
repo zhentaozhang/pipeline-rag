@@ -49,6 +49,7 @@ class QueryRewriteStage(Stage[PrepareContext, "ExecutionPlan"]):
             question=ctx.question,
             memory_ctx=ctx.memory_ctx,
             history_summary=ctx.history_summary,
+            current_date_text=ctx.current_date_text,
         )
 
         # ── P0-1b 意图分流 · LLM/JEV 判定路径（无论是否改写，均优先检查是否命中开放意图）──────────
@@ -67,11 +68,7 @@ class QueryRewriteStage(Stage[PrepareContext, "ExecutionPlan"]):
             return StageResult(signal=StageSignal.TERMINATE, plan=plan)
 
         if rewrite_result is None or not rewrite_result.needs_rewrite:
-            # 问题无需改写：返回 SKIP 跳过本阶段（不更新上下文，继续下一 Stage）。
-            # 下游对 ctx.rewritten_question 均有原问题兜底：
-            #   plan_builder.py:20 `ctx.rewritten_question or ctx.question`
-            #   navigation_analyzer first_non_blank(rewrote, original_question)
-            #   route_service._build_routing_text 空 rewr 时回退 orig
+            # 问题无需改写：返回 SKIP 跳过本阶段（不更新上下文，由下游阶段安全兜底原问题）。
             return StageResult(signal=StageSignal.SKIP)
 
         ctx.rewritten_question = (
@@ -85,4 +82,5 @@ class QueryRewriteStage(Stage[PrepareContext, "ExecutionPlan"]):
             else None
         )
         ctx.rewrite_sub_questions = sub_qs if sub_qs else [ctx.rewritten_question]
+        ctx.keywords = list(getattr(rewrite_result, "keywords", None) or [])
         return StageResult(signal=StageSignal.CONTINUE, context=ctx)

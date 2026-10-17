@@ -230,6 +230,7 @@ JSON 格式：
         intent: str = "knowledge",
         history_summary: str = "",
         force: bool = False,
+        current_date_text: str = "",
     ) -> RewriteResult:
         """
         重写入口。force=True 时跳过 _needs_rewrite 检查，始终调用 LLM（用于评估场景）。
@@ -261,7 +262,8 @@ JSON 格式：
         rewrite_budget = max(200, settings.rag.rewrite_history_turns * 550)
         if len(history_context) > rewrite_budget:
             history_context = _clip_tail(history_context, rewrite_budget)
-        prompt = f"【最近对话】\n{history_context or '无历史上下文'}\n\n【用户问题】\n{normalized_question}"
+        time_block = f"【当前基准时间】\n{current_date_text}\n\n" if current_date_text else ""
+        prompt = f"{time_block}【最近对话】\n{history_context or '无历史上下文'}\n\n【用户问题】\n{normalized_question}"
 
         raw_output = ""
         try:
