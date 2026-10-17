@@ -23,7 +23,7 @@ COPY requirements.txt .
 #   docker build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
 #                --build-arg PIP_EXTRA_INDEX_URL= \
 #                --build-arg HTTPS_PROXY=http://host.docker.internal:7897 .
-ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG PIP_INDEX_URL=https://pypi.org/simple
 ARG PIP_EXTRA_INDEX_URL=
 ARG HTTP_PROXY=""
 ARG HTTPS_PROXY=""

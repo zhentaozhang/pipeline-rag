@@ -306,7 +306,7 @@ services:
     build:
       context: ./jev_service
       args:
-        PIP_INDEX_URL: ${JEV_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+        PIP_INDEX_URL: ${JEV_PIP_INDEX_URL:-https://pypi.org/simple}
         PIP_EXTRA_INDEX_URL: ${JEV_PIP_EXTRA_INDEX_URL:-}
         HTTP_PROXY: ${JEV_HTTP_PROXY:-}
         HTTPS_PROXY: ${JEV_HTTP_PROXY:-}
