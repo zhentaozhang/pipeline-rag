@@ -389,32 +389,11 @@ class RagRetrievalEngine:
                 )
             )
 
-        # ── ParentBlock 提升 ────────────────────────────────────
-        parent_started_at = datetime.now(UTC)
-        t_parent = time.monotonic()
-        parent_candidates = await ParentBlockElevator().elevate(merged, session=self.db)
-        parent_duration_ms = int((time.monotonic() - t_parent) * 1000)
-        if collected_spans_out is not None:
-            collected_spans_out.append(
-                SpanContext(
-                    span_id=next_id_str(),
-                    trace_id=trace_id,
-                    parent_span_id=parent_span_id,
-                    kind=SpanKind.PIPELINE,
-                    name="parent_block",
-                    status=SpanStatus.OK,
-                    started_at=parent_started_at,
-                    ended_at=parent_started_at + timedelta(milliseconds=parent_duration_ms),
-                    duration_ms=parent_duration_ms,
-                    metadata={"input": len(merged), "output": len(parent_candidates)},
-                )
-            )
-
-        # ── Rerank ─────────────────────────────────────────────
+        # ── Rerank (在子块粒度上重排，避免 Parent 大块物理截断与注意力稀释) ────
         rerank_started_at = datetime.now(UTC)
         t_rerank = time.monotonic()
         reranked = await self._maybe_rerank(
-            sub_q.text, parent_candidates, sub_question_index, notes, used_channels
+            sub_q.text, merged, sub_question_index, notes, used_channels
         )
         rerank_duration_ms = int((time.monotonic() - t_rerank) * 1000)
         if collected_spans_out is not None:
@@ -429,11 +408,34 @@ class RagRetrievalEngine:
                     started_at=rerank_started_at,
                     ended_at=rerank_started_at + timedelta(milliseconds=rerank_duration_ms),
                     duration_ms=rerank_duration_ms,
-                    metadata={"input": len(parent_candidates), "output": len(reranked)},
+                    metadata={"input": len(merged), "output": len(reranked)},
                 )
             )
 
-        final_docs = self._apply_rerank_filter_and_topk(reranked)
+        reranked_filtered = self._apply_rerank_filter(reranked)
+
+        # ── ParentBlock 提升 (将经过精排重选的子块聚合提升为父块) ──────────────
+        parent_started_at = datetime.now(UTC)
+        t_parent = time.monotonic()
+        parent_candidates = await ParentBlockElevator().elevate(reranked_filtered, session=self.db)
+        parent_duration_ms = int((time.monotonic() - t_parent) * 1000)
+        if collected_spans_out is not None:
+            collected_spans_out.append(
+                SpanContext(
+                    span_id=next_id_str(),
+                    trace_id=trace_id,
+                    parent_span_id=parent_span_id,
+                    kind=SpanKind.PIPELINE,
+                    name="parent_block",
+                    status=SpanStatus.OK,
+                    started_at=parent_started_at,
+                    ended_at=parent_started_at + timedelta(milliseconds=parent_duration_ms),
+                    duration_ms=parent_duration_ms,
+                    metadata={"input": len(reranked_filtered), "output": len(parent_candidates)},
+                )
+            )
+
+        final_docs = parent_candidates[: settings.rag.final_top_k]
 
         self._mark_selection(final_docs, sub_question_index, channel_results, notes)
         self._record_empty_retrieval_metrics(
@@ -459,12 +461,12 @@ class RagRetrievalEngine:
                 "vector_accepted": len(vector_accepted),
                 "keyword_accepted": len(keyword_accepted),
                 "fused": len(merged),
-                "parent": len(parent_candidates),
                 "reranked": len(reranked),
+                "parent": len(parent_candidates),
             },
             fused_candidate_count=len(merged),
-            parent_candidate_count=len(parent_candidates),
             reranked_candidate_count=len(reranked),
+            parent_candidate_count=len(parent_candidates),
         )
 
     async def _parallel_channel_retrieve(
@@ -555,14 +557,17 @@ class RagRetrievalEngine:
             notes.append(f"子问题{sub_question_index}重排失败，已降级跳过。")
             return candidates
 
-    def _apply_rerank_filter_and_topk(self, docs: list[Evidence]) -> list[Evidence]:
+    def _apply_rerank_filter(self, docs: list[Evidence]) -> list[Evidence]:
         min_rerank = settings.rag.rerank_min_score or 0.0
         if min_rerank > 0 and any(e.rerank_score is not None for e in docs):
             filtered = [e for e in docs if (e.rerank_score or 1.0) >= min_rerank]
             # 兜底：阈值语义失效（该查询整体低分区间）时保留最高分 top-1，
             # 避免空证据导致拒答（实证："请假"类查询相关块仅 0.05-0.17）
             docs = filtered or sorted(docs, key=lambda e: e.rerank_score or 0.0, reverse=True)[:1]
-        return docs[: settings.rag.final_top_k]
+        return docs
+
+    def _apply_rerank_filter_and_topk(self, docs: list[Evidence]) -> list[Evidence]:
+        return self._apply_rerank_filter(docs)[: settings.rag.final_top_k]
 
     def _mark_selection(
         self,
@@ -638,6 +643,17 @@ class RagRetrievalEngine:
                     filtered.append(e)
                 else:
                     e.gate_passed = False
+            # 软近邻兜底：当全部 vector 证据均低于硬阈值时，若 top-1 落在 85% 软门限内，予以保底保留
+            if not filtered and doc_scores:
+                top_e, top_s = max(doc_scores, key=lambda x: x[1] if x[1] is not None else -1.0)
+                if top_s is not None and top_s >= settings.rag.min_vector_similarity * 0.85:
+                    top_e.gate_passed = True
+                    filtered.append(top_e)
+                    logger.info(
+                        "vector_gate_near_miss_fallback",
+                        top_score=top_s,
+                        min_threshold=settings.rag.min_vector_similarity,
+                    )
             return RetrievalChannelResult(channel_name=result.channel_name, documents=filtered)
 
         if result.channel_name == "keyword":

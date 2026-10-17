@@ -19,6 +19,7 @@ class ConversationSession(Base, TimestampMixin):
         String(64), default="default", server_default="default", nullable=False, index=True
     )
     conversation_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(256), nullable=True)
     chat_mode: Mapped[str] = mapped_column(String(32), default="auto")
     memory_strategy: Mapped[str] = mapped_column(String(32), default="summary_compression")

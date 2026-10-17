@@ -350,6 +350,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       {
         onEvent: (event) => {
           get().updateCurrentAssistant((msg) => {
+            if (event.type === 'clear_answer') {
+              msg.content = '';
+            }
             if (event.type === 'text' && typeof event.content === 'string') {
               msg.content += event.content;
             }
@@ -370,6 +373,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               msg.statusText = event.content;
             }
             if (event.type === 'review' && event.content) {
+              msg.content = '';
               const info = event.content as {
                 round?: number;
                 maxRounds?: number;

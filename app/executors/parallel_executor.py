@@ -92,6 +92,10 @@ class ParallelExecutor(ConversationExecutor):
         all_results: list[WorkerResult] = []
 
         for layer_idx, layer in enumerate(layers):
+            if self.task.is_cancelled:
+                yield self._emit(SSEEventType.STATUS, "⏹ 任务已被用户取消")
+                return
+
             yield self._emit(
                 SSEEventType.THINKING, f"第 {layer_idx + 1} 层：{len(layer)} 个 Worker"
             )
@@ -117,6 +121,10 @@ class ParallelExecutor(ConversationExecutor):
                     )
                 all_results.append(result)
 
+        if self.task.is_cancelled:
+            yield self._emit(SSEEventType.STATUS, "⏹ 任务已被用户取消")
+            return
+
         yield self._emit(SSEEventType.THINKING, "正在综合多源信息…")
 
         aggregator = AggregatorExecutor()
@@ -134,6 +142,9 @@ class ParallelExecutor(ConversationExecutor):
             )  # service.py will emit the reference SSE event
 
     async def _run_single(self, sp: SubPlan) -> WorkerResult:
+        if self.task.is_cancelled:
+            return WorkerResult(sub_plan_id=sp.id, mode=sp.mode, error="Task was cancelled")
+
         # 创建独立的 worker_task 副本，隔离 references 与缓冲，避免层内并行竞争与引用交叉污染
         worker_task = self.task.model_copy(
             update={

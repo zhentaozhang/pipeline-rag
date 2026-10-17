@@ -155,16 +155,35 @@ class FactMemoryStore:
     async def delete_by_conversation(
         self, conversation_id: str, user_key: str | None = None
     ) -> int:
-        """删除会话的全部事实记忆（会话重置/删除时调用，隐私清理）。
+        """删除会话事实记忆。仅在显式传入有效 user_key 时才附带清除该用户跨会话记忆。"""
+        if not conversation_id or not conversation_id.strip():
+            return 0
+        from app.infra.pg import execute
 
-        user_key 提供时同时清除该用户的全部事实（用户注销/隐私擦除场景）。
-        """
+        cid = conversation_id.strip()
+        uk = user_key.strip() if user_key and user_key.strip() else None
+        if uk:
+            result = await execute(
+                "DELETE FROM public.user_fact_memory WHERE conversation_id = $1 OR user_key = $2",
+                cid,
+                uk,
+            )
+        else:
+            result = await execute(
+                "DELETE FROM public.user_fact_memory WHERE conversation_id = $1",
+                cid,
+            )
+        return int(result.split()[-1]) if result and result.split()[-1].isdigit() else 0
+
+    async def delete_by_user(self, user_key: str) -> int:
+        """按用户标识彻底清除该用户的所有事实记忆（用户注销/隐私擦除）。"""
+        if not user_key or not user_key.strip():
+            return 0
         from app.infra.pg import execute
 
         result = await execute(
-            "DELETE FROM public.user_fact_memory WHERE conversation_id = $1 OR user_key = $2",
-            conversation_id,
-            user_key or "",
+            "DELETE FROM public.user_fact_memory WHERE user_key = $1",
+            user_key.strip(),
         )
         return int(result.split()[-1]) if result and result.split()[-1].isdigit() else 0
 

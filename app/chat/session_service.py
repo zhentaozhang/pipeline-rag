@@ -93,12 +93,16 @@ async def stop_session(cid: str) -> dict[str, Any]:
     return {"conversationId": cid, "stopped": True, "message": "已停止会话生成"}
 
 
-async def get_session_detail(db: AsyncSession, cid: str) -> dict[str, Any] | None:
+async def get_session_detail(
+    db: AsyncSession, cid: str, user_id: str | None = None
+) -> dict[str, Any] | None:
     from app.db.models.conversation import ConversationExchange, ConversationMemory
 
     archive_store = ConversationArchiveStore(db)
     session = await archive_store.get_session(cid)
     if not session:
+        return None
+    if user_id and session.user_id and session.user_id != user_id.strip():
         return None
 
     stmt_mem = select(ConversationMemory).where(ConversationMemory.conversation_id == cid)
@@ -198,8 +202,25 @@ async def get_session_detail(db: AsyncSession, cid: str) -> dict[str, Any] | Non
     return vo.model_dump(by_alias=True)
 
 
-async def reset_session(db: AsyncSession, cid: str) -> dict[str, Any]:
+async def reset_session(
+    db: AsyncSession, cid: str, user_id: str | None = None
+) -> dict[str, Any]:
     from app.db.models.conversation import ConversationSession
+
+    archive_store = ConversationArchiveStore(db)
+    session = await archive_store.get_session(cid)
+    if not session:
+        return {
+            "conversationId": cid,
+            "stoppedRunningTask": False,
+            "message": "会话不存在",
+        }
+    if user_id and session.user_id and session.user_id != user_id.strip():
+        return {
+            "conversationId": cid,
+            "stoppedRunningTask": False,
+            "message": "无权操作该会话",
+        }
 
     stopped_running_task = False
     task = ChatRuntimeRegistry.get(cid)
@@ -244,17 +265,38 @@ async def _update_session_field(db: AsyncSession, cid: str, **values: Any) -> No
     await db.commit()
 
 
-async def rename_session(db: AsyncSession, cid: str, title: str) -> dict[str, Any]:
+async def rename_session(
+    db: AsyncSession, cid: str, title: str, user_id: str | None = None
+) -> dict[str, Any]:
+    if user_id:
+        archive_store = ConversationArchiveStore(db)
+        session = await archive_store.get_session(cid)
+        if session and session.user_id and session.user_id != user_id.strip():
+            return {"conversationId": cid, "title": title, "message": "无权操作该会话"}
     await _update_session_field(db, cid, title=title)
     return {"conversationId": cid, "title": title}
 
 
-async def recover_session(db: AsyncSession, cid: str) -> dict[str, Any]:
+async def recover_session(
+    db: AsyncSession, cid: str, user_id: str | None = None
+) -> dict[str, Any]:
+    if user_id:
+        archive_store = ConversationArchiveStore(db)
+        session = await archive_store.get_session(cid)
+        if session and session.user_id and session.user_id != user_id.strip():
+            return {"conversationId": cid, "message": "无权操作该会话"}
     await _update_session_field(db, cid, is_deleted=False)
     return {"conversationId": cid, "message": "会话已恢复"}
 
 
-async def pin_session(db: AsyncSession, cid: str, pinned: bool) -> dict[str, Any]:
+async def pin_session(
+    db: AsyncSession, cid: str, pinned: bool, user_id: str | None = None
+) -> dict[str, Any]:
+    if user_id:
+        archive_store = ConversationArchiveStore(db)
+        session = await archive_store.get_session(cid)
+        if session and session.user_id and session.user_id != user_id.strip():
+            return {"conversationId": cid, "pinned": pinned, "message": "无权操作该会话"}
     await _update_session_field(db, cid, is_pinned=pinned, pinned_at=func.now() if pinned else None)
     return {"conversationId": cid, "pinned": pinned}
 
@@ -269,6 +311,8 @@ async def list_sessions(db: AsyncSession, req: SessionListRequest) -> dict[str, 
         keyword=req.keyword,
         chat_mode=req.chat_mode,
         turn_status=_parse_turn_status(req.turn_status),
+        user_id=req.user_id,
+        tenant_id=req.tenant_id,
     )
 
     cids = [s.conversation_id for s in sessions]

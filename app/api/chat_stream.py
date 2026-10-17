@@ -137,8 +137,10 @@ async def chat_stream(
     流式对话主入口，返回 SSE 流。
     """
     from app.chat.service import BusinessChatService
+    from app.chat.service_utils import _normalize_conversation_id
 
-    conversation_id = request.conversation_id or ""
+    conversation_id = _normalize_conversation_id(request.conversation_id)
+    request.conversation_id = conversation_id
 
     async def _event_source():
         # 断线续传：先重放未消费缓冲

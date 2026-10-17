@@ -36,9 +36,9 @@ async def get_session_detail(
     request: SessionIdRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    data = await svc.get_session_detail(db, request.conversation_id)
+    data = await svc.get_session_detail(db, request.conversation_id, user_id=request.user_id)
     if data is None:
-        return ApiResponse.fail("会话不存在: " + request.conversation_id)
+        return ApiResponse.fail("会话不存在或无权访问: " + request.conversation_id)
     return ApiResponse.ok(data=data)
 
 
@@ -47,7 +47,7 @@ async def reset_session(
     request: SessionIdRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    data = await svc.reset_session(db, request.conversation_id)
+    data = await svc.reset_session(db, request.conversation_id, user_id=request.user_id)
     return ApiResponse.ok(data=data)
 
 
@@ -56,7 +56,9 @@ async def rename_session(
     request: RenameRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    data = await svc.rename_session(db, request.conversation_id, request.title)
+    data = await svc.rename_session(
+        db, request.conversation_id, request.title, user_id=request.user_id
+    )
     return ApiResponse.ok(data=data)
 
 
@@ -65,7 +67,7 @@ async def recover_session(
     request: SessionIdRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    data = await svc.recover_session(db, request.conversation_id)
+    data = await svc.recover_session(db, request.conversation_id, user_id=request.user_id)
     return ApiResponse.ok(data=data)
 
 
@@ -74,7 +76,9 @@ async def pin_session(
     request: PinRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    data = await svc.pin_session(db, request.conversation_id, request.pinned)
+    data = await svc.pin_session(
+        db, request.conversation_id, request.pinned, user_id=request.user_id
+    )
     return ApiResponse.ok(data=data)
 
 

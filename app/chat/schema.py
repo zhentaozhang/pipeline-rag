@@ -240,6 +240,10 @@ class Evidence(BaseModel):
     chunk_no: int | None = None
     parent_block_id: int | None = None
 
+    # Child Chunk 溯源与高亮对齐
+    child_chunk_id: str | None = None
+    child_chunk_text: str | None = None
+
     # Rerank 元数据
     rerank_model: str | None = None
     rerank_query: str | None = None
@@ -278,6 +282,8 @@ class SearchReference(BaseModel):
     parent_block_id: int | None = None
     parent_block_no: int | None = None
     chunk_no: int | None = None
+    child_chunk_id: str | None = None
+    child_chunk_text: str | None = None
     section_path: str = ""
     structure_node_id: int | None = None
     structure_node_type: int | None = None

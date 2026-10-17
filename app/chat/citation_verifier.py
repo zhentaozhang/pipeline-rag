@@ -32,17 +32,29 @@ def extract_citations(answer: str) -> list[int]:
     return seen
 
 
-def _reference_content(ref: dict[str, Any] | Any, fallback_id: int) -> str:
-    """从 reference 条目提取证据文本（按 id 或 title）"""
+def _reference_content(ref: dict[str, Any] | Any, fallback_id: int, max_chars: int = 1200) -> str:
+    """从 reference 条目提取证据文本，优先精确匹配子块并携带父块上下文"""
     if isinstance(ref, dict):
-        return (
+        child_text = (ref.get("child_chunk_text") or "").strip()
+        full_content = (
             ref.get("content")
             or ref.get("excerpt")
-            or ref.get("title")
+            or ref.get("snippet")
             or ref.get("chunk_text")
-            or f"(证据 {fallback_id}，无文本)"
-        )
-    return str(ref)
+            or ref.get("title")
+            or ""
+        ).strip()
+
+        if child_text and full_content and child_text != full_content:
+            if child_text in full_content:
+                text = full_content
+            else:
+                text = f"【精确命中段落】：{child_text}\n【上下文】：{full_content}"
+        else:
+            text = child_text or full_content or f"(证据 {fallback_id}，无文本)"
+
+        return text[:max_chars]
+    return str(ref)[:max_chars]
 
 
 async def verify_citations(
@@ -72,7 +84,8 @@ async def verify_citations(
 
             jev = get_jev_client()
             evidence_map = {
-                i + 1: _reference_content(r, i + 1)[:280] for i, r in enumerate(references)
+                i + 1: _reference_content(r, i + 1, max_chars=1200)
+                for i, r in enumerate(references)
             }
             questions = {
                 f"cite_{ref_n}": {
@@ -131,7 +144,8 @@ async def verify_citations(
 
     # 构造证据映射与 LLM 审计提示词（备用/降级路径）
     evidence_block = "\n".join(
-        f"[{i + 1}] {_reference_content(r, i + 1)[:280]}" for i, r in enumerate(references)
+        f"[{i + 1}] {_reference_content(r, i + 1, max_chars=1200)}"
+        for i, r in enumerate(references)
     )
     ref_list = ", ".join(str(r) for r in refs)
 
@@ -142,7 +156,7 @@ async def verify_citations(
     )
     user = (
         f"问题：{question}\n\n回答：{answer}\n\n"
-        f"证据列表（前 280 字）：\n{evidence_block}\n\n"
+        f"证据列表：\n{evidence_block}\n\n"
         f"回答中出现的引用编号：{ref_list}\n"
         "判断：哪些编号的引用内容在对应证据中找不到支持？（证据提及相似主题但未直接说明的不算支持）"
     )

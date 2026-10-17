@@ -16,9 +16,10 @@ class SSEEventType:
     STATUS = "status"
     DONE = "done"
 
-    # ── 回答质量审核 ─────────────────────────────────────────────────
+    # ── 回答质量审核与安全清除 ──────────────────────────────────────
     REVIEW = "review"
     REVIEW_RESULT = "review_result"
+    CLEAR_ANSWER = "clear_answer"
 
 
 def sse_event(

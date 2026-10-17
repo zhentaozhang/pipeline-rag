@@ -310,9 +310,34 @@ class PromptAssemblyService:
                 rendered_keys.add(unique_key)
                 budget.mark_rendered(self._reference_summary(ev, "已纳入 Prompt"))
             else:
-                omitted = True
-                budget.mark_omitted(self._reference_summary(ev, "超出上下文预算，已省略"))
-                break
+                # 软窗口降级尝试：若剩余可用预算 >= 250，尝试以子块为锚点裁剪软窗口，而不是直接丢弃
+                available = min(budget.remaining_total, budget.remaining_sub_question)
+                consumed = False
+                if available >= 250:
+                    header = (
+                        f"[{ev.reference_id or ''}] 网页：{ev.title or '网页来源'}；链接：{ev.url or '未知'}\n摘要："
+                        if ev.source_type == "web"
+                        else f"[{ev.reference_id or ''}] 文档：{ev.title or '文档来源'}；章节：{ev.section_title or '未识别'}\n内容："
+                    )
+                    max_content_len = available - len(header) - 10
+                    if max_content_len >= 150:
+                        anchor = getattr(ev, "child_chunk_text", None)
+                        soft_content = self._extract_soft_window(
+                            ev.content or "", anchor, max_content_len
+                        )
+                        soft_block = f"{header}{soft_content}\n"
+                        if budget.try_consume(len(soft_block)):
+                            builder.append(soft_block)
+                            rendered_keys.add(unique_key)
+                            budget.mark_rendered(
+                                self._reference_summary(ev, "已通过软窗口裁剪纳入 Prompt")
+                            )
+                            consumed = True
+
+                if not consumed:
+                    omitted = True
+                    budget.mark_omitted(self._reference_summary(ev, "超出上下文预算，已省略"))
+                    break
 
         if omitted:
             builder.append("- 其余证据因上下文预算限制已省略")
@@ -338,6 +363,32 @@ class PromptAssemblyService:
         section_path = ev.section_title or "未识别"
         snippet = self._trim_snippet(ev.content, 1100)
         return f"[{ref_id}] 文档：{doc_name}；章节：{section_path}\n内容：{snippet}\n"
+
+    def _extract_soft_window(self, content: str, anchor: str | None, max_chars: int) -> str:
+        """围绕核心锚点（如子块文本）截取软窗口上下文，避免整块截断丢失关键事实。"""
+        if not content:
+            return ""
+        if len(content) <= max_chars:
+            return content
+        if not anchor or anchor not in content:
+            return content[:max_chars] + "..."
+
+        anchor_pos = content.find(anchor)
+        anchor_len = len(anchor)
+        half_window = (max_chars - anchor_len) // 2
+
+        if half_window <= 0:
+            return anchor[:max_chars] + "..."
+
+        start = max(0, anchor_pos - half_window)
+        end = min(len(content), start + max_chars)
+        if end == len(content):
+            start = max(0, end - max_chars)
+
+        window_text = content[start:end]
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(content) else ""
+        return f"{prefix}{window_text}{suffix}"
 
     def _trim_snippet(self, snippet: str | None, max_chars: int) -> str:
         if not snippet or not snippet.strip():

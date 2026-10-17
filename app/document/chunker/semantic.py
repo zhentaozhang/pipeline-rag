@@ -68,6 +68,13 @@ class SemanticChunker:
             sim = _cosine_similarity(current_emb, next_emb)
             merged_token_count = current_chunk.token_count + next_chunk.token_count
             if same_parent and sim >= threshold and merged_token_count <= config.max_chunk_size:
+                w1 = max(1, current_chunk.token_count)
+                w2 = max(1, next_chunk.token_count)
+                total_w = w1 + w2
+                current_emb = [
+                    (c1 * w1 + c2 * w2) / total_w
+                    for c1, c2 in zip(current_emb, next_emb, strict=False)
+                ]
                 current_chunk.content = current_chunk.content + "\n" + next_chunk.content
                 current_chunk.token_count = merged_token_count
             else:

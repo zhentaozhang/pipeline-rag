@@ -83,7 +83,7 @@ class ParentBlockElevator:
             return evidences
 
         from app.db.models.document import DocumentChunk, DocumentParentBlock
-        from app.db.session import get_engine
+        from app.db.session import get_engine, get_session_factory
 
         @contextlib.asynccontextmanager
         async def _ensure_session(s: AsyncSession | None) -> AsyncIterator[AsyncSession]:
@@ -91,9 +91,14 @@ class ParentBlockElevator:
                 yield s
             else:
                 logger.debug("parent_block_elevator_using_managed_session", stacklevel=4)
-                engine = get_engine()
-                async with AsyncSession(engine) as managed:
-                    yield managed
+                factory = get_session_factory()
+                if factory is not None:
+                    async with factory() as managed:
+                        yield managed
+                else:
+                    engine = get_engine()
+                    async with AsyncSession(engine, expire_on_commit=False) as managed:
+                        yield managed
 
         # 1. 查找这些 chunk 的 parent_chunk_id (优先查局部 LRU 缓存)
         parent_map: dict[str, str | None] = {}
@@ -236,7 +241,17 @@ class ParentBlockElevator:
         parent_groups: dict[str, list[Evidence]] = {}
         elevated_evidences = []
 
+        def _get_sort_score(e: Evidence) -> float:
+            if e.rerank_score is not None and e.rerank_score > 0.0:
+                return e.rerank_score
+            return e.score or 0.0
+
         for ev in evidences:
+            if not getattr(ev, "child_chunk_id", None):
+                ev.child_chunk_id = str(ev.chunk_id)
+            if not getattr(ev, "child_chunk_text", None):
+                ev.child_chunk_text = ev.content
+
             if ev.source_type != "document":
                 elevated_evidences.append(ev)
                 continue
@@ -254,7 +269,7 @@ class ParentBlockElevator:
 
         # 3. 聚合计算得分与合并文本
         for parent_id, children in parent_groups.items():
-            best_child = max(children, key=lambda e: e.score)
+            best_child = max(children, key=_get_sort_score)
 
             # parent_contents 的值为 str | None（缓存与兜底查询都可能写入 None），
             # 统一收敛为空串，避免下游 len()/切片/拼接遇到 None。
@@ -268,7 +283,9 @@ class ParentBlockElevator:
             if max_chars > 0 and len(final_content) > max_chars:
                 final_content = final_content[:max_chars] + "..."
 
-            # 复用 best_child 作为基座，更新内容但保持原始分数（不重新打分）
+            # 复用 best_child 作为基座，记录命中子块，提升内容为父块完整上下文
+            best_child.child_chunk_id = str(best_child.chunk_id)
+            best_child.child_chunk_text = best_child.child_chunk_text or best_child.content
             best_child.content = final_content
             with contextlib.suppress(ValueError, TypeError):
                 best_child.parent_block_id = int(parent_id)
@@ -278,4 +295,4 @@ class ParentBlockElevator:
 
             elevated_evidences.append(best_child)
 
-        return sorted(elevated_evidences, key=lambda e: e.score, reverse=True)
+        return sorted(elevated_evidences, key=_get_sort_score, reverse=True)

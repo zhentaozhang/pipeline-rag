@@ -354,7 +354,11 @@ JSON 格式：
         def _parse(answers: dict) -> str | None:
             intent_res = answers.get("intent")
             choice = intent_res.get("choice") if isinstance(intent_res, dict) else intent_res
-            return str(choice) if choice in ("knowledge", "open", "ambiguous") else None
+            if choice in ("open", "capability"):
+                return "open"
+            if choice in ("knowledge", "ambiguous"):
+                return str(choice)
+            return None
 
         jev_intent = await jev_decide(
             "intent_detection_enabled",
@@ -366,6 +370,7 @@ JSON 格式：
                     "options": {
                         "knowledge": "可从企业内部文档与知识库中查证的业务咨询",
                         "open": "需要外部搜索的实时信息（天气、新闻、股票等）或日常闲聊",
+                        "capability": "询问助手本身的功能、用法或身份",
                         "ambiguous": "信息不完整或模糊不清，需要澄清",
                     },
                 }
@@ -378,11 +383,16 @@ JSON 格式：
         return self._rule_based_intent(question)
 
     def _rule_based_intent(self, question: str) -> str:
-        """规则意图判定：开放提问/闲聊 → open，其余默认 knowledge（P0-1b）"""
+        """规则意图判定：开放提问/闲聊/能力问答 → open，其余默认 knowledge（P0-1b）"""
         try:
-            from app.orchestrator.intent_detector import looks_like_open_chat_question
+            from app.orchestrator.intent_detector import (
+                looks_like_capability_question,
+                looks_like_open_chat_question,
+            )
 
-            if looks_like_open_chat_question(question, requires_fresh_search=False):
+            if looks_like_capability_question(question) or looks_like_open_chat_question(
+                question, requires_fresh_search=False
+            ):
                 return "open"
         except Exception:
             pass

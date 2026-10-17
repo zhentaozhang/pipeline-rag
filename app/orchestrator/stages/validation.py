@@ -26,6 +26,11 @@ RAG_DISABLED_REPLY = (
     "请切换到「开放式提问」模式，或联系管理员开启文档问答。"
 )
 
+MISSING_DOCUMENT_SCOPE_REPLY = (
+    "当前为文档问答模式，但未指定需要查询的文档范围。"
+    "请选择目标文档或切换为「开放式提问」模式后再试。"
+)
+
 
 class ValidationStage(Stage[PrepareContext, "ExecutionPlan"]):
     async def process(self, ctx: PrepareContext) -> StageResult[PrepareContext, ExecutionPlan]:

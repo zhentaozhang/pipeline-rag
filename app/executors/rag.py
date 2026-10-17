@@ -210,7 +210,7 @@ class RagChatExecutor(ConversationExecutor):
 
     mode = ExecutionMode.RETRIEVAL
 
-    def __init__(self, db: AsyncSession, task: ChatTaskInfo) -> None:
+    def __init__(self, db: AsyncSession | None, task: ChatTaskInfo) -> None:
         self.db = db
         self.task = task
 
@@ -303,6 +303,9 @@ class RagChatExecutor(ConversationExecutor):
                         "doc_id": ev.doc_id,
                         # P1-1 引用溯源：携带 chunk 定位与原文（点击引用 → 原文段落）
                         "chunk_id": ev.chunk_id,
+                        "parent_block_id": ev.parent_block_id,
+                        "child_chunk_id": ev.child_chunk_id or str(ev.chunk_id),
+                        "child_chunk_text": ev.child_chunk_text or "",
                         "section_title": ev.section_title or "",
                         "content": (ev.content or "")[:2000],
                     }
@@ -344,12 +347,11 @@ class RagChatExecutor(ConversationExecutor):
                 blocked = output_result.blocked_text
                 self.task.answer_buffer.clear()
                 self.task.answer_buffer.append(blocked)
-                yield sse_event(SSEEventType.STATUS, "⏹ 回答已被安全机制拦截")
-                yield sse_event(
+                yield self._emit(SSEEventType.CLEAR_ANSWER, "")
+                yield self._emit(SSEEventType.STATUS, "⏹ 回答已被安全机制拦截")
+                yield self._emit(
                     SSEEventType.ERROR,
                     blocked,
-                    conversation_id=self.task.conversation_id,
-                    exchange_id=self.task.exchange_id,
                 )
 
         # P1-c：引用校验与质量自审并发预跑（结果由 service_executor 复用）
@@ -388,6 +390,7 @@ class RagChatExecutor(ConversationExecutor):
                         f"正在进行第 {plan.review_round} 轮优化。",
                     },
                 )
+                yield self._emit(SSEEventType.CLEAR_ANSWER, "")
 
                 improved_system = (
                     prompt_result.system_prompt
@@ -407,12 +410,11 @@ class RagChatExecutor(ConversationExecutor):
                     blocked = retry_output.blocked_text
                     self.task.answer_buffer.clear()
                     self.task.answer_buffer.append(blocked)
-                    yield sse_event(SSEEventType.STATUS, "⏹ 回答已被安全机制拦截")
-                    yield sse_event(
+                    yield self._emit(SSEEventType.CLEAR_ANSWER, "")
+                    yield self._emit(SSEEventType.STATUS, "⏹ 回答已被安全机制拦截")
+                    yield self._emit(
                         SSEEventType.ERROR,
                         blocked,
-                        conversation_id=self.task.conversation_id,
-                        exchange_id=self.task.exchange_id,
                     )
                     break
 

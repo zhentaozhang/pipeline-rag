@@ -44,7 +44,7 @@ class ExecutorRegistry:
     通过 ExecutionMode 查找并实例化对应的 executor，未注册的 mode 抛出 RuntimeError。
     """
 
-    def __init__(self, db: AsyncSession, task: ChatTaskInfo) -> None:
+    def __init__(self, db: AsyncSession | None, task: ChatTaskInfo) -> None:
         self.db = db
         self.task = task
         self._registry = _build_default_registry()

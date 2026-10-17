@@ -45,6 +45,38 @@ def _route_embed_key(text: str) -> str:
     return _ROUTE_EMBED_KEY_PREFIX + hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
+def _serialize_embedding(emb: list[float]) -> bytes:
+    import struct
+
+    return struct.pack(f"<{len(emb)}f", *emb)
+
+
+def _deserialize_embedding(raw: bytes | str | None) -> list[float] | None:
+    import struct
+
+    if not raw:
+        return None
+    if isinstance(raw, str):
+        try:
+            return [float(x) for x in raw.split(",") if x]
+        except Exception:
+            return None
+    if isinstance(raw, bytes):
+        if b"," in raw:
+            try:
+                return [float(x) for x in raw.decode("utf-8").split(",") if x]
+            except Exception:
+                return None
+        try:
+            count = len(raw) // 4
+            if count * 4 != len(raw):
+                return None
+            return list(struct.unpack(f"<{count}f", raw))
+        except Exception:
+            return None
+    return None
+
+
 class RouteRepository:
     def __init__(self) -> None:
         self.embedding_provider = get_embedding_provider()
@@ -78,9 +110,9 @@ class RouteRepository:
             redis = get_redis()
             cached = await redis.get(key)
             if cached:
-                if isinstance(cached, bytes):
-                    cached = cached.decode("utf-8")
-                return [float(x) for x in cached.split(",")]
+                emb = _deserialize_embedding(cached)
+                if emb is not None:
+                    return emb
         except Exception:
             pass  # 缓存不可用时直接调 API
 
@@ -90,7 +122,11 @@ class RouteRepository:
             if query_embedding:
                 try:
                     redis = get_redis()
-                    await redis.set(key, ",".join(str(f) for f in query_embedding), ex=86400)
+                    await redis.set(
+                        key,
+                        _serialize_embedding(query_embedding),
+                        ex=_ROUTE_EMBED_CACHE_TTL_SECONDS,
+                    )
                 except Exception:
                     pass
             return query_embedding
@@ -118,9 +154,7 @@ class RouteRepository:
                 for i, key in enumerate(keys):
                     cached = await redis.get(key)
                     if cached:
-                        if isinstance(cached, bytes):
-                            cached = cached.decode("utf-8")
-                        results[i] = [float(x) for x in cached.split(",")]
+                        results[i] = _deserialize_embedding(cached)
             except Exception:
                 logger.warning("Route candidate embedding cache read failed", exc_info=True)
                 redis = None
@@ -137,7 +171,7 @@ class RouteRepository:
                     with contextlib.suppress(Exception):
                         await redis.set(
                             keys[idx],
-                            ",".join(str(f) for f in emb),
+                            _serialize_embedding(emb),
                             ex=_ROUTE_EMBED_CACHE_TTL_SECONDS,
                         )
         return results

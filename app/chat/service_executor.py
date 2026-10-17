@@ -301,13 +301,25 @@ async def execute_stream(
 
         try:
             data = json.loads(chunk.removeprefix("data: ").strip())
-            if data.get("type") == "text":
+            ev_type = data.get("type")
+            if ev_type == "text":
                 elapsed = int((datetime.now(UTC) - task.start_time).total_seconds() * 1000)
                 task.try_set_first_response_time(elapsed)
                 content = data.get("content", "")
                 if isinstance(content, dict):
                     content = content.get("content", "")
                 state.full_answer.append(str(content))
+            elif ev_type in (SSEEventType.CLEAR_ANSWER, SSEEventType.REVIEW):
+                state.full_answer.clear()
+            elif ev_type == SSEEventType.ERROR:
+                err_content = data.get("content", "")
+                if isinstance(err_content, dict):
+                    err_content = err_content.get("content", "")
+                state.last_error_message = str(err_content)
+                state.turn_failed = True
+                state.full_answer.clear()
+                if err_content:
+                    state.full_answer.append(str(err_content))
         except Exception as e:
             logger.warning(
                 "failed to parse text chunk", chunk=chunk[:80], error=str(e), exc_info=True

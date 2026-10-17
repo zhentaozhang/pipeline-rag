@@ -75,6 +75,34 @@ async def _seed_admin_user() -> None:
             logger.debug("admin user already exists", username=username)
 
 
+async def _ensure_session_user_id_column() -> None:
+    """启动时幂等探查 conversation_session 表，若缺少 user_id 列则自动补齐"""
+    from sqlalchemy import text
+
+    from app.db.session import _session_factory as sf
+
+    if sf is None:
+        return
+    try:
+        async with sf() as session:
+            result = await session.execute(
+                text("SHOW COLUMNS FROM conversation_session LIKE 'user_id'")
+            )
+            if not result.fetchall():
+                await session.execute(
+                    text("ALTER TABLE conversation_session ADD COLUMN user_id VARCHAR(64) NULL")
+                )
+                await session.execute(
+                    text(
+                        "CREATE INDEX ix_conversation_session_user_id ON conversation_session(user_id)"
+                    )
+                )
+                await session.commit()
+                logger.info("conversation_session user_id column and index ensured")
+    except Exception as e:
+        logger.debug("session user_id column check completed", error=str(e))
+
+
 async def _cancel_subscriber() -> None:
     """监听 Redis 中的跨 Worker / 跨实例会话取消广播"""
     import json
@@ -156,6 +184,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 确保管理员用户存在（首次启动自动创建）
     await _seed_admin_user()
     logger.info("admin user ensured")
+
+    # 确保会话表 user_id 字段与索引存在（平滑兼容未运行 migration 的环境）
+    await _ensure_session_user_id_column()
 
     # Redis（分布式锁 + Celery Broker）
     await init_redis()

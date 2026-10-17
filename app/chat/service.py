@@ -136,7 +136,10 @@ class BusinessChatService:
         async with self._get_session() as bootstrap_db:
             bootstrap_archive_store = ConversationArchiveStore(bootstrap_db)
             session, _ = await bootstrap_archive_store.find_or_create_session(
-                conversation_id, question
+                conversation_id,
+                question,
+                user_id=getattr(request, "user_key", None),
+                tenant_id=getattr(request, "tenant_id", "default"),
             )
 
         # ── 3. 集群级 Redis 锁（先获取锁再注册任务）───────────────────────
@@ -271,6 +274,8 @@ class BusinessChatService:
                     ),
                     timeout=timeout,
                 ):
+                    if '"type": "clear_answer"' in event or '"type": "review"' in event:
+                        collected_events = [e for e in collected_events if '"type": "text"' not in e]
                     collected_events.append(event)
                     yield event
 

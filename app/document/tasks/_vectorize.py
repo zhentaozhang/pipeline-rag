@@ -69,6 +69,7 @@ async def _save_mysql_document_chunks_async(doc_id: str, chunks: list, task_id: 
                     status=1,
                 )
             )
+        if chunk_models:
             db.add_all(chunk_models)
 
 

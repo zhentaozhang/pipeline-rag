@@ -27,7 +27,12 @@ class ConversationArchiveStore:
     # ── Session ──────────────────────────────────────────────────────────
 
     async def find_or_create_session(
-        self, conversation_id: str, title: str, memory_strategy: str | None = None
+        self,
+        conversation_id: str,
+        title: str,
+        memory_strategy: str | None = None,
+        user_id: str | None = None,
+        tenant_id: str | None = None,
     ) -> tuple[ConversationSession, bool]:
         stmt = select(ConversationSession).where(
             ConversationSession.conversation_id == conversation_id
@@ -42,6 +47,8 @@ class ConversationArchiveStore:
             session = ConversationSession(
                 id=next_id_int(),
                 conversation_id=conversation_id,
+                user_id=user_id.strip() if user_id and user_id.strip() else None,
+                tenant_id=tenant_id.strip() if tenant_id and tenant_id.strip() else "default",
                 title=title[:50],
                 memory_strategy=strategy,
                 created_at=datetime.now(),
@@ -49,6 +56,9 @@ class ConversationArchiveStore:
             self.db.add(session)
             await self.db.flush()
             created = True
+        elif user_id and user_id.strip() and not session.user_id:
+            session.user_id = user_id.strip()
+            await self.db.flush()
         return session, created
 
     async def get_session_title(self, conversation_id: str) -> str:
@@ -82,6 +92,8 @@ class ConversationArchiveStore:
         keyword: str | None = None,
         chat_mode: str | None = None,
         turn_status: int | None = None,
+        user_id: str | None = None,
+        tenant_id: str | None = None,
     ) -> tuple[list[ConversationSession], int]:
         from sqlalchemy import and_, exists, or_
 
@@ -95,6 +107,16 @@ class ConversationArchiveStore:
         # 软删除过滤：只返回未删除的会话
         base = base.where(~ConversationSession.is_deleted)
         count_base = count_base.where(~ConversationSession.is_deleted)
+
+        # 多用户与租户隔离
+        if user_id and user_id.strip():
+            uid = user_id.strip()
+            base = base.where(ConversationSession.user_id == uid)
+            count_base = count_base.where(ConversationSession.user_id == uid)
+        if tenant_id and tenant_id.strip():
+            tid = tenant_id.strip()
+            base = base.where(ConversationSession.tenant_id == tid)
+            count_base = count_base.where(ConversationSession.tenant_id == tid)
 
         # apply session page filters:
         # keyword → conversationId OR selectedDocumentName OR EXISTS exchange content
