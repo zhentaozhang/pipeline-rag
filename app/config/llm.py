@@ -63,8 +63,11 @@ class RerankSettings(BaseSettings):
     base_url: str = "https://api.siliconflow.cn/v1"
     api_key: str = ""
     model: str = "BAAI/bge-reranker-v2-m3"
-    # top_n：请求体里"送打分条数"的语义（调用方恒传候选数，这里仅作兜底默认）
+    # top_n：历史配置，语义已被 score_cap 取代（调用方恒传候选数）。保留字段避免 .env 解析失败。
     top_n: int = 10
+    # score_cap：送打分条数上限；0 = 全部候选（默认）。超出部分不送 API、不丢弃，按原序追加在已评分之后。
+    # 与 keep_top_n（本地保留条数）解耦：前者控成本，后者控输出条数。
+    score_cap: int = 0
     # keep_top_n：本地保留条数；0 = 不截断（默认），避免静默封顶父块多样性
     keep_top_n: int = 0
     connect_timeout_ms: int = 3000

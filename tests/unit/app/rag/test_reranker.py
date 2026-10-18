@@ -232,3 +232,41 @@ class TestErrorHandling:
 
         result = await reranker.rerank("q", [ev(f"c{i}") for i in range(5)])
         assert len(result) == 5
+
+    async def test_score_cap_limits_payload_and_keeps_unscored_tail(
+        self, reranker, monkeypatch, rerank_settings
+    ):
+        """score_cap = "送打分条数上限"：超出部分不送 API，但不得丢弃，追加在已评分之后。"""
+        monkeypatch.setattr(rerank_settings, "score_cap", 2, raising=False)
+        fake = FakeClient(
+            FakeResponse(
+                {
+                    "results": [
+                        {"index": 1, "relevance_score": 0.9},
+                        {"index": 0, "relevance_score": 0.5},
+                    ]
+                }
+            )
+        )
+        monkeypatch.setattr(reranker_module, "_get_rerank_client", lambda: fake)
+
+        evs = [ev("c1"), ev("c2"), ev("c3"), ev("c4"), ev("c5")]
+        out = await reranker.rerank("q", evs)
+
+        sent = fake.captured[0][2]
+        assert len(sent["documents"]) == 2
+        assert sent["top_n"] == 2
+        assert [e.chunk_id for e in out[:2]] == ["c2", "c1"]
+        assert [e.chunk_id for e in out[2:]] == ["c3", "c4", "c5"]
+        assert all(e.rerank_score == 0.0 for e in out[2:])
+
+    async def test_score_cap_zero_scores_every_candidate(
+        self, reranker, monkeypatch, rerank_settings
+    ):
+        monkeypatch.setattr(rerank_settings, "score_cap", 0, raising=False)
+        fake = FakeClient(
+            FakeResponse({"results": [{"index": i, "relevance_score": 0.5} for i in range(5)]})
+        )
+        monkeypatch.setattr(reranker_module, "_get_rerank_client", lambda: fake)
+        await reranker.rerank("q", [ev(f"c{i}") for i in range(5)])
+        assert len(fake.captured[0][2]["documents"]) == 5

@@ -1,0 +1,17 @@
+{
+  "summary": {
+    "questions": 115,
+    "zero_hit_rate": 0.2435,
+    "avg_hits": 2.64,
+    "gold_coverage_at_k": 0.5926,
+    "mrr": 0.528
+  },
+  "rows": [
+    {
+      "question_id": "emp001",
+      "hits": [
+        "2111417690865270789",
+        "2111417690865270790",
+        "2111418510977531909"
+      ],
+      "gold": 

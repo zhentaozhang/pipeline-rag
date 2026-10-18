@@ -56,15 +56,21 @@ class Reranker:
             "Content-Type": "application/json",
         }
 
+        # 送打分条数上限（score_cap，0=全部）：超出部分不送 API，但不得丢弃，
+        # 追加在已评分结果之后（无分数），由下游按原有融合分兜底。
+        cap = int(getattr(settings.rerank, "score_cap", 0) or 0)
+        head = evidences[:cap] if 0 < cap < len(evidences) else evidences
+        tail = evidences[len(head) :]
+
         if getattr(settings.rerank, "inject_title_breadcrumbs", False):
             docs_to_rerank = [
                 f"【{ev.title}】\n{ev.content}"
                 if ev.title and ev.title != "未知文档片段"
                 else ev.content
-                for ev in evidences
+                for ev in head
             ]
         else:
-            docs_to_rerank = [ev.content for ev in evidences]
+            docs_to_rerank = [ev.content for ev in head]
         payload = {
             "model": settings.rerank.model,
             "query": query,
@@ -98,13 +104,15 @@ class Reranker:
             # 否则 50 个候选重排完只留 10 个孩子进父块提升，且无任何日志。
             keep_top_n = int(getattr(settings.rerank, "keep_top_n", 0) or 0)
             if keep_top_n > 0:
+                # keep_top_n 是"最终保留条数"硬上限：此时未送打分的尾巴也不再追加。
                 results_sorted = results_sorted[:keep_top_n]
+                tail = []
 
             reranked = []
             for item in results_sorted:
                 idx = item.get("index")
-                if idx is not None and 0 <= idx < len(evidences):
-                    ev = evidences[idx].model_copy()
+                if idx is not None and 0 <= idx < len(head):
+                    ev = head[idx].model_copy()
                     relevance_score = float(item.get("relevance_score", 0.0))
                     ev.rerank_score = relevance_score
                     ev.rerank_model = settings.rerank.model
@@ -113,7 +121,7 @@ class Reranker:
                     ev.rerank_original_index = idx
                     reranked.append(ev)
 
-            return reranked
+            return reranked + [e.model_copy() for e in tail]
 
         except (Exception, asyncio.CancelledError):
             logger.exception("rerank failed, propagating to sub-question exception handler")

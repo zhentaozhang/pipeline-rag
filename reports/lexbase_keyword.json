@@ -1,0 +1,1678 @@
+{
+  "provenance": {
+    "judge_model": "deepseek-v4-flash",
+    "jev_coverage": {
+      "flags": {},
+      "totals": {
+        "decided": 0,
+        "failed": 0,
+        "disabled": 0,
+        "attempted": 0
+      }
+    },
+    "with_executor": false,
+    "variant": "custom",
+    "keyword_channel_enabled": true,
+    "rerank_enabled": true,
+    "online_jev_enabled": true,
+    "vector_top_k": 50,
+    "keyword_top_k": 50,
+    "candidate_top_k": 50,
+    "final_top_k": 8,
+    "retrieval_eval_depth": 8,
+    "rrf_k": 30,
+    "rrf_vector_weight": 1.0,
+    "rrf_keyword_weight": 1.0,
+    "rerank_top_n": 10,
+    "rerank_min_score": 0.0,
+    "rerank_relative_ratio": 0.0,
+    "rerank_skip_min_similarity": 0.0,
+    "rerank_rank1_guard_enabled": true,
+    "multi_hop_split_enabled": false,
+    "max_sub_questions": 4,
+    "judge_temperature": 0.0,
+    "eval_context_max_chars": 20000,
+    "reference_snippet_max_chars": 2000,
+    "vector_channel_enabled": false,
+    "total_questions": 30
+  },
+  "round": "lexbase_keyword",
+  "total": 30,
+  "averages": {
+    "faithfulness": null,
+    "recall_at_5": 0.5666666666666667,
+    "recall_at_final_k": 0.5666666666666667,
+    "mrr": 0.5416666666666666,
+    "ndcg_at_5": 0.509,
+    "ndcg_at_final_k": 0.509,
+    "answer_relevancy": null,
+    "context_precision": null,
+    "answer_correctness": null,
+    "context_recall": null,
+    "recall_at_5_ids": 0.5666666666666667,
+    "recall_at_final_k_ids": 0.5666666666666667,
+    "mrr_ids": 0.5416666666666666,
+    "ndcg_at_5_ids": 0.54769,
+    "recall_at_5_parent_ids": 0.52222,
+    "recall_at_final_k_parent_ids": 0.52222,
+    "grounded_questions": 30,
+    "citation_accuracy": null,
+    "citation_samples": 0,
+    "quality_pass_rate": null,
+    "quality_unknown_rate": null,
+    "quality_samples": 0,
+    "correct_refusal_rate": null,
+    "false_answer_rate": null,
+    "refusal_cases": 0,
+    "corpus_gap_cases": 0,
+    "latency_total_p50_ms": 11.4,
+    "latency_total_p95_ms": 331.0,
+    "latency_total_samples": 30,
+    "latency_retrieval_p50_ms": 11.4,
+    "latency_retrieval_p95_ms": 331.0,
+    "latency_retrieval_samples": 30,
+    "latency_generation_p50_ms": null,
+    "latency_generation_p95_ms": null,
+    "latency_generation_samples": 0,
+    "latency_citation_p50_ms": null,
+    "latency_citation_p95_ms": null,
+    "latency_citation_samples": 0,
+    "latency_quality_p50_ms": null,
+    "latency_quality_p95_ms": null,
+    "latency_quality_samples": 0,
+    "latency_samples": 30
+  },
+  "stage_attribution_summary": {
+    "total_snippets": 46,
+    "hit": 20,
+    "cutoff_dropped": 0,
+    "rerank_demoted": 0,
+    "fusion_dropped": 0,
+    "unrecalled": 26,
+    "judge_failed": {
+      "faithfulness": 30,
+      "answer_relevancy": 30,
+      "context_precision": 30,
+      "answer_correctness": 30,
+      "context_recall": 30
+    },
+    "hit_rate": 0.4348,
+    "cutoff_drop_rate": 0.0,
+    "rerank_demote_rate": 0.0,
+    "fusion_drop_rate": 0.0,
+    "unrecalled_rate": 0.5652
+  },
+  "failed": [],
+  "results": [
+    {
+      "question_id": "lex001",
+      "question": "《华远科技集团差旅与报销管理制度》第9条的主题是什么？",
+      "rewritten_question": "",
+      "ground_truth": "住宿费用限额。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：华远科技集团差旅与报销管理制度（2026年修订版）】\n# 华远科技集团差旅与报销管理制度（2026年修订版）\n**编号**：HY-CW-2026-002\n**版本**：V2.3\n**发布日期**：2026年2月15日\n**生效日期**：2026年3月1日\n**责任部门**：财务部\n---"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 1
+        },
+        "breakdown": [
+          {
+            "snippet": "第9条 住宿费用限额",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [
+        "2111417685869854726"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 44.8,
+      "retrieval_ms": 43.3,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex002",
+      "question": "《商务招待与礼品管理制度》第7条的主题是什么？",
+      "rewritten_question": "",
+      "ground_truth": "礼品标准。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第7条 礼品标准】\n### 第7条 礼品标准\n**7.1 常规礼品**（纪念品、伴手礼）：单价不超过200元。\n**7.2 商务礼品**（品牌礼品、办公用品）：单价200-800元。\n**7.3 重要礼品**（限量款、定制礼品）：单价800-2000元。\n**7.4 禁止品类**：现金、购物卡、奢侈品（单价超5000元）、烟酒（单价超800元）。",
+        "[2] 【章节路径：第1条 目的】\n### 第1条 目的\n为规范集团商务招待行为，合理控制招待费用，防止铺张浪费和腐败行为，特制定本制度。",
+        "[3] 【章节路径：第2条 适用范围】\n### 第2条 适用范围\n本制度适用于集团及全资/控股子公司因商务需要发生的餐饮招待、礼品赠送、会议接待等活动。",
+        "[4] 【章节路径：华远科技集团商务招待与礼品管理制度】\n# 华远科技集团商务招待与礼品管理制度\n**编号**：HY-CW-2026-004\n**版本**：V1.2\n**生效日期**：2026年3月1日\n**责任部门**：财务部\n---",
+        "[5] 【章节路径：第3条 基本原则】\n### 第3条 基本原则\n**3.1** 禁止公款吃喝，招待须有明确的商务目的和事前审批。\n**3.2** 禁止提供单价超过800元/瓶的高档酒水。\n**3.3** 禁止赠送现金、购物卡、有价证券、奢侈品（单价超过5000元）。\n**3.4** 招待费用实行预算管理，按年度分解至各部门。",
+        "[6] 【章节路径：第4条 人均餐饮标准（不含酒水）】\n### 第4条 人均餐饮标准（不含酒水）\n**4.1 普通商务招待**（日常拜访、一般客户来访）：\n- 一线城市：人均不超过300元\n- 二线城市：人均不超过200元\n- 三线及以下：人均不超过150元\n**4.2 重要商务招待**（高管来访、签约仪式、战略客户）：\n- 一线城市：人均不超过600元\n- 二线城市：人均不超过400元\n- 三线及以下：人均不超过300元\n**4.3 集团内部接待**（兄弟公司来访、总部检查）：\n- 工作餐：人均不超过80元\n- 不适用酒水",
+        "[7] 【章节路径：第8条 礼品审批权限】\n### 第8条 礼品审批权限\n- 常规礼品：部门负责人审批\n- 商务礼品：事业部负责人审批\n- 重要礼品：分管副总裁审批",
+        "[8] 【章节路径：第11条 招待报销凭证】\n### 第11条 招待报销凭证\n**11.1** 发票须为餐饮/礼品/酒店类目增值税专用发票。\n**11.2** 报销须附招待清单：注明招待对象单位、人数、招待事由、陪同人员。\n**11.3** 须关联事前审批单号，无审批单的款项不予报销。\n**11.4** 报销时限：招待发生后30天内提交。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "第7条 礼品标准",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417690164822022",
+        "2111417690164822016",
+        "2111417690164822017",
+        "2111417690160627712",
+        "2111417690164822018",
+        "2111417690164822019",
+        "2111417690164822023",
+        "2111417690164822026"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 342.1,
+      "retrieval_ms": 342.1,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex003",
+      "question": "《华远科技集团员工手册》第5条的主题是什么？",
+      "rewritten_question": "",
+      "ground_truth": "试用期规定。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第1条 手册目的与适用范围】\n### 第1条 手册目的与适用范围\n**1.1** 为规范集团人力资源管理，明确员工的权利与义务，保障员工与集团的合法权益，根据《中华人民共和国劳动法》《中华人民共和国劳动合同法》及相关法律法规，结合集团实际情况，特制定本手册。\n**1.2** 本手册适用于华远科技集团股份有限公司及其全资/控股子公司全体正式员工。劳务派遣人员参照执行，以派遣服务协议约定为准。\n**1.3** 本手册为集团基本管理制度的汇编，单项事务另有专项制度的，以专项制度为准。",
+        "[2] 【章节路径：华远科技集团员工手册（2026年版）】\n# 华远科技集团员工手册（2026年版）\n**版本**：V3.2\n**修订日期**：2026年1月15日\n**生效日期**：2026年2月1日\n**签发人**：集团总裁办\n---",
+        "[3] 【章节路径：第15条 奖励类型】\n### 第15条 奖励类型\n**15.1 即时奖励**：季度内表现突出，可获得500-5000元现金或等值礼品，由部门负责人审批。\n**15.2 优秀员工**：年度评选，授予\"华远之星\"称号，奖励10000元+5天带薪旅游。\n**15.3 创新大奖**：年度技术/业务创新评审，特等奖50万元，一等奖20万元，二等奖10万元。\n**15.4 长期服务奖**：入职满5年授予银质徽章+5000元，满10年授予金质徽章+20000元。",
+        "[4] 【章节路径：第5条 试用期规定】\n### 第5条 试用期规定\n**5.1** 试用期按劳动合同期限确定：\n- 合同期限3个月以上不满1年：试用期1个月\n- 合同期限1年以上不满3年：试用期2个月\n- 合同期限3年以上或无固定期限：试用期6个月\n**5.2** 试用期薪酬为转正薪酬的80%，不低于当地最低工资标准。\n**5.3** 试用期考核：第2个月末进行中期回顾，结束前15天进行终期评估。考核维度包括：任务完成度、团队协作、文化契合度。\n**5.4** 转正条件：考核评分≥70分，无重大违规违纪记录。未达标者延长试用期1个月（仅一次机会）或协商解除劳动关系。",
+        "[5] 【章节路径：第3条 名词定义】\n### 第3条 名词定义\n**3.1 集团**：华远科技集团股份有限公司。\n**3.2 员工**：与集团建立劳动关系并签订劳动合同的在册人员。\n**3.3 上级**：组织架构中具有直接汇报关系的管理者。\n**3.4 工作日**：周一至周五（法定节假日除外）。\n**3.5 常驻工作地**：员工劳动合同中约定的日常工作所在城市。",
+        "[6] 【章节路径：第16条 违纪处分分级】\n### 第16条 违纪处分分级\n**16.1** 处分等级由轻到重共五级：\n- 口头警告：有效期3个月，口头警告单归档\n- 书面警告：有效期6个月，影响年度绩效评级\n- 记过：有效期12个月，取消年度晋升资格及年终奖\n- 降级/降薪：降低1-2个职级，相应调整薪酬\n- 解除劳动合同：依法解除，不支付经济补偿\n**16.2** 单次违纪扣款不超过当月工资的20%，且扣款后不低于当地最低工资标准。\n**16.3 处分离场流程**：\n第1步：事实调查。部门负责人协同HRBP组成调查组，5个工作日内完成事实调查，形成书面调查报告。\n第2步：面谈告知。调查组与员工正式面谈，告知调查结论、拟处分等级及依据，听取陈述和申辩，形成书面记录由双方签字。\n第3步：处分决定。口头警告/书面警告由部门负责人决定；记过/降级由事业部负责人审批；解除劳动合同由集团人力资源委员会审议。\n第4步：书面送达。处分决定书送达员工本人，含违纪事实、处分等级、依据、申诉权利。\n第5步：申诉与归档。员工5个工作日内可向集团人力资源委员会书面申诉，委员会15个工作日内终裁。处分材料归入员工档案。\n**16.4** 年度累计2次书面警告自动升级为记过处分。",
+        "[7] 【章节路径：申诉与归档。员工5个工作日内可向集团人力资源委员会书面申诉，委员会15个工作日内终裁。处分材料归入员工档案。】\n第5步：申诉与归档。员工5个工作日内可向集团人力资源委员会书面申诉，委员会15个工作日内终裁。处分材料归入员工档案。",
+        "[8] 【章节路径：第2条 核心价值观】\n### 第2条 核心价值观\n**2.1 客户至上**：一切以客户价值为导向，持续为客户创造极致体验。\n**2.2 创新驱动**：鼓励技术突破与业务创新，包容试错，从失败中学习。\n**2.3 务实高效**：结果导向，数据说话，反对形式主义与低效内耗。\n**2.4 诚信合规**：坚守商业道德底线，对腐败、造假、利益输送零容忍。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "第5条 试用期规定",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 0.25,
+      "ndcg_at_5": 0.4307,
+      "ndcg_at_final_k": 0.4307,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 0.25,
+      "ndcg_at_5_ids": 0.4307,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417690865270785",
+        "2111417690865270784",
+        "2111417690865270806",
+        "2111417690865270789",
+        "2111417690865270787",
+        "2111417690865270807",
+        "2111417690865270810",
+        "2111417690865270786"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 674.9,
+      "retrieval_ms": 674.8,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex004",
+      "question": "《华远科技集团差旅与报销管理制度》第6条的主题是什么？",
+      "rewritten_question": "",
+      "ground_truth": "高铁/动车（乘坐座席标准）。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：华远科技集团差旅与报销管理制度（2026年修订版）】\n# 华远科技集团差旅与报销管理制度（2026年修订版）\n**编号**：HY-CW-2026-002\n**版本**：V2.3\n**发布日期**：2026年2月15日\n**生效日期**：2026年3月1日\n**责任部门**：财务部\n---"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 1
+        },
+        "breakdown": [
+          {
+            "snippet": "第6条 高铁/动车",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [
+        "2111417685869854726"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 16.9,
+      "retrieval_ms": 16.8,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex005",
+      "question": "《商务招待与礼品管理制度》第9条的主题是什么？",
+      "rewritten_question": "",
+      "ground_truth": "会议接待标准。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第9条 会议接待标准】\n### 第9条 会议接待标准\n**9.1** 内部会议：茶歇标准每人每天不超过50元。\n**9.2** 外部会议：含场租、茶歇、午餐，每人每天不超过300元。\n**9.3** 会议用餐标准参照第4条执行。",
+        "[2] 【章节路径：第1条 目的】\n### 第1条 目的\n为规范集团商务招待行为，合理控制招待费用，防止铺张浪费和腐败行为，特制定本制度。",
+        "[3] 【章节路径：第2条 适用范围】\n### 第2条 适用范围\n本制度适用于集团及全资/控股子公司因商务需要发生的餐饮招待、礼品赠送、会议接待等活动。",
+        "[4] 【章节路径：华远科技集团商务招待与礼品管理制度】\n# 华远科技集团商务招待与礼品管理制度\n**编号**：HY-CW-2026-004\n**版本**：V1.2\n**生效日期**：2026年3月1日\n**责任部门**：财务部\n---",
+        "[5] 【章节路径：第3条 基本原则】\n### 第3条 基本原则\n**3.1** 禁止公款吃喝，招待须有明确的商务目的和事前审批。\n**3.2** 禁止提供单价超过800元/瓶的高档酒水。\n**3.3** 禁止赠送现金、购物卡、有价证券、奢侈品（单价超过5000元）。\n**3.4** 招待费用实行预算管理，按年度分解至各部门。",
+        "[6] 【章节路径：第4条 人均餐饮标准（不含酒水）】\n### 第4条 人均餐饮标准（不含酒水）\n**4.1 普通商务招待**（日常拜访、一般客户来访）：\n- 一线城市：人均不超过300元\n- 二线城市：人均不超过200元\n- 三线及以下：人均不超过150元\n**4.2 重要商务招待**（高管来访、签约仪式、战略客户）：\n- 一线城市：人均不超过600元\n- 二线城市：人均不超过400元\n- 三线及以下：人均不超过300元\n**4.3 集团内部接待**（兄弟公司来访、总部检查）：\n- 工作餐：人均不超过80元\n- 不适用酒水",
+        "[7] 【章节路径：第7条 礼品标准】\n### 第7条 礼品标准\n**7.1 常规礼品**（纪念品、伴手礼）：单价不超过200元。\n**7.2 商务礼品**（品牌礼品、办公用品）：单价200-800元。\n**7.3 重要礼品**（限量款、定制礼品）：单价800-2000元。\n**7.4 禁止品类**：现金、购物卡、奢侈品（单价超5000元）、烟酒（单价超800元）。",
+        "[8] 【章节路径：第11条 招待报销凭证】\n### 第11条 招待报销凭证\n**11.1** 发票须为餐饮/礼品/酒店类目增值税专用发票。\n**11.2** 报销须附招待清单：注明招待对象单位、人数、招待事由、陪同人员。\n**11.3** 须关联事前审批单号，无审批单的款项不予报销。\n**11.4** 报销时限：招待发生后30天内提交。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "第9条 会议接待标准",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417690164822024",
+        "2111417690164822016",
+        "2111417690164822017",
+        "2111417690160627712",
+        "2111417690164822018",
+        "2111417690164822019",
+        "2111417690164822022",
+        "2111417690164822026"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 280.0,
+      "retrieval_ms": 279.9,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex006",
+      "question": "差旅报销制度 9.1 里，总监级及以上人员在 A 类城市的每日住宿上限是多少？",
+      "rewritten_question": "",
+      "ground_truth": "800元/晚（含税）。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第9条 住宿费用限额】\n### 第9条 住宿费用限额\n**9.1** 每日住宿上限（含税）：\n| 职级 | A类城市 | B类城市 | C类城市 | D类城市 |\n|:---|:---:|:---:|:---:|:---:|\n| 总监级及以上（M4+） | 800元/晚 | 650元/晚 | 500元/晚 | 300美元/晚 |\n| 经理级（M3） | 600元/晚 | 500元/晚 | 400元/晚 | — |\n| 员工级（P1-P7/M1-M2） | 450元/晚 | 350元/晚 | 280元/晚 | — |\n**9.2** 同性别2人同行须合住一间（总监级及以上除外），按较高职级一方的标准执行。\n**9.3** 住宿发票须为增值税专用发票（可抵扣），住宿信息须完整（酒店名称、入住/退房日期、单价）。\n**9.4** 优先入住公司签约酒店（携程商旅协议价），签约酒店无法安排的方可入住非签约酒店。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 2,
+          "hit": 2,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "800元/晚",
+            "stage": "hit"
+          },
+          {
+            "snippet": "每日住宿上限（含税）",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 0.6131,
+      "ndcg_at_final_k": 0.6131,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417685869854735"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 317.4,
+      "retrieval_ms": 317.4,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex007",
+      "question": "差旅报销制度 9.2 对同性别两人同行的住宿有什么要求？",
+      "rewritten_question": "",
+      "ground_truth": "须合住一间（总监级及以上除外），按较高职级一方的标准执行。",
+      "generated_answer": "",
+      "retrieved_contexts": [],
+      "stage_attribution": {
+        "stats": {
+          "total": 2,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 2
+        },
+        "breakdown": [
+          {
+            "snippet": "同性别2人同行须合住一间",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "按较高职级一方的标准执行",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 317.1,
+      "retrieval_ms": 317.0,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex008",
+      "question": "差旅报销制度 8.1 规定的市内交通费包干标准是多少？",
+      "rewritten_question": "",
+      "ground_truth": "每人每天80元包干使用，无需发票。",
+      "generated_answer": "",
+      "retrieved_contexts": [],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 1
+        },
+        "breakdown": [
+          {
+            "snippet": "市内交通费每人每天80元包干使用",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 11.8,
+      "retrieval_ms": 11.8,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex009",
+      "question": "差旅报销制度 7.1 规定的自驾报销标准是多少？",
+      "rewritten_question": "",
+      "ground_truth": "1.2元/公里（含油费、过路费、车辆损耗）。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第7条 自驾车】\n### 第7条 自驾车\n**7.1** 自驾报销标准：1.2元/公里（含油费、过路费、车辆损耗）。\n**7.2** 单程超过200公里的须在出差申请中注明自驾方式，经直属上级审批。\n**7.3** 过路费、停车费凭票实报实销。\n**7.4** 交通事故责任由驾驶员本人承担，公司不承担自驾途中的车辆维修及事故赔偿费用。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "1.2元/公里",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 0.3333,
+      "recall_at_final_k_parent_ids": 0.3333,
+      "retrieved_chunk_ids": [
+        "2111417685869854733"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 22.9,
+      "retrieval_ms": 22.9,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex010",
+      "question": "差旅报销制度 5.1 里，经理级人员乘坐飞机的单程票价上限是多少？",
+      "rewritten_question": "",
+      "ground_truth": "经济舱，单程票价不超过2500元。",
+      "generated_answer": "",
+      "retrieved_contexts": [],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 1
+        },
+        "breakdown": [
+          {
+            "snippet": "经理级（M3）：经济舱，单程票价不超过2500元",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 14.0,
+      "retrieval_ms": 14.0,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex011",
+      "question": "差旅报销制度 6.2 里，员工级在什么情况下可以申请一等座？",
+      "rewritten_question": "",
+      "ground_truth": "行程超过4小时且无直达高铁时，须在出差申请中注明。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第6条 高铁/动车】\n### 第6条 高铁/动车\n**6.1** 乘坐标准：\n- 总监级及以上（M4+）：商务座\n- 经理级（M3）：一等座\n- 员工级（P1-P7/M1-M2）：二等座\n**6.2** 行程超过4小时且无直达高铁的，员工级可申请一等座，须在出差申请中注明。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "行程超过4小时且无直达高铁",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417685869854732"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 15.3,
+      "retrieval_ms": 15.2,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex012",
+      "question": "商务招待制度 4.1 里，一线城市普通商务招待的人均餐饮标准上限是多少？",
+      "rewritten_question": "",
+      "ground_truth": "人均不超过300元（不含酒水）。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第4条 人均餐饮标准（不含酒水）】\n### 第4条 人均餐饮标准（不含酒水）\n**4.1 普通商务招待**（日常拜访、一般客户来访）：\n- 一线城市：人均不超过300元\n- 二线城市：人均不超过200元\n- 三线及以下：人均不超过150元\n**4.2 重要商务招待**（高管来访、签约仪式、战略客户）：\n- 一线城市：人均不超过600元\n- 二线城市：人均不超过400元\n- 三线及以下：人均不超过300元\n**4.3 集团内部接待**（兄弟公司来访、总部检查）：\n- 工作餐：人均不超过80元\n- 不适用酒水"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "一线城市：人均不超过300元",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417690164822019"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 6.9,
+      "retrieval_ms": 6.9,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex013",
+      "question": "商务招待制度 4.2 里，二线城市重要商务招待的人均餐饮标准上限是多少？",
+      "rewritten_question": "",
+      "ground_truth": "人均不超过400元（不含酒水）。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第4条 人均餐饮标准（不含酒水）】\n### 第4条 人均餐饮标准（不含酒水）\n**4.1 普通商务招待**（日常拜访、一般客户来访）：\n- 一线城市：人均不超过300元\n- 二线城市：人均不超过200元\n- 三线及以下：人均不超过150元\n**4.2 重要商务招待**（高管来访、签约仪式、战略客户）：\n- 一线城市：人均不超过600元\n- 二线城市：人均不超过400元\n- 三线及以下：人均不超过300元\n**4.3 集团内部接待**（兄弟公司来访、总部检查）：\n- 工作餐：人均不超过80元\n- 不适用酒水"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "二线城市：人均不超过400元",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417690164822019"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 5.8,
+      "retrieval_ms": 5.8,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex014",
+      "question": "商务招待与礼品管理制度 7.1 规定的常规礼品单价上限是多少？",
+      "rewritten_question": "",
+      "ground_truth": "单价不超过200元。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：华远科技集团商务招待与礼品管理制度】\n# 华远科技集团商务招待与礼品管理制度\n**编号**：HY-CW-2026-004\n**版本**：V1.2\n**生效日期**：2026年3月1日\n**责任部门**：财务部\n---"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 2,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 2
+        },
+        "breakdown": [
+          {
+            "snippet": "常规礼品",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "单价不超过200元",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [
+        "2111417690160627712"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 14.4,
+      "retrieval_ms": 14.3,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex015",
+      "question": "员工手册 5.2 规定的试用期薪酬比例是多少？",
+      "rewritten_question": "",
+      "ground_truth": "为转正薪酬的80%，且不低于当地最低工资标准。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第5条 试用期规定】\n### 第5条 试用期规定\n**5.1** 试用期按劳动合同期限确定：\n- 合同期限3个月以上不满1年：试用期1个月\n- 合同期限1年以上不满3年：试用期2个月\n- 合同期限3年以上或无固定期限：试用期6个月\n**5.2** 试用期薪酬为转正薪酬的80%，不低于当地最低工资标准。\n**5.3** 试用期考核：第2个月末进行中期回顾，结束前15天进行终期评估。考核维度包括：任务完成度、团队协作、文化契合度。\n**5.4** 转正条件：考核评分≥70分，无重大违规违纪记录。未达标者延长试用期1个月（仅一次机会）或协商解除劳动关系。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "试用期薪酬为转正薪酬的80%",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417690865270789"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 10.9,
+      "retrieval_ms": 10.9,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex016",
+      "question": "差旅报销制度第9条里，总监级及以上（M4+）在 A 类城市的住宿上限是多少？",
+      "rewritten_question": "",
+      "ground_truth": "800元/晚。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第9条 住宿费用限额】\n### 第9条 住宿费用限额\n**9.1** 每日住宿上限（含税）：\n| 职级 | A类城市 | B类城市 | C类城市 | D类城市 |\n|:---|:---:|:---:|:---:|:---:|\n| 总监级及以上（M4+） | 800元/晚 | 650元/晚 | 500元/晚 | 300美元/晚 |\n| 经理级（M3） | 600元/晚 | 500元/晚 | 400元/晚 | — |\n| 员工级（P1-P7/M1-M2） | 450元/晚 | 350元/晚 | 280元/晚 | — |\n**9.2** 同性别2人同行须合住一间（总监级及以上除外），按较高职级一方的标准执行。\n**9.3** 住宿发票须为增值税专用发票（可抵扣），住宿信息须完整（酒店名称、入住/退房日期、单价）。\n**9.4** 优先入住公司签约酒店（携程商旅协议价），签约酒店无法安排的方可入住非签约酒店。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "总监级及以上（M4+） | 800元/晚",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417685869854735"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 6.0,
+      "retrieval_ms": 6.0,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex017",
+      "question": "差旅报销制度第9条里，经理级（M3）在 C 类城市的住宿上限是多少？",
+      "rewritten_question": "",
+      "ground_truth": "400元/晚。",
+      "generated_answer": "",
+      "retrieved_contexts": [],
+      "stage_attribution": {
+        "stats": {
+          "total": 2,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 2
+        },
+        "breakdown": [
+          {
+            "snippet": "经理级（M3）",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "400元/晚",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 9.7,
+      "retrieval_ms": 9.7,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex018",
+      "question": "差旅报销制度第9条里，员工级（P1-P7/M1-M2）在 B 类城市的住宿上限是多少？",
+      "rewritten_question": "",
+      "ground_truth": "350元/晚。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第9条 住宿费用限额】\n### 第9条 住宿费用限额\n**9.1** 每日住宿上限（含税）：\n| 职级 | A类城市 | B类城市 | C类城市 | D类城市 |\n|:---|:---:|:---:|:---:|:---:|\n| 总监级及以上（M4+） | 800元/晚 | 650元/晚 | 500元/晚 | 300美元/晚 |\n| 经理级（M3） | 600元/晚 | 500元/晚 | 400元/晚 | — |\n| 员工级（P1-P7/M1-M2） | 450元/晚 | 350元/晚 | 280元/晚 | — |\n**9.2** 同性别2人同行须合住一间（总监级及以上除外），按较高职级一方的标准执行。\n**9.3** 住宿发票须为增值税专用发票（可抵扣），住宿信息须完整（酒店名称、入住/退房日期、单价）。\n**9.4** 优先入住公司签约酒店（携程商旅协议价），签约酒店无法安排的方可入住非签约酒店。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 2,
+          "hit": 2,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "员工级（P1-P7/M1-M2）",
+            "stage": "hit"
+          },
+          {
+            "snippet": "350元/晚",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 0.6131,
+      "ndcg_at_final_k": 0.6131,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 0.3333,
+      "recall_at_final_k_parent_ids": 0.3333,
+      "retrieved_chunk_ids": [
+        "2111417685869854735"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 10.2,
+      "retrieval_ms": 10.2,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex019",
+      "question": "差旅报销制度第9条里，总监级及以上（M4+）在 D 类城市的住宿上限是多少？",
+      "rewritten_question": "",
+      "ground_truth": "300美元/晚。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第9条 住宿费用限额】\n### 第9条 住宿费用限额\n**9.1** 每日住宿上限（含税）：\n| 职级 | A类城市 | B类城市 | C类城市 | D类城市 |\n|:---|:---:|:---:|:---:|:---:|\n| 总监级及以上（M4+） | 800元/晚 | 650元/晚 | 500元/晚 | 300美元/晚 |\n| 经理级（M3） | 600元/晚 | 500元/晚 | 400元/晚 | — |\n| 员工级（P1-P7/M1-M2） | 450元/晚 | 350元/晚 | 280元/晚 | — |\n**9.2** 同性别2人同行须合住一间（总监级及以上除外），按较高职级一方的标准执行。\n**9.3** 住宿发票须为增值税专用发票（可抵扣），住宿信息须完整（酒店名称、入住/退房日期、单价）。\n**9.4** 优先入住公司签约酒店（携程商旅协议价），签约酒店无法安排的方可入住非签约酒店。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "300美元/晚",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417685869854735"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 3.9,
+      "retrieval_ms": 3.9,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex020",
+      "question": "差旅报销制度第5条里，总监级及以上（M4+）乘坐飞机的单程票价上限是多少？",
+      "rewritten_question": "",
+      "ground_truth": "可乘坐商务舱/头等舱，单程票价不超过3000元。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第5条 飞机】\n### 第5条 飞机\n**5.1** 乘坐标准：\n- 总监级及以上（M4+）：可乘坐商务舱/头等舱，单程票价不超过3000元\n- 经理级（M3）：经济舱，单程票价不超过2500元\n- 员工级（P1-P7/M1-M2）：经济舱，单程票价不超过1500元\n**5.2** 优先选择经济舱，以下情形可申请商务舱：出差途中突发疾病、陪同重要客户、紧急任务且经济舱无票。须经部门权签人审批同意。\n**5.3** 因公改签或退票产生的费用可报销，须附说明并签字确认。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "总监级及以上（M4+）：可乘坐商务舱/头等舱，单程票价不超过3000元",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417685869854731"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 9.2,
+      "retrieval_ms": 9.1,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex021",
+      "question": "差旅报销制度第5条里，员工级（P1-P7/M1-M2）乘坐飞机的单程票价上限是多少？",
+      "rewritten_question": "",
+      "ground_truth": "经济舱，单程票价不超过1500元。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第5条 飞机】\n### 第5条 飞机\n**5.1** 乘坐标准：\n- 总监级及以上（M4+）：可乘坐商务舱/头等舱，单程票价不超过3000元\n- 经理级（M3）：经济舱，单程票价不超过2500元\n- 员工级（P1-P7/M1-M2）：经济舱，单程票价不超过1500元\n**5.2** 优先选择经济舱，以下情形可申请商务舱：出差途中突发疾病、陪同重要客户、紧急任务且经济舱无票。须经部门权签人审批同意。\n**5.3** 因公改签或退票产生的费用可报销，须附说明并签字确认。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "员工级（P1-P7/M1-M2）：经济舱，单程票价不超过1500元",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417685869854731"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 12.0,
+      "retrieval_ms": 11.9,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex022",
+      "question": "差旅报销制度第6条里，经理级（M3）乘坐高铁的座席标准是什么？",
+      "rewritten_question": "",
+      "ground_truth": "一等座。",
+      "generated_answer": "",
+      "retrieved_contexts": [],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 1
+        },
+        "breakdown": [
+          {
+            "snippet": "经理级（M3）：一等座",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 12.0,
+      "retrieval_ms": 12.0,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex023",
+      "question": "差旅报销制度第6条里，员工级（P1-P7/M1-M2）乘坐高铁的座席标准是什么？",
+      "rewritten_question": "",
+      "ground_truth": "二等座。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第6条 高铁/动车】\n### 第6条 高铁/动车\n**6.1** 乘坐标准：\n- 总监级及以上（M4+）：商务座\n- 经理级（M3）：一等座\n- 员工级（P1-P7/M1-M2）：二等座\n**6.2** 行程超过4小时且无直达高铁的，员工级可申请一等座，须在出差申请中注明。",
+        "[2] 【章节路径：第5条 飞机】\n### 第5条 飞机\n**5.1** 乘坐标准：\n- 总监级及以上（M4+）：可乘坐商务舱/头等舱，单程票价不超过3000元\n- 经理级（M3）：经济舱，单程票价不超过2500元\n- 员工级（P1-P7/M1-M2）：经济舱，单程票价不超过1500元\n**5.2** 优先选择经济舱，以下情形可申请商务舱：出差途中突发疾病、陪同重要客户、紧急任务且经济舱无票。须经部门权签人审批同意。\n**5.3** 因公改签或退票产生的费用可报销，须附说明并签字确认。",
+        "[3] 【章节路径：第9条 住宿费用限额】\n### 第9条 住宿费用限额\n**9.1** 每日住宿上限（含税）：\n| 职级 | A类城市 | B类城市 | C类城市 | D类城市 |\n|:---|:---:|:---:|:---:|:---:|\n| 总监级及以上（M4+） | 800元/晚 | 650元/晚 | 500元/晚 | 300美元/晚 |\n| 经理级（M3） | 600元/晚 | 500元/晚 | 400元/晚 | — |\n| 员工级（P1-P7/M1-M2） | 450元/晚 | 350元/晚 | 280元/晚 | — |\n**9.2** 同性别2人同行须合住一间（总监级及以上除外），按较高职级一方的标准执行。\n**9.3** 住宿发票须为增值税专用发票（可抵扣），住宿信息须完整（酒店名称、入住/退房日期、单价）。\n**9.4** 优先入住公司签约酒店（携程商旅协议价），签约酒店无法安排的方可入住非签约酒店。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "员工级（P1-P7/M1-M2）：二等座",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417685869854732",
+        "2111417685869854731",
+        "2111417685869854735"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 114.7,
+      "retrieval_ms": 114.7,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex024",
+      "question": "员工手册第7条里，弹性工时制适用于哪个序列和职级？",
+      "rewritten_question": "",
+      "ground_truth": "仅限研发序列 P6 及以上员工，核心工作时间 10:00-16:00。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第7条 工作时间】\n### 第7条 工作时间\n**7.1 标准工时制**：周一至周五，9:00-12:00，13:30-18:30（午休1.5小时），每日标准工时8小时。\n**7.2 弹性工时制**：仅限研发序列P6及以上员工，核心工作时间为10:00-16:00，须保证每日在岗满8小时。\n**7.3** 每日须在考勤系统打卡2次（上班+下班），缺卡可在当月内补卡3次，超过部分每次扣50元。\n**7.4 迟到与早退**：\n- ≤15分钟：月度前3次免责，第4次起每次扣50元\n- 15-60分钟：每次扣半天薪酬\n- >60分钟：按旷工处理\n**7.5 旷工**：连续旷工3天或年度累计旷工7天，公司可依法解除劳动合同，不支付经济补偿。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 2,
+          "hit": 2,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "仅限研发序列P6及以上员工",
+            "stage": "hit"
+          },
+          {
+            "snippet": "核心工作时间为10:00-16:00",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 0.6131,
+      "ndcg_at_final_k": 0.6131,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417690865270791"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 6.6,
+      "retrieval_ms": 6.6,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex025",
+      "question": "员工手册第4条里，竞业限制协议适用于哪些岗位？",
+      "rewritten_question": "",
+      "ground_truth": "仅限 P6+/M3+ 岗位。",
+      "generated_answer": "",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第4条 录用流程】\n### 第4条 录用流程\n**4.1** 录用通知（Offer Letter）以电子邮件形式发出，候选人在收到后3个工作日内确认是否接受。\n**4.2** 入职当日须提交以下材料：\n- 身份证原件及复印件2份\n- 学历学位证书原件及复印件\n- 前单位离职证明（办理日期距入职日不超过3个月）\n- 近6个月内三甲医院体检报告\n- 工资卡信息（仅限招商银行或中国银行Ⅰ类卡）\n- 一寸白底免冠证件照电子版\n**4.3** 入职当日签订劳动合同（一式三份）、保密协议、知识产权归属协议、竞业限制协议（仅限P6+/M3+岗位）。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 1,
+          "hit": 1,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "竞业限制协议（仅限P6+/M3+岗位）",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 1.0,
+      "recall_at_final_k": 1.0,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "ndcg_at_final_k": 1.0,
+      "recall_at_5_ids": 1.0,
+      "recall_at_final_k_ids": 1.0,
+      "mrr_ids": 1.0,
+      "ndcg_at_5_ids": 1.0,
+      "recall_at_5_parent_ids": 1.0,
+      "recall_at_final_k_parent_ids": 1.0,
+      "retrieved_chunk_ids": [
+        "2111417690865270788"
+      ],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 7.5,
+      "retrieval_ms": 7.5,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex026",
+      "question": "“第3条”在员工手册、差旅制度、商务招待制度里分别规定什么？",
+      "rewritten_question": "",
+      "ground_truth": "员工手册=名词定义；差旅制度=城市分类标准；商务招待制度=基本原则。",
+      "generated_answer": "",
+      "retrieved_contexts": [],
+      "stage_attribution": {
+        "stats": {
+          "total": 3,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 3
+        },
+        "breakdown": [
+          {
+            "snippet": "第3条 名词定义",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "第3条 城市分类标准",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "第3条 基本原则",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 9.7,
+      "retrieval_ms": 9.6,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex027",
+      "question": "“第6条”在员工手册、差旅制度、商务招待制度里分别规定什么？",
+      "rewritten_question": "",
+      "ground_truth": "员工手册=劳动合同管理；差旅制度=高铁/动车；商务招待制度=餐饮招待审批权限。",
+      "generated_answer": "",
+      "retrieved_contexts": [],
+      "stage_attribution": {
+        "stats": {
+          "total": 3,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 3
+        },
+        "breakdown": [
+          {
+            "snippet": "第6条 劳动合同管理",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "第6条 高铁/动车",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "第6条 餐饮招待审批权限",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 9.5,
+      "retrieval_ms": 9.5,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex028",
+      "question": "“第7条”在员工手册、差旅制度、商务招待制度里分别规定什么？",
+      "rewritten_question": "",
+      "ground_truth": "员工手册=工作时间；差旅制度=自驾车；商务招待制度=礼品标准。",
+      "generated_answer": "",
+      "retrieved_contexts": [],
+      "stage_attribution": {
+        "stats": {
+          "total": 3,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 3
+        },
+        "breakdown": [
+          {
+            "snippet": "第7条 工作时间",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "第7条 自驾车",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "第7条 礼品标准",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 6.3,
+      "retrieval_ms": 6.3,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex029",
+      "question": "“第9条”在员工手册、差旅制度、商务招待制度里分别规定什么？",
+      "rewritten_question": "",
+      "ground_truth": "员工手册=加班管理；差旅制度=住宿费用限额；商务招待制度=会议接待标准。",
+      "generated_answer": "",
+      "retrieved_contexts": [],
+      "stage_attribution": {
+        "stats": {
+          "total": 3,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 3
+        },
+        "breakdown": [
+          {
+            "snippet": "第9条 加班管理",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "第9条 住宿费用限额",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "第9条 会议接待标准",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 6.8,
+      "retrieval_ms": 6.8,
+      "generation_ms": null
+    },
+    {
+      "question_id": "lex030",
+      "question": "“第12条”在员工手册、差旅制度、商务招待制度里分别规定什么？",
+      "rewritten_question": "",
+      "ground_truth": "员工手册=办公行为规范；差旅制度=报销基本原则；商务招待制度=违规行为。",
+      "generated_answer": "",
+      "retrieved_contexts": [],
+      "stage_attribution": {
+        "stats": {
+          "total": 3,
+          "hit": 0,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 3
+        },
+        "breakdown": [
+          {
+            "snippet": "第12条 办公行为规范",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "第12条 报销基本原则",
+            "stage": "unrecalled"
+          },
+          {
+            "snippet": "第12条 违规行为",
+            "stage": "unrecalled"
+          }
+        ]
+      },
+      "faithfulness_score": null,
+      "answer_relevancy_score": null,
+      "context_precision_score": null,
+      "answer_correctness_score": null,
+      "context_recall_score": null,
+      "recall_at_5": 0.0,
+      "recall_at_final_k": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
+      "ndcg_at_final_k": 0.0,
+      "recall_at_5_ids": 0.0,
+      "recall_at_final_k_ids": 0.0,
+      "mrr_ids": 0.0,
+      "ndcg_at_5_ids": 0.0,
+      "recall_at_5_parent_ids": 0.0,
+      "recall_at_final_k_parent_ids": 0.0,
+      "retrieved_chunk_ids": [],
+      "expected_refusal": false,
+      "refused": null,
+      "total_ms": 6.1,
+      "retrieval_ms": 6.1,
+      "generation_ms": null
+    }
+  ]
+}

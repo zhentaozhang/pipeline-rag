@@ -1126,7 +1126,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--rrf-keyword-weight", type=float, default=-1.0, help="覆盖 RRF 关键词权重"
     )
-    parser.add_argument("--rerank-top-n", type=int, default=0, help="覆盖 Reranker top_n")
+    parser.add_argument(
+        "--rerank-top-n",
+        type=int,
+        default=0,
+        help="覆盖 Reranker score_cap（送打分条数上限，0=全部候选）",
+    )
     parser.add_argument(
         "--rerank-relative-ratio", type=float, default=-1.0, help="覆盖重排相对阈值 ratio"
     )
@@ -1264,7 +1269,7 @@ if __name__ == "__main__":
     if args.rrf_keyword_weight >= 0:
         _settings.rag.rrf_keyword_weight = args.rrf_keyword_weight
     if args.rerank_top_n > 0:
-        _settings.rerank.top_n = args.rerank_top_n
+        _settings.rerank.score_cap = args.rerank_top_n
     if args.rerank_relative_ratio >= 0:
         _settings.rag.rerank_relative_ratio = args.rerank_relative_ratio
     if args.multi_hop_split:
@@ -1326,7 +1331,7 @@ if __name__ == "__main__":
                         "rrf_k": _settings.rag.rrf_k,
                         "rrf_vector_weight": _settings.rag.rrf_vector_weight,
                         "rrf_keyword_weight": _settings.rag.rrf_keyword_weight,
-                        "rerank_top_n": _settings.rerank.top_n,
+                        "rerank_top_n": _settings.rerank.score_cap,
                         "rerank_min_score": _settings.rag.rerank_min_score,
                         "rerank_relative_ratio": _settings.rag.rerank_relative_ratio,
                         "rerank_skip_min_similarity": _settings.rag.rerank_skip_min_similarity,
