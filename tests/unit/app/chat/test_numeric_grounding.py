@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from app.chat.numeric_grounding import (
+    caution_note,
     extract_quantities,
     numeric_issues,
     polarity_issues,
@@ -127,3 +128,36 @@ class TestPolarityIssues:
             [{"reference_id": 1, "content": "员工禁止将客户数据带离办公场所。"}],
         )
         assert issues == []
+
+
+class TestCautionNote:
+    """确定性判负要能变成用户看得见的一句话，而不是只写进 meta。"""
+
+    def test_note_mentions_the_value_and_the_evidence(self):
+        issues = numeric_issues(
+            "总监级每日住宿上限 807 元[1]。",
+            [_ref(1, "每日住宿上限为 800 元/晚。")],
+        )
+        note = caution_note(issues, [])
+        assert "807" in note and "证据 1" in note
+        assert "[1]" not in note, "尾注里不能再写引用编号，否则会被当成新引用"
+
+    def test_no_issue_means_no_note(self):
+        assert caution_note([], []) == ""
+
+    def test_polarity_note_is_wording_free_of_accusation(self):
+        issues = polarity_issues(
+            "员工可以带离办公场所[1]。",
+            [_ref(1, "员工禁止将数据带离办公场所。")],
+        )
+        note = caution_note([], issues)
+        assert "禁止" in note and "请核对原文" in note
+
+    def test_note_is_capped(self):
+        many = [
+            numeric_issues(f"上限 90{i} 元[1]。", [_ref(1, "上限 800 元。")])
+            for i in range(4)
+        ]
+        flat = [i for group in many for i in group]
+        note = caution_note(flat, [], limit=2)
+        assert note.count("·") <= 2

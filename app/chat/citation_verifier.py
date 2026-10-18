@@ -17,6 +17,7 @@ from typing import Any
 import structlog
 
 from app.chat.answer_grounding import audit_grounding, grounding_note
+from app.chat.numeric_grounding import caution_note
 from app.config import get_settings
 
 logger = structlog.get_logger(__name__)
@@ -145,6 +146,23 @@ async def verify_citations(
         return answer + grounding_note(grounding), list(grounding.unsupported_citations), meta
 
     extra = _grounding_extra(grounding)
+
+    # 数字/极性与所引证据对不上时，把结论写进用户可见的尾注：判分模型看不见这类错误
+    # （标定：改数字漏 27.5%、翻极性漏 52.5%），而且 LLM 复核可能因为余额/超时而根本跑不起来。
+    caution = caution_note(grounding.numeric_mismatches, grounding.polarity_mismatches)
+    if caution:
+        logger.warning(
+            "answer numeric/polarity mismatch",
+            numeric=len(grounding.numeric_mismatches),
+            polarity=len(grounding.polarity_mismatches),
+        )
+        answer = answer + caution
+        extra = {
+            **extra,
+            "caution": True,
+            "numeric_mismatches": len(grounding.numeric_mismatches),
+            "polarity_mismatches": len(grounding.polarity_mismatches),
+        }
 
     refs = extract_citations(answer)
     if not refs:

@@ -312,3 +312,42 @@ async def test_polarity_flip_forces_llm_even_when_jev_is_confident(monkeypatch):
     )
     assert fallback.calls == 1, "极性翻转时 JEV 的高置信度不能免掉 LLM 复核"
     assert meta["status"] == "judged"
+
+
+@pytest.mark.asyncio
+async def test_numeric_mismatch_is_visible_in_the_answer(monkeypatch):
+    """没有余额、语料不全的时候，确定性判负必须变成用户看得见的一句话，
+    而不是只写进 meta（否则这条检查在线上等于不存在）。"""
+    monkeypatch.setattr(cv_module, "get_settings", lambda: _settings(verify_enabled=False))
+    fallback = _Fallback()
+
+    answer = "总监级每日住宿上限 807 元[1]。"
+    verified, _bad, meta = await verify_citations(
+        fallback, answer, [{"reference_id": 1, "content": "每日住宿上限为 800 元/晚。"}], "住宿上限"
+    )
+    assert "请核对原文" in verified and "807" in verified
+    assert meta["caution"] is True and meta["numeric_mismatches"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_note_survives_a_failing_llm(monkeypatch):
+    """LLM 审计挂掉（如余额不足）时，确定性尾注不能让回答整个丢掉。"""
+    monkeypatch.setattr(cv_module, "get_settings", lambda: _settings(verify_enabled=False))
+    fallback = _Fallback(error=RuntimeError("402 Insufficient Balance"))
+
+    answer = "总监级每日住宿上限 807 元[1]。"
+    verified, _bad, meta = await verify_citations(
+        fallback, answer, [{"reference_id": 1, "content": "每日住宿上限为 800 元/晚。"}], "住宿上限"
+    )
+    assert "请核对原文" in verified
+    assert fallback.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_correct_number_gets_no_note(monkeypatch):
+    monkeypatch.setattr(cv_module, "get_settings", lambda: _settings(verify_enabled=False))
+    answer = "总监级每日住宿上限 800 元[1]。"
+    verified, _bad, _meta = await verify_citations(
+        _Fallback(), answer, [{"reference_id": 1, "content": "每日住宿上限为 800 元/晚。"}], "住宿上限"
+    )
+    assert verified == answer

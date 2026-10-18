@@ -274,3 +274,28 @@ def polarity_issues(
         if len(issues) >= max_issues:
             return issues
     return issues
+
+
+def caution_note(
+    issues: list[NumericIssue],
+    polarity: list[PolarityIssue],
+    *,
+    limit: int = 2,
+) -> str:
+    """把确定性判负写成一句用户可见的尾注（只提示，不改写正文、不阻断）。
+
+    尾注里刻意不写 ``[n]`` 形式，改用"证据 n"——否则尾注自己的方括号会被下游
+    当成新的引用编号，凭空造出一条引用。
+    """
+    parts: list[str] = []
+    for issue in list(issues)[:limit]:
+        refs = "、".join(f"证据 {r}" for r in issue.ref_ids) or "所引证据"
+        parts.append(f"数值 {issue.raw} 未出现在 {refs} 中")
+    remaining = max(0, limit - len(parts))
+    for issue in list(polarity)[:remaining]:
+        refs = "、".join(f"证据 {r}" for r in issue.ref_ids) or "所引证据"
+        parts.append(f"{refs} 为禁止性规定而回答表述为允许")
+    if not parts:
+        return ""
+    body = "；".join(f"· {p}" for p in parts)
+    return f"\n\n（注：以下内容未能在所引证据中核实，请核对原文：{body}。）"
