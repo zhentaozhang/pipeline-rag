@@ -38,7 +38,8 @@ class FakeInputFilter:
         self.sanitized_text = sanitized_text
         self.reason = reason
 
-    async def filter(self, question):
+    async def filter(self, question, **kwargs):
+        # 生产签名支持 defer_semantic；fake 必须镜像接口，否则真实调用会 TypeError
         return self
 
 

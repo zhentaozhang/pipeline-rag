@@ -262,8 +262,19 @@ class InjectionDetector:
             for category, pattern, score, desc in _INJECTION_PATTERNS
         ]
 
-    async def detect(self, text: str) -> InjectionResult:
-        """检测文本中的注入模式，返回所有匹配"""
+    async def detect(
+        self,
+        text: str,
+        *,
+        semantic_prob: float | None = None,
+        defer_semantic: bool = False,
+    ) -> InjectionResult:
+        """检测文本中的注入模式，返回所有匹配。
+
+        - ``defer_semantic=True``：只跑规则层，语义注入判定交给调用方合并到单次 JEV
+          请求里（输入阶段 2 次调用合并为 1 次的 T1 优化）。
+        - ``semantic_prob``：调用方已经算好的语义注入概率，避免重复推理。
+        """
         if not text or not text.strip():
             return InjectionResult()
 
@@ -284,8 +295,11 @@ class InjectionDetector:
         is_injection = max_score >= self._threshold
 
         # JEV 语义补充：规则未命中时兜底识别改写/隐喻/角色扮演式注入（只增不减）
-        if not is_injection:
-            semantic_score = await self._semantic_injection_score(text)
+        if not is_injection and not defer_semantic:
+            if semantic_prob is not None:
+                semantic_score = 9.0 if semantic_prob >= 0.5 else None
+            else:
+                semantic_score = await self._semantic_injection_score(text)
             if semantic_score is not None:
                 matches.append(
                     InjectionMatch(
@@ -387,11 +401,11 @@ class SafetyInputFilter:
         )
         self._settings = settings
 
-    async def filter(self, question: str) -> InputFilterResult:
-        """
-        执行输入安全检测。
+    async def filter(self, question: str, *, defer_semantic: bool = False) -> InputFilterResult:
+        """执行输入安全检测。
 
-        返回 (is_safe, sanitized_text, reason)
+        返回 (is_safe, sanitized_text, reason)。``defer_semantic=True`` 时只跑规则层，
+        语义注入由调用方在同一次 JEV 请求里判定（见 ``app.orchestrator.guardrails``）。
         """
         if not question or not question.strip():
             return InputFilterResult(is_safe=True, sanitized_text=question)
@@ -417,7 +431,9 @@ class SafetyInputFilter:
         # 2. 注入检测
         try:
             if not self._settings or self._settings.input_injection_enabled:
-                injection_result = await self._injection.detect(sanitized)
+                injection_result = await self._injection.detect(
+                    sanitized, defer_semantic=defer_semantic
+                )
                 if injection_result.is_injection:
                     logger.warning(
                         "injection_detected",
