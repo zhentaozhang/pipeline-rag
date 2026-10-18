@@ -124,7 +124,7 @@ class TestCitationVerifyBand:
         assert bad == []
 
     @pytest.mark.asyncio
-    async def test_confident_unsupported_stays_jev(self, monkeypatch):
+    async def test_low_score_escalates_and_lets_llm_accuse(self, monkeypatch):
         from app.chat.citation_verifier import verify_citations
 
         _enable(monkeypatch, "citation_verify_enabled")
@@ -137,8 +137,10 @@ class TestCitationVerifyBand:
                 references=[{"content": "证据一"}, {"content": "证据二"}],
                 question="问题",
             )
-        assert fallback.called is False
-        assert meta["status"] == "jev_judged"
+        # 标定实测：grounded 最低可到 0.01、fabricated 最高 0.52，阈值分不开两类，
+        # 因此 JEV 只做筛子；"哪条不支持"的结论必须由 LLM 给出。
+        assert fallback.called is True
+        assert meta["status"] == "judged"
         assert bad == [1]
         assert "[1]" in answer
 

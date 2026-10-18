@@ -33,7 +33,10 @@ class JEVSettings(BaseSettings):
     guardrail_enabled: bool = True  # M2: 安全护栏深度检测
     intent_detection_enabled: bool = True  # M3/M4: 意图分类与分流
     navigation_intent_enabled: bool = True  # M5: 文档导航意图识别
-    citation_verify_enabled: bool = True  # M6: 引用真实性审计
+    # 引用真实性审计：默认关。实测（24 题 + 48 例标定）JEV 路径 p50 3.73s / 准确率 0.840，
+    # LLM 审计 p50 0.78s / 准确率 1.000；且真实多条款回答的分数集中在 0.4 附近，
+    # 只能升级给 LLM，等于白花 2~4s。保留该开关以便在"高置信引用"场景做加速档。
+    citation_verify_enabled: bool = False  # M6: 引用真实性审计（JEV 加速档，默认关）
     faithfulness_eval_enabled: bool = False  # M7: 忠实度评测（禁止 JEV 接管，见 _EVALUATION_FLAGS）
     answer_relevancy_enabled: bool = False  # M8: 答案相关性评测（禁止 JEV 接管）
     answer_correctness_enabled: bool = False  # M8b: 答案正确性评测（禁止 JEV 接管）
@@ -68,9 +71,12 @@ class JEVSettings(BaseSettings):
     #                    其余（灰区 / 低置信 yes / 分布分裂）视为不确定 -> 升级，安全侧永不静默降级。
     guardrail_review_low: float = 0.35
     guardrail_review_high: float = 0.65
-    # 引用核验（noul 为"证据支持"概率）：< low 明确不支持；>= citation_confidence_threshold
-    #                                    明确支持；[low, threshold) 为灰区 -> 整轮升级到既有 LLM 审计。
-    citation_review_low: float = 0.45
+    # 引用核验（noul 为"证据支持"概率）：>= citation_confidence_threshold 视为高置信支持、
+    # 跳过 LLM 审计；低于阈值的**一律**升级给 LLM 判定，绝不由 1.5B 模型直接给用户扣
+    # "引用不支持"的帽子。理由（2026-10-18 标定，48 例确定性样本）：grounded 最低 0.01、
+    # fabricated 最高 0.52，AUC 0.974 但没有阈值能把两类分开 —— JEV 能筛、不能判。
+    # citation_review_low 仅为历史字段保留，不再参与判定。
+    citation_review_low: float = 0.45  # deprecated: 见上，判定已统一由 LLM 给出
 
     # 超时时间 (秒)
     timeout_seconds: float = 30.0

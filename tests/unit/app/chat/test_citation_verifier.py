@@ -209,3 +209,41 @@ async def test_failed_shard_escalates_instead_of_silently_passing(monkeypatch):
 
     assert fallback.calls == 1, "分片失败必须走 LLM 审计"
     assert meta["status"] == "judged"
+
+
+class TestJevScreensButDoesNotAccuse:
+    """标定实测（48 例确定性样本，AUC 0.974）：grounded 最低 0.01、fabricated 最高 0.52 ——
+    没有阈值能把两者完全分开，所以 JEV 只能当"筛子"，判定必须交给 LLM，
+    否则会把正确引用标成"未找到支持"（实测发生过）。"""
+
+    @pytest.mark.asyncio
+    async def test_low_score_escalates_instead_of_accusing(self, monkeypatch):
+        monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
+        monkeypatch.setattr(
+            "app.infra.jev_client.get_jev_client",
+            lambda: _FakeJev({"cite_1": {"noul": 0.01}, "cite_2": {"noul": 0.02}}),
+        )
+        fallback = _Fallback(payload='{"unsupported": [2]}')
+
+        answer, bad, meta = await verify_citations(
+            fallback, "答案[1][2]", [{"content": "证据一"}, {"content": "证据二"}], "问题"
+        )
+        assert fallback.calls == 1, "低分必须升级 LLM，而不是直接下结论"
+        assert meta["status"] == "judged"
+        assert bad == [2], "结论只能来自 LLM 审计"
+        assert "未能在当前知识库证据中找到支持" in answer
+
+    @pytest.mark.asyncio
+    async def test_high_scores_skip_the_llm_entirely(self, monkeypatch):
+        monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
+        monkeypatch.setattr(
+            "app.infra.jev_client.get_jev_client",
+            lambda: _FakeJev({"cite_1": {"noul": 0.99}, "cite_2": {"noul": 0.97}}),
+        )
+        fallback = _Fallback()
+
+        answer, bad, meta = await verify_citations(
+            fallback, "答案[1][2]", [{"content": "证据一"}, {"content": "证据二"}], "问题"
+        )
+        assert fallback.calls == 0, "高置信支持时不应再花钱调 LLM"
+        assert meta["status"] == "jev_judged" and bad == [] and answer == "答案[1][2]"

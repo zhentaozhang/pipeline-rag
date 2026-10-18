@@ -248,3 +248,12 @@ class TestParentRerankDefaults:
         assert s.parent_rerank_top_n == 8
         assert s.parent_rerank_max_chars == 2000
         assert s.parent_rerank_blend == 1.0
+
+
+class TestJevCitationVerifyDefault:
+    """JEV 引用核验默认关闭：实测它既不更快也不更准，只应作为可选加速档。"""
+
+    def test_default_is_off(self):
+        from app.config.jev import JEVSettings
+
+        assert JEVSettings(_env_file=None).citation_verify_enabled is False

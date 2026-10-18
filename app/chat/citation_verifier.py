@@ -179,9 +179,10 @@ async def verify_citations(
                 answers.update(result or {})
 
             threshold = getattr(jev_cfg, "citation_confidence_threshold", 0.60)
-            review_low = getattr(jev_cfg, "citation_review_low", 0.45)
-            unsupported = []
-            ambiguous = []
+            # 实测（48 例确定性样本，AUC 0.974）：grounded 最低 0.01、fabricated 最高 0.52，
+            # 没有阈值能把两类完全分开。因此 JEV 只做"高置信放行"的筛子：达到阈值就跳过 LLM，
+            # 否则一律升级给 LLM 判定 —— 绝不由 1.5B 模型直接给用户扣"引用不支持"的帽子。
+            suspicious: list[int] = []
             missing: list[int] = []
             scores = {}
             for ref_n in refs:
@@ -194,38 +195,26 @@ async def verify_citations(
                     continue
                 prob = float(prob)
                 scores[str(ref_n)] = prob
-                if prob < review_low:
-                    unsupported.append(ref_n)
-                elif prob < threshold:
-                    # 灰区：既非明确不支持，也未达高置信支持 -> 整轮升级到既有 LLM 审计
-                    ambiguous.append(ref_n)
+                if prob < threshold:
+                    suspicious.append(ref_n)
 
-            if ambiguous or missing:
+            if suspicious or missing:
                 logger.warning(
-                    "citation verify JEV uncertain -> escalate to LLM",
-                    ambiguous=ambiguous,
+                    "citation verify JEV not confident -> escalate to LLM",
+                    suspicious=suspicious,
                     missing=missing,
                     scores=scores,
                 )
             else:
                 _meta = {
                     "status": "jev_judged",
-                    "unsupported": unsupported,
+                    "unsupported": [],
                     "scores": scores,
                     "missing_scores": missing,
                     **extra,
                 }
                 logger.info("citation verify JEV judge", **_meta)
-
-                if not unsupported:
-                    return answer, [], _meta
-
-                cited = "、".join(f"[{u}]" for u in unsupported)
-                note = (
-                    f"\n\n（注：回答中 {cited} 的引用内容未能在当前知识库证据中找到支持，"
-                    "相关内容请以官方文件为准。）"
-                )
-                return answer + note, unsupported, _meta
+                return answer, [], _meta
         except Exception as e:
             logger.warning("JEV citation verify failed, falling back to LLM", error=str(e)[:120])
 
