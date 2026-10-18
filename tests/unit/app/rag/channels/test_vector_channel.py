@@ -130,6 +130,79 @@ class TestEmbed:
             await channel._embed("q")
 
 
+class TestEvidenceMetadata:
+    """证据元数据契约：SQL 已取到的 document_name / section_path 必须落到 Evidence。
+
+    缺失时下游 PromptAssembly 只能渲染"章节：未识别"，引用溯源不可核对。
+    """
+
+    @pytest.mark.asyncio
+    async def test_maps_document_name_and_section_path(self, make_channel, monkeypatch):
+        channel, _ = make_channel()
+
+        async def fake_fetch(sql, *args):
+            return [
+                {
+                    "chunk_id": 7,
+                    "content": "试用期不得超过六个月",
+                    "section_path": "1. 总则 > 1.2 试用期",
+                    "document_id": 5,
+                    "document_name": "员工手册",
+                    "similarity": 0.8,
+                }
+            ]
+
+        monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
+        results = await channel.retrieve(make_sub_question())
+        ev = results[0]
+        assert ev.document_name == "员工手册"
+        assert ev.section_path == "1. 总则 > 1.2 试用期"
+        assert ev.section_title == "1.2 试用期"
+
+    @pytest.mark.asyncio
+    async def test_section_title_from_single_segment(self, make_channel, monkeypatch):
+        channel, _ = make_channel()
+
+        async def fake_fetch(sql, *args):
+            return [
+                {
+                    "chunk_id": 8,
+                    "content": "正文",
+                    "section_path": "试用期",
+                    "document_id": 5,
+                    "document_name": "员工手册",
+                    "similarity": 0.7,
+                }
+            ]
+
+        monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
+        results = await channel.retrieve(make_sub_question())
+        assert results[0].section_title == "试用期"
+
+    @pytest.mark.asyncio
+    async def test_empty_metadata_stays_empty(self, make_channel, monkeypatch):
+        channel, _ = make_channel()
+
+        async def fake_fetch(sql, *args):
+            return [
+                {
+                    "chunk_id": 9,
+                    "content": "正文",
+                    "section_path": None,
+                    "document_id": 5,
+                    "document_name": None,
+                    "similarity": 0.6,
+                }
+            ]
+
+        monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
+        results = await channel.retrieve(make_sub_question())
+        ev = results[0]
+        assert ev.document_name == ""
+        assert ev.section_path == ""
+        assert ev.section_title is None
+
+
 class TestRetrieve:
     @pytest.mark.asyncio
     async def test_success_mapping(self, make_channel, monkeypatch):

@@ -330,9 +330,9 @@ class PromptAssemblyService:
                 consumed = False
                 if available >= 250:
                     header = (
-                        f"[{ev.reference_id or ''}] 网页：{ev.title or '网页来源'}；链接：{ev.url or '未知'}\n摘要："
+                        self._web_header(ev)
                         if ev.source_type == "web"
-                        else f"[{ev.reference_id or ''}] 文档：{ev.title or '文档来源'}；章节：{ev.section_title or '未识别'}\n内容："
+                        else self._document_header(ev)
                     )
                     max_content_len = available - len(header) - 10
                     if max_content_len >= 150:
@@ -366,20 +366,37 @@ class PromptAssemblyService:
         return self._render_document_reference(ev)
 
     def _render_web_reference(self, ev: Evidence) -> str:
+        snippet = self._trim_snippet(ev.content, 900)
+        return f"{self._web_header(ev)}{snippet}\n"
+
+    @staticmethod
+    def _section_label(ev: Evidence) -> str:
+        """拼装章节展示串：路径 + 叶子标题（叶子已在路径里则不重复）。"""
+        path = (ev.section_path or "").strip()
+        leaf = (ev.section_title or "").strip()
+        if path and leaf and leaf not in path:
+            return f"{path} › {leaf}"
+        return path or leaf
+
+    def _document_header(self, ev: Evidence) -> str:
+        """文档引用块 header（完整渲染与软窗口裁剪共用同一实现）。"""
+        ref_id = ev.reference_id or ""
+        doc_name = ev.document_name or ev.title or "文档来源"
+        section = self._section_label(ev) or "未识别"
+        return f"[{ref_id}] 文档：{doc_name}；章节：{section}\n内容："
+
+    @staticmethod
+    def _web_header(ev: Evidence) -> str:
         ref_id = ev.reference_id or ""
         title = ev.title or "网页来源"
         url = ev.url or "未知"
-        snippet = self._trim_snippet(ev.content, 900)
-        return f"[{ref_id}] 网页：{title}；链接：{url}\n摘要：{snippet}\n"
+        return f"[{ref_id}] 网页：{title}；链接：{url}\n摘要："
 
     def _render_document_reference(self, ev: Evidence) -> str:
-        ref_id = ev.reference_id or ""
-        doc_name = ev.title or "文档来源"
-        section_path = ev.section_title or "未识别"
         snippet = self._trim_snippet(
             ev.content, getattr(settings.rag, "reference_snippet_max_chars", 2000)
         )
-        return f"[{ref_id}] 文档：{doc_name}；章节：{section_path}\n内容：{snippet}\n"
+        return f"{self._document_header(ev)}{snippet}\n"
 
     def _extract_soft_window(self, content: str, anchor: str | None, max_chars: int) -> str:
         """围绕核心锚点（如子块文本）截取软窗口上下文，避免整块截断丢失关键事实。"""
@@ -439,8 +456,8 @@ class PromptAssemblyService:
         return max(1, _estimate(text or ""))
 
     def _reference_summary(self, ev: Evidence, suffix: str) -> str:
-        title = ev.title or ""
-        path = ev.section_title or ev.url or ""
+        title = ev.document_name or ev.title or ""
+        path = self._section_label(ev) or ev.url or ""
         ref_id = str(ev.reference_id) if ev.reference_id is not None else "-"
         path_part = f" | {path}" if path else ""
         return f"[{ref_id}] {title}{path_part} | {suffix}"

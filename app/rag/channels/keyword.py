@@ -14,6 +14,7 @@ from app.common.text_utils import normalize_step_numeral
 from app.common.utils import safe_int
 from app.config import get_settings
 from app.infra.es import CHUNK_INDEX, get_es
+from app.rag.evidence_meta import leaf_section_title
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
@@ -122,18 +123,21 @@ class KeywordRetrievalChannel:
             for hit in hits:
                 score = hit["_score"] or 0.0
                 source = hit.get("_source", {})
+                section_path = source.get("sectionPath") or ""
+                document_name = source.get("documentName") or ""
                 evidences.append(
                     Evidence(
                         chunk_id=source.get("chunkId", ""),
                         content=source.get("chunkText", ""),
-                        title=source.get("sectionPath")
-                        or source.get("documentName")
-                        or "未知文档片段",
+                        title=section_path or document_name or "未知文档片段",
                         source_type="document",
                         score=score,
                         original_score=score,
                         channel="keyword",
                         doc_id=str(source.get("documentId", "")),
+                        document_name=document_name,
+                        section_path=section_path,
+                        section_title=leaf_section_title(section_path),
                     )
                 )
 
@@ -240,16 +244,21 @@ class KeywordRetrievalChannel:
 
         for row in rows:
             if float(row["similarity"]) > 0:
+                section_path = row["section_path"] or ""
+                document_name = row.get("document_name") or ""
                 evidences.append(
                     Evidence(
                         chunk_id=str(row["chunk_id"]),
                         content=row["chunk_text"],
-                        title=row["section_path"] or row.get("document_name", "") or "未知文档片段",
+                        title=section_path or document_name or "未知文档片段",
                         source_type="document",
                         score=float(row["similarity"]),
                         original_score=float(row["similarity"]),
                         channel="keyword",
                         doc_id=str(row["document_id"]),
+                        document_name=document_name,
+                        section_path=section_path,
+                        section_title=leaf_section_title(section_path),
                     )
                 )
 

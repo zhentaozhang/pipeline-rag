@@ -17,6 +17,8 @@ def make_ev(
     source_type="document",
     url=None,
     section_title="1.1",
+    section_path="",
+    document_name="",
 ):
     return Evidence(
         chunk_id=chunk_id,
@@ -27,6 +29,8 @@ def make_ev(
         reference_id=ref_id,
         url=url,
         section_title=section_title,
+        section_path=section_path,
+        document_name=document_name,
     )
 
 
@@ -170,6 +174,60 @@ class TestRenderReferenceBlock:
         ev = make_ev(chunk_id="c1", ref_id=1, content="a" * 1500)
         block = PromptAssemblyService()._render_document_reference(ev)
         assert "a" * 1100 + "..." in block
+
+
+class TestDocumentHeaderMetadata:
+    """文档引用块必须使用显式元数据，而不是把章节路径当文档名。"""
+
+    def test_prefers_document_name_over_title(self):
+        ev = make_ev(
+            chunk_id="c1",
+            ref_id=1,
+            title="1. 总则 > 1.2 试用期",
+            document_name="员工手册",
+            section_path="1. 总则 > 1.2 试用期",
+            section_title="1.2 试用期",
+        )
+        block = PromptAssemblyService()._render_document_reference(ev)
+        assert block.startswith("[1] 文档：员工手册；章节：1. 总则 > 1.2 试用期\n内容：")
+        assert "未识别" not in block
+
+    def test_appends_leaf_when_not_contained_in_path(self):
+        ev = make_ev(
+            chunk_id="c1",
+            ref_id=2,
+            document_name="差旅制度",
+            section_path="第二章",
+            section_title="住宿标准",
+        )
+        block = PromptAssemblyService()._render_document_reference(ev)
+        assert block.startswith("[2] 文档：差旅制度；章节：第二章 › 住宿标准\n内容：")
+
+    def test_section_path_only(self):
+        ev = make_ev(chunk_id="c1", ref_id=3, section_path="2. 报销", section_title=None)
+        block = PromptAssemblyService()._render_document_reference(ev)
+        assert block.startswith("[3] 文档：文档A；章节：2. 报销\n内容：")
+
+    def test_unidentified_when_all_metadata_missing(self):
+        ev = make_ev(chunk_id="c1", ref_id=4, section_path="", section_title=None)
+        block = PromptAssemblyService()._render_document_reference(ev)
+        assert "章节：未识别" in block
+
+    def test_soft_window_header_matches_full_header(self):
+        """预算不足时走软窗口裁剪，header 必须与完整渲染一致（含章节信息）。"""
+        svc = PromptAssemblyService()
+        ev = make_ev(
+            chunk_id="c1",
+            ref_id=5,
+            content="y" * 3000,
+            document_name="员工手册",
+            section_path="1. 总则",
+            section_title="总则",
+            )
+        ev.child_chunk_text = "y" * 100
+        budget = PromptBudget(total_budget=400, per_sub_question_budget=400)
+        rendered = svc._append_references([ev], set(), budget)
+        assert "文档：员工手册；章节：1. 总则\n内容：" in rendered
 
 
 class TestReferenceSummary:

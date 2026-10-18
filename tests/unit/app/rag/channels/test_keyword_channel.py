@@ -147,6 +147,76 @@ class TestBuildFallbackSql:
         assert [3] in args
 
 
+class TestEvidenceMetadata:
+    """ES / PG 降级两条路径都必须把文档层级元数据落到 Evidence。"""
+
+    @pytest.mark.asyncio
+    async def test_hits_map_section_and_document(self, monkeypatch):
+        class FakeEs:
+            async def search(self, index=None, body=None):
+                return {
+                    "hits": {
+                        "hits": [
+                            {
+                                "_score": 3.1,
+                                "_source": {
+                                    "chunkId": "c1",
+                                    "chunkText": "正文",
+                                    "sectionPath": "1. 总则 > 1.2 试用期",
+                                    "documentName": "员工手册",
+                                    "documentId": "9",
+                                },
+                            }
+                        ]
+                    }
+                }
+
+        monkeypatch.setattr(
+            keyword_module,
+            "settings",
+            types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=20)),
+        )
+        monkeypatch.setattr(keyword_module, "get_es", lambda: FakeEs())
+        results = await KeywordRetrievalChannel().retrieve(make_sub_question())
+        ev = results[0]
+        assert ev.document_name == "员工手册"
+        assert ev.section_path == "1. 总则 > 1.2 试用期"
+        assert ev.section_title == "1.2 试用期"
+
+    @pytest.mark.asyncio
+    async def test_fallback_maps_section_and_document(self, monkeypatch):
+        class FakeEs:
+            async def search(self, index=None, body=None):
+                return {"hits": {"hits": []}}
+
+        async def fake_fetch(sql, *args):
+            return [
+                {
+                    "chunk_id": 1,
+                    "chunk_text": "正文",
+                    "section_path": "2. 报销 > 2.3 住宿标准",
+                    "document_id": 5,
+                    "document_name": "差旅制度",
+                    "similarity": 0.8,
+                }
+            ]
+
+        monkeypatch.setattr(
+            keyword_module,
+            "settings",
+            types.SimpleNamespace(rag=types.SimpleNamespace(keyword_top_k=20)),
+        )
+        monkeypatch.setattr(keyword_module, "get_es", lambda: FakeEs())
+        monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
+        results = await KeywordRetrievalChannel().retrieve(
+            make_sub_question(text="配置数据库连接")
+        )
+        ev = results[0]
+        assert ev.document_name == "差旅制度"
+        assert ev.section_path == "2. 报销 > 2.3 住宿标准"
+        assert ev.section_title == "2.3 住宿标准"
+
+
 class TestRetrieve:
     @pytest.mark.asyncio
     async def test_blank_text_returns_empty(self):

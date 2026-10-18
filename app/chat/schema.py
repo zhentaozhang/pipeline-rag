@@ -232,7 +232,11 @@ class Evidence(BaseModel):
     score: float = 0.0  # 融合后最终得分
     reference_id: int | None = None  # [1][2] 引用编号，由 ReferenceMapper 分配
     url: str | None = None  # 网页引用时的 URL
+    # 文档层级元数据：title 是兼容旧消费方的展示名（历史上塞的是章节路径），
+    # 需要"文档名 / 章节路径 / 叶子章节标题"的地方应读下面三个显式字段。
     section_title: str | None = None
+    section_path: str = ""
+    document_name: str = ""
 
     # 溯源与打分 Metadata
     original_score: float = 0.0
