@@ -170,7 +170,8 @@ class TestRerankCall:
         assert payload["model"] == "bge-reranker-v2-m3"
         assert payload["query"] == "查询"
         assert payload["documents"] == ["内容a"]
-        assert payload["top_n"] == 3
+        # 请求全部候选分数（截断由本地 top_n 决定）
+        assert payload["top_n"] == 1
 
 
 class TestErrorHandling:
@@ -185,3 +186,33 @@ class TestErrorHandling:
 
         with pytest.raises(httpx.HTTPStatusError):
             await reranker.rerank("q", [ev("a")])
+
+    @pytest.mark.asyncio
+    async def test_payload_requests_scores_for_all_documents(self, reranker, monkeypatch):
+        """API 侧 top_n 必须等于文档数：否则候选在进入父块提升前就被硬截断。"""
+        fake = FakeClient(
+            FakeResponse({"results": [{"index": i, "relevance_score": 0.5} for i in range(5)]})
+        )
+        monkeypatch.setattr(reranker_module, "_get_rerank_client", lambda: fake)
+        captured = []
+        monkeypatch.setattr(
+            reranker_module,
+            "_get_rerank_client",
+            lambda: FakeClient(fake.response, captured),
+        )
+
+        await reranker.rerank("q", [ev(f"c{i}") for i in range(5)])
+        assert captured[0][2]["top_n"] == 5
+
+    @pytest.mark.asyncio
+    async def test_top_n_zero_keeps_all_results(self, reranker, monkeypatch, rerank_settings):
+        monkeypatch.setattr(rerank_settings, "top_n", 0)
+        fake = FakeClient(
+            FakeResponse(
+                {"results": [{"index": i, "relevance_score": 1.0 - i / 10} for i in range(5)]}
+            )
+        )
+        monkeypatch.setattr(reranker_module, "_get_rerank_client", lambda: fake)
+
+        result = await reranker.rerank("q", [ev(f"c{i}") for i in range(5)])
+        assert len(result) == 5

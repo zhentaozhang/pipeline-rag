@@ -70,7 +70,9 @@ class Reranker:
             "query": query,
             "documents": docs_to_rerank,
             "return_documents": False,
-            "top_n": settings.rerank.top_n,
+            # 让 API 返回全部候选的分数：截断留到下游（父块提升后再按 final_top_k 收口），
+            # 否则候选在进入提升前就被砍掉，父块多样性直接受损。
+            "top_n": len(docs_to_rerank),
         }
 
         try:
@@ -91,7 +93,9 @@ class Reranker:
                 results,
                 key=lambda r: -(float(r.get("relevance_score", 0))),
             )
-            results_sorted = results_sorted[: settings.rerank.top_n]
+            top_n = int(getattr(settings.rerank, "top_n", 0) or 0)
+            if top_n > 0:
+                results_sorted = results_sorted[:top_n]
 
             reranked = []
             for item in results_sorted:
