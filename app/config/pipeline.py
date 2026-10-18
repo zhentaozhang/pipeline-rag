@@ -203,7 +203,11 @@ class RAGSettings(BaseSettings):
     supervisor_max_review_retries: int = 2
     quality_enabled: bool = True
     quality_max_retries: int = 2
-    quality_min_score: float = 7.0
+    # 26 例确定性样本实测（good=原文摘录，bad=跑题/空洞/自相矛盾）：
+    # good 分数 3.48~9.33（均值 7.0）、bad 0.13~6.00（均值 2.2），单峰重叠区就在 6.0~6.7。
+    # 阈值 7.0 → good 自动放行仅 54%；阈值 6.5 → 9/14 = 64% 且 0 个 bad 漏过。
+    # 样本小，按"宁可多花一次 LLM 审核"的保守口径取 6.5。
+    quality_min_score: float = 6.5
     quality_model: str = ""
     quality_check_timeout_seconds: float = 5.0
     corrective_retrieval_enabled: bool = True

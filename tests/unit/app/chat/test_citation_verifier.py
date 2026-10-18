@@ -159,8 +159,12 @@ class _RecordingJev:
 
 
 @pytest.mark.asyncio
-async def test_citation_evidence_is_capped_and_prefers_the_hit_paragraph(monkeypatch):
-    """单条证据只送被引用的那一段（<=400 字符），不再把 1200 字整块塞进判据。"""
+async def test_evidence_lives_in_state_and_only_the_criterion_in_the_question(monkeypatch):
+    """材料进 state（一次读完），判据只描述要回答的问题。
+
+    参考实现的做法是"state 放材料、question 放判据"：把 1200 字证据塞进每个
+    question.instructions 会让判据与材料一起被截断，也让同一份材料被重复读多次。
+    """
     monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
     jev = _RecordingJev()
     monkeypatch.setattr("app.infra.jev_client.get_jev_client", lambda: jev)
@@ -172,10 +176,32 @@ async def test_citation_evidence_is_capped_and_prefers_the_hit_paragraph(monkeyp
     await verify_citations(_Fallback(), "答案[1]", [ref], "住宿标准？")
 
     assert len(jev.calls) == 1
-    instruction = jev.calls[0]["questions"]["cite_1"]["instructions"]
-    assert "800 元/晚" in instruction, "被引用的精确命中文段必须完整保留"
-    assert "已截断" not in instruction
-    assert len(instruction) <= 600, f"判据过长会挤掉证据：{len(instruction)}"
+    call = jev.calls[0]
+    assert "800 元/晚" in call["state"], "被引用的精确命中文段必须进 state"
+    assert len(call["state"]) <= 6000, "单次 state 需要有上界，否则会被服务端左截断"
+    instruction = call["questions"]["cite_1"]["instructions"]
+    assert "800 元/晚" not in instruction, "证据不该再重复塞进判据"
+    assert "[1]" in instruction
+    assert len(instruction) <= 120, f"判据只应描述问题：{instruction}"
+
+
+@pytest.mark.asyncio
+async def test_each_citation_gets_its_own_question_about_its_own_evidence(monkeypatch):
+    """一问一个对象：4 条引用在同一 state 里被读一次，但每条各自一问。"""
+    monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
+    jev = _RecordingJev()
+    monkeypatch.setattr("app.infra.jev_client.get_jev_client", lambda: jev)
+
+    refs = [
+        {"content": "住宿上限 800 元/晚", "child_chunk_text": ""},
+        {"content": "餐补每天 100 元", "child_chunk_text": ""},
+    ]
+    await verify_citations(_Fallback(), "答案[1][2]", refs, "差旅标准？")
+
+    call = jev.calls[0]
+    assert set(call["questions"]) == {"cite_1", "cite_2"}
+    assert "800 元/晚" in call["state"] and "餐补每天 100 元" in call["state"]
+    assert "证据 [1]" not in call["questions"]["cite_2"]["instructions"]
 
 
 @pytest.mark.asyncio

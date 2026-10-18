@@ -59,7 +59,8 @@ def _reference_content(ref: dict[str, Any] | Any, fallback_id: int, max_chars: i
 
 
 _CITATION_SHARD_SIZE = 4
-_CITATION_EVIDENCE_CHARS = 400
+_CITATION_EVIDENCE_CHARS = 1200
+_CITATION_ANSWER_CHARS = 1500
 
 
 def _citation_evidence(ref: dict[str, Any] | Any, fallback_id: int, max_chars: int = 400) -> str:
@@ -144,7 +145,14 @@ async def verify_citations(
                 i + 1: _citation_evidence(r, i + 1, max_chars=_CITATION_EVIDENCE_CHARS)
                 for i, r in enumerate(references)
             }
-            state = f"用户问题：{question}\n\nAI 生成的带有引用编号的完整回答：\n{answer}"
+            # 材料全部进 state（一次读完），判据只描述"要回答什么问题"。
+            # 参考实现的做法（feder-cr/jev）：state 放材料、question 放判据；
+            # 把证据塞进 instructions 会让判据与证据一起被服务端截断，
+            # 而且同样一批证据在每条判据里重复一遍。
+            base_state = (
+                f"用户问题：{question}\n\n"
+                f"AI 生成的带有引用编号的完整回答：\n{answer[:_CITATION_ANSWER_CHARS]}"
+            )
             # 分片：每片 <=4 条引用。单请求塞 10+ 条会把判据挤到 4096 token 之外
             # （服务端左截断先砍判断标准），既慢又判不准。
             shards = [
@@ -154,17 +162,23 @@ async def verify_citations(
             answers: dict[str, Any] = {}
 
             async def _judge_shard(shard: list[int]) -> dict[str, Any]:
+                evidence_block = "\n\n".join(
+                    f"[{ref_n}] {evidence_map.get(ref_n, '（该引用编号无对应证据内容）')}"
+                    for ref_n in shard
+                )
                 questions = {
                     f"cite_{ref_n}": {
                         "type": "noul",
                         "instructions": (
-                            f"回答中带有 [{ref_n}] 编号的引用论断，是否确实被以下证据内容直接支持（无推测、无捏造）？\n"
-                            f"证据[{ref_n}]：{evidence_map.get(ref_n, '（该引用编号无对应证据内容）')}"
+                            f"回答中标注 [{ref_n}] 的那句话，是否被上面给出的证据 [{ref_n}] "
+                            f"直接支持？证据只是相关但没有直接说到，也算不支持。"
                         ),
                     }
                     for ref_n in shard
                 }
-                return await jev.system_one(state=state, questions=questions)
+                return await jev.system_one(
+                    state=f"{base_state}\n\n证据：\n{evidence_block}", questions=questions
+                )
 
             shard_results = await asyncio.gather(
                 *[_judge_shard(shard) for shard in shards], return_exceptions=True

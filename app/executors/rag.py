@@ -68,6 +68,25 @@ class QualityResult:
         return "\n\n".join(parts)
 
 
+QUALITY_CRITERIA: dict[str, str] = {
+    "on_topic": "回答是否正面回应用户提出的问题（不是答非所问、也不是只复述背景）",
+    "specific": "回答是否给出具体的规定、数值或条款，而不是笼统的“视情况而定”",
+    "complete": "回答是否覆盖了问题所问的要点及其适用条件，没有遗漏关键限制",
+    "consistent": "回答内部是否没有自相矛盾的表述、也没有明显违反常理的错误",
+}
+
+
+def quality_from_answers(answers: dict[str, object]) -> tuple[float, dict[str, float]]:
+    """把 4 个 yes/no 概率聚合成 0-1 质量分（缺任何一条判据都算失败，不猜）。"""
+    probs: dict[str, float] = {}
+    for name in QUALITY_CRITERIA:
+        res = answers.get(name)
+        if not isinstance(res, dict) or res.get("noul") is None:
+            raise ValueError(f"JEV missing criterion {name}")
+        probs[name] = float(res["noul"])
+    return sum(probs.values()) / len(probs), probs
+
+
 class AnswerQualityChecker:
     def __init__(self, tracer=None) -> None:
         self._jinja = jinja_env
@@ -132,33 +151,24 @@ class AnswerQualityChecker:
         return template.render(question=question, answer=answer)
 
     async def _jev_quality_score(self, question: str, answer: str) -> float | None:
-        """JEV Score 原语：回答质量映射到 0-10 分；关闭/异常返回 None（调用方回退 LLM）。"""
+        """JEV 质量审核：4 个 yes/no 判据取平均，映射回 0-10 分；关闭/异常返回 None（回退 LLM）。
+
+        为什么不用 ``type="score"`` 的 1-10 分档：分数是生成文本、要解析、会聚簇，
+        且一个数字把"有没有回答问题/够不够具体/全不全/自洽吗"混成一体，
+        失败时无法告诉用户是哪一条没过。yes/no 判据可逐条阈值、可标定、可解释。
+        """
         from app.infra.jev_client import jev_decide
 
-        levels = [
-            "很差：答非所问或内容空洞",
-            "较差：只覆盖很少要点或存在明显错误",
-            "一般：部分相关，完整性或准确性不足",
-            "良好：较完整、准确、基于证据",
-            "优秀：完整、准确、有据且条理清晰",
-        ]
-        score_map = {levels[0]: 2.0, levels[1]: 5.0, levels[2]: 6.5, levels[3]: 8.0, levels[4]: 9.5}
-
         def _parse(answers: dict) -> float:
-            res = answers.get("quality")
-            if not isinstance(res, dict) or "score" not in res:
-                raise ValueError("JEV missing quality score")
-            return score_map.get(res["score"], 5.0)
+            mean, _probs = quality_from_answers(answers)
+            return round(mean * 10.0, 2)
 
         return await jev_decide(
             "quality_eval_enabled",
             state=f"问题：{question}\n\n待评回答：\n{answer[:1500]}",
             questions={
-                "quality": {
-                    "type": "score",
-                    "instructions": "评估该回答对问题的整体质量（相关性、完整性、准确性、有据性）",
-                    "levels": levels,
-                }
+                name: {"type": "noul", "instructions": text}
+                for name, text in QUALITY_CRITERIA.items()
             },
             parse=_parse,
             log_context="JEV 质量审核",

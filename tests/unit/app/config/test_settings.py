@@ -257,3 +257,14 @@ class TestJevCitationVerifyDefault:
         from app.config.jev import JEVSettings
 
         assert JEVSettings(_env_file=None).citation_verify_enabled is False
+
+
+class TestQualityThresholdCalibration:
+    """质量阈值按 26 例确定性样本标定（good 原文摘录 / bad 跑题·空洞·自相矛盾）。"""
+
+    def test_threshold_sits_above_the_worst_bad_answer(self):
+        from app.config.pipeline import RAGSettings
+
+        cfg = RAGSettings(_env_file=None)
+        # bad 样本最高 6.00 分，取 6.5 才能保证 0 个坏答案被 JEV 直接放行
+        assert cfg.quality_min_score == 6.5
