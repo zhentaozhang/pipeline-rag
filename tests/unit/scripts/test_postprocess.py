@@ -123,3 +123,25 @@ class TestReferencesFromEvidence:
         refs = references_from_evidence(evs)
         assert len(refs) == 1
         assert refs[0]["id"] == 8, "保留 reference_id，与 Prompt 里渲染的 [n] 编号一致"
+
+
+@pytest.mark.asyncio
+async def test_run_postprocess_records_quality_status():
+    class _Checker:
+        async def check(self, question, answer):
+            return type(
+                "Q",
+                (),
+                {"passed": True, "score": 10.0, "feedback": "", "status": "unknown"},
+            )()
+
+    with patch("app.executors.rag.AnswerQualityChecker", _Checker):
+        result = await run_postprocess(
+            question="q",
+            answer="答案",
+            references=[{"id": 1}],
+            fallback=None,
+            run_quality=True,
+        )
+    assert result.quality_passed is True
+    assert result.quality_status == "unknown"

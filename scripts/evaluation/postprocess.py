@@ -37,6 +37,7 @@ class PostprocessResult:
     citation_meta: dict[str, Any] = field(default_factory=dict)
     quality_passed: bool | None = None
     quality_score: float | None = None
+    quality_status: str = ""
     quality_feedback: str = ""
     citation_ms: float = 0.0
     quality_ms: float = 0.0
@@ -78,9 +79,11 @@ async def run_postprocess(
             quality = await AnswerQualityChecker().check(question, result.answer)
             result.quality_passed = bool(quality.passed)
             result.quality_score = float(quality.score)
+            result.quality_status = str(getattr(quality, "status", "checked"))
             result.quality_feedback = str(getattr(quality, "feedback", "") or "")
         except Exception as exc:  # noqa: BLE001
             result.quality_feedback = f"error: {str(exc)[:200]}"
+            result.quality_status = "error"
         result.quality_ms = (time.perf_counter() - t1) * 1000
 
     return result

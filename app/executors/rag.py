@@ -47,12 +47,16 @@ class QualityResult:
         issues: list[str],
         suggestion: str = "",
         dimensions: dict[str, float] | None = None,
+        status: str = "checked",
     ):
         self.passed = passed
         self.score = score
         self.issues = issues
         self.suggestion = suggestion
         self.dimensions = dimensions or {}
+        # status: checked=真的审过；disabled=开关关闭；unknown=审核失败但按通过放行（fail-open）
+        # 保留 passed 语义不变（保守口径），只让"没审成"可被观测与单列统计。
+        self.status = status
 
     @property
     def feedback(self) -> str:
@@ -77,7 +81,7 @@ class AnswerQualityChecker:
         reference_titles: list[str] | None = None,
     ) -> QualityResult:
         if not settings.rag.quality_enabled:
-            return QualityResult(passed=True, score=10.0, issues=[])
+            return QualityResult(passed=True, score=10.0, issues=[], status="disabled")
 
         # JEV System 1 Score 优先：通过即免 LLM 调用；未通过再走 LLM 取具体问题/建议
         jev_score = await self._jev_quality_score(question, answer)
@@ -98,8 +102,8 @@ class AnswerQualityChecker:
                     timeout=settings.rag.quality_check_timeout_seconds,
                 )
         except Exception as e:
-            logger.warning("quality_check_failed", error=str(e))
-            return QualityResult(passed=True, score=10.0, issues=[])
+            logger.warning("quality_check_failed", error=str(e), degraded=True, status="unknown")
+            return QualityResult(passed=True, score=10.0, issues=[], status="unknown")
 
         score = float(result_dict.get("score", 10))
         issues = result_dict.get("issues", [])

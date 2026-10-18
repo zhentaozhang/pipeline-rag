@@ -5,7 +5,7 @@ RAG 双通道检索引擎主入口
 1. asyncio 并行执行 SubQuestion 检索（含超时 + exceptionally 降级）
 2. 每个 SubQuestion 内 channels 并行执行
 3. EvidenceGate 过滤低质量命中
-4. RRF 融合（K=60）
+4. RRF 融合（K 由 settings.rag.rrf_k 决定，默认 30）
 5. ParentBlock 提升（Child 检索 → Parent 上下文）
 6. Rerank 精排（可选）
 7. Top-K 截取 → 分配 Reference ID → 留痕溯源 (Trace)
@@ -244,7 +244,10 @@ class RagRetrievalEngine:
                     doc_ids=plan.retrieval_document_ids,
                 )
             ]
+            previous_context = context
             context = await self.retrieve(plan, tracer=tracer)
+            if not previous_context.is_empty and not context.is_empty:
+                context = self._merge_corrective_context(previous_context, context)
             folded = (
                 f"（原 {collapsed_sub_questions} 个子问题均无命中，已折叠为单查询）"
                 if collapsed_sub_questions > 1
@@ -412,8 +415,67 @@ class RagRetrievalEngine:
             parse=_parse,
             log_context="JEV 证据充分性判定",
         )
-        # JEV 关闭/异常 → None → 按"充分"处理（保持原行为）
-        return True if result is None else result
+        if result is None:
+            # JEV 关闭/异常 → 未知。保守口径：行为仍按"充分"处理（绝不误触发纠错），
+            # 但必须留痕——否则"纠错检索从未执行"在报告里完全不可见。
+            from app.observability.metrics import DEGRADATION_TOTAL
+
+            DEGRADATION_TOTAL.labels(reason="evidence_sufficiency_unknown").inc()
+            context.retrieval_notes.append(
+                "证据充分性无法判定（JEV 未启用或不可用），本轮按充分处理、跳过纠错检索。"
+            )
+            logger.info("evidence_sufficiency_unknown", question=question[:50])
+            return True
+        return result
+
+    @staticmethod
+    def _merge_evidence_lists(
+        previous: RagRetrievalContext, fresh: RagRetrievalContext
+    ) -> list[Evidence]:
+        """按 chunk_id 与新一轮证据求并集，分数取 max（顺序稳定）。"""
+        merged: dict[str, Evidence] = {}
+        for source in (previous, fresh):
+            for se in source.sub_question_evidence_list:
+                for ev in se.evidences:
+                    key = ev.chunk_id or (ev.content or "")[:64]
+                    existing = merged.get(key)
+                    if existing is None:
+                        merged[key] = ev
+                        continue
+                    existing.score = max(existing.score or 0.0, ev.score or 0.0)
+                    existing.rerank_score = max(
+                        getattr(existing, "rerank_score", 0.0) or 0.0,
+                        getattr(ev, "rerank_score", 0.0) or 0.0,
+                    )
+        return sorted(
+            merged.values(),
+            key=lambda e: ((getattr(e, "rerank_score", 0.0) or 0.0), (e.score or 0.0)),
+            reverse=True,
+        )
+
+    def _merge_corrective_context(
+        self, previous: RagRetrievalContext, fresh: RagRetrievalContext
+    ) -> RagRetrievalContext:
+        """把纠错重查的新证据并回上一轮上下文，避免"重查即丢弃已召回片段"。"""
+        merged = self._merge_evidence_lists(previous, fresh)
+        if not merged:
+            return fresh
+        first = fresh.sub_question_evidence_list[0] if fresh.sub_question_evidence_list else None
+        if first is None:
+            return fresh
+        fresh.sub_question_evidence_list = [
+            SubQuestionEvidence(
+                sub_question=first.sub_question,
+                evidences=merged,
+                channel_trace=first.channel_trace,
+                fused_candidate_count=first.fused_candidate_count,
+                parent_candidate_count=first.parent_candidate_count,
+                reranked_candidate_count=first.reranked_candidate_count,
+            )
+        ]
+        self._assign_reference_ids(fresh.sub_question_evidence_list)
+        fresh.retrieval_notes.append(f"纠错重查结果已与上一轮证据合并：去重后 {len(merged)} 条。")
+        return fresh
 
     async def _rewrite_query(self, question: str) -> str:
         """复用查询改写服务，强制改写为更利于检索的形式。"""
@@ -646,12 +708,12 @@ class RagRetrievalEngine:
         keyword_channel = KeywordRetrievalChannel()
         channel_timeout = max(settings.rag.channel_timeout_ms / 1000.0, 0.001)
 
-        async def _channel_retrieve(channel_fn, channel_name: str) -> RetrievalChannelResult:
+        async def _channel_retrieve(channel, channel_name: str) -> RetrievalChannelResult:
             started_at = time.monotonic()
             docs: list[Evidence] = []
             error_message = ""
             try:
-                docs = await asyncio.wait_for(channel_fn(sub_q), timeout=channel_timeout)
+                docs = await asyncio.wait_for(channel.retrieve(sub_q), timeout=channel_timeout)
             except Exception as e:
                 # 体检 C5：静默降级可见化
                 from app.observability.metrics import DEGRADATION_TOTAL
@@ -669,6 +731,20 @@ class RagRetrievalEngine:
                     f"子问题{sub_question_index}通道[{channel_name}]检索失败或超时，已自动降级。"
                 )
                 error_message = str(e)
+
+            if not error_message:
+                # 通道内部吞掉的异常（如 embedding/PG/ES 故障）也要归因成"通道故障"，
+                # 否则会被上层读成"知识库为空"（both_channels_empty）。
+                swallowed = str(getattr(channel, "last_error", "") or "").strip()
+                if swallowed:
+                    from app.observability.metrics import DEGRADATION_TOTAL
+
+                    DEGRADATION_TOTAL.labels(reason="retrieval_channel_failed").inc()
+                    logger.warning("检索通道内部异常", channel=channel_name, error=swallowed)
+                    notes.append(
+                        f"子问题{sub_question_index}通道[{channel_name}]异常已降级：{swallowed[:80]}"
+                    )
+                    error_message = swallowed
 
             elapsed_ms = int((time.monotonic() - started_at) * 1000)
             scores = [
@@ -694,9 +770,9 @@ class RagRetrievalEngine:
 
         channel_tasks = []
         if getattr(settings.rag, "vector_channel_enabled", True):
-            channel_tasks.append(_channel_retrieve(vector_channel.retrieve, "vector"))
+            channel_tasks.append(_channel_retrieve(vector_channel, "vector"))
         if settings.rag.keyword_channel_enabled:
-            channel_tasks.append(_channel_retrieve(keyword_channel.retrieve, "keyword"))
+            channel_tasks.append(_channel_retrieve(keyword_channel, "keyword"))
 
         return await asyncio.gather(*channel_tasks) if channel_tasks else []
 

@@ -93,6 +93,7 @@ class EvalResult(BaseModel):
     citation_ms: float | None = None
     quality_ms: float | None = None
     quality_passed: bool | None = None
+    quality_status: str = ""  # checked / disabled / unknown / error
 
     # Task 2：拒答表现（只对 expected_refusal 的题有意义）
     answerable: bool = True

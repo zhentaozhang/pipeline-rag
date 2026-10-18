@@ -104,11 +104,17 @@ async def verify_citations(
             review_low = getattr(jev_cfg, "citation_review_low", 0.45)
             unsupported = []
             ambiguous = []
+            missing: list[int] = []
             scores = {}
             for ref_n in refs:
                 key = f"cite_{ref_n}"
                 res = answers.get(key) or {}
-                prob = res.get("noul", 1.0) if isinstance(res, dict) else 1.0
+                # 缺键 ≠ 高置信支持：JEV 没给分就是"未知"，必须升级而不是默认 1.0
+                prob = res.get("noul") if isinstance(res, dict) else None
+                if prob is None:
+                    missing.append(ref_n)
+                    continue
+                prob = float(prob)
                 scores[str(ref_n)] = prob
                 if prob < review_low:
                     unsupported.append(ref_n)
@@ -116,10 +122,11 @@ async def verify_citations(
                     # 灰区：既非明确不支持，也未达高置信支持 -> 整轮升级到既有 LLM 审计
                     ambiguous.append(ref_n)
 
-            if ambiguous:
+            if ambiguous or missing:
                 logger.warning(
                     "citation verify JEV uncertain -> escalate to LLM",
                     ambiguous=ambiguous,
+                    missing=missing,
                     scores=scores,
                 )
             else:
@@ -127,6 +134,7 @@ async def verify_citations(
                     "status": "jev_judged",
                     "unsupported": unsupported,
                     "scores": scores,
+                    "missing_scores": missing,
                 }
                 logger.info("citation verify JEV judge", **_meta)
 
@@ -196,7 +204,17 @@ async def verify_citations(
         logger.info("citation verify judge", **_meta)
     except Exception as e:  # noqa: BLE001
         logger.warning("citation verify failed, skip", error=str(e)[:120])
-        return answer, [], {"status": "error", "error": str(e)[:120]}
+        # 保守口径：不改正文、不追加尾注，但把"这些引用一条都没核实"单列出来，
+        # 否则 citation_accuracy 会把审计失败读成"全部支持"。
+        return (
+            answer,
+            [],
+            {
+                "status": "error",
+                "error": str(e)[:120],
+                "unknown_refs": list(refs),
+            },
+        )
 
     if not unsupported:
         return answer, [], _meta

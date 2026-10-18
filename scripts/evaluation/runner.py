@@ -516,6 +516,7 @@ async def evaluate_single(
         result.citation_ms = post.citation_ms
         result.quality_ms = post.quality_ms
         result.quality_passed = post.quality_passed
+        result.quality_status = post.quality_status
         logger.info(
             "执行器后处理",
             question_id=q.id,
@@ -757,6 +758,9 @@ def _print_report(
         if quality_judged
         else None
     )
+    # fail-open 的"没审成"必须单列，否则 quality_pass_rate 会被 unknown 抬高
+    quality_unknown = sum(1 for r in quality_judged if r.quality_status in {"unknown", "error"})
+    quality_unknown_rate = quality_unknown / len(quality_judged) if quality_judged else None
 
     from scripts.evaluation.refusal import refusal_rates
 
@@ -790,6 +794,7 @@ def _print_report(
         "citation_accuracy": _avg(citation_acc) if citation_acc else None,
         "citation_samples": len(citation_acc),
         "quality_pass_rate": quality_pass_rate,
+        "quality_unknown_rate": quality_unknown_rate,
         "quality_samples": len(quality_judged),
         # Task 2：拒答表现（None = 本轮没有不可答题，不参与门禁）
         "correct_refusal_rate": refusal["correct_refusal_rate"],
@@ -902,6 +907,11 @@ def _print_report(
                 "  │ • 质量审核通过率: %s  (n=%d)      │",
                 f"{avg['quality_pass_rate']:.3f}",
                 int(avg.get("quality_samples", 0)),
+            )
+        if avg.get("quality_unknown_rate") is not None:
+            logger.info(
+                "  │ • 质量审核未知率: %s  (fail-open)  │",
+                f"{avg['quality_unknown_rate']:.3f}",
             )
     if tot > 0:
         logger.info("  ├──────────────────────────────────────────────┤")

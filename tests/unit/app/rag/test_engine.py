@@ -578,3 +578,149 @@ class TestRetrieveWithCorrection:
         # Check that the sub_question received by channel has tenant_id and doc_ids preserved
         assert captured_sub_qs[0].tenant_id == "tenant_x"
         assert "999" in captured_sub_qs[0].doc_ids
+
+
+class TestEvidenceSufficiencyUnknown:
+    """JEV 不可用时"证据充分性"是未知，不是 True —— 未知必须留痕。"""
+
+    @pytest.mark.asyncio
+    async def test_unknown_sufficiency_is_recorded_in_notes(self, monkeypatch):
+        async def _none(*args, **kwargs):
+            return None
+
+        monkeypatch.setattr("app.infra.jev_client.jev_decide", _none)
+        engine = RagRetrievalEngine()
+        ctx = RagRetrievalContext(
+            sub_question_evidence_list=[
+                SubQuestionEvidence(
+                    sub_question=SubQuestion(index=0, text="q"),
+                    evidences=[make_evidence()],
+                )
+            ]
+        )
+
+        assert await engine._evidence_is_sufficient("q", ctx) is True
+        assert any("充分性" in note for note in ctx.retrieval_notes)
+
+    @pytest.mark.asyncio
+    async def test_known_insufficiency_does_not_add_unknown_note(self, monkeypatch):
+        async def _false(*args, **kwargs):
+            return False
+
+        monkeypatch.setattr("app.infra.jev_client.jev_decide", _false)
+        engine = RagRetrievalEngine()
+        ctx = RagRetrievalContext(
+            sub_question_evidence_list=[
+                SubQuestionEvidence(
+                    sub_question=SubQuestion(index=0, text="q"),
+                    evidences=[make_evidence()],
+                )
+            ]
+        )
+
+        assert await engine._evidence_is_sufficient("q", ctx) is False
+        assert not any("充分性" in note for note in ctx.retrieval_notes)
+
+
+class TestCorrectiveRetrievalMerge:
+    """纠错重查只能补充证据，不能把第一轮已召回的片段丢掉。"""
+
+    @staticmethod
+    def _ctx(chunk_id: str) -> RagRetrievalContext:
+        return RagRetrievalContext(
+            retrieval_question="q",
+            sub_question_evidence_list=[
+                SubQuestionEvidence(
+                    sub_question=SubQuestion(index=0, text="q"),
+                    evidences=[make_evidence(chunk_id=chunk_id)],
+                )
+            ],
+        )
+
+    @pytest.mark.asyncio
+    async def test_second_round_merges_instead_of_replacing(self, monkeypatch):
+        monkeypatch.setattr(
+            engine_module,
+            "settings",
+            make_settings(
+                rag=dict(corrective_retrieval_enabled=True, corrective_retrieval_max_rounds=1)
+            ),
+        )
+        rounds = [self._ctx("first"), self._ctx("second")]
+        engine = RagRetrievalEngine()
+
+        async def fake_retrieve(plan, tracer=None):
+            return rounds.pop(0)
+
+        async def fake_rewrite(question):
+            return "改写后的查询"
+
+        async def fake_sufficient(question, context):
+            return False
+
+        engine.retrieve = fake_retrieve
+        engine._rewrite_query = fake_rewrite
+        engine._evidence_is_sufficient = fake_sufficient
+
+        ctx = await engine.retrieve_with_correction(make_plan())
+        chunk_ids = {ev.chunk_id for se in ctx.sub_question_evidence_list for ev in se.evidences}
+        assert chunk_ids == {"first", "second"}
+        assert any("合并" in note for note in ctx.retrieval_notes)
+
+    @pytest.mark.asyncio
+    async def test_empty_first_round_is_pure_replace(self, monkeypatch):
+        monkeypatch.setattr(
+            engine_module,
+            "settings",
+            make_settings(
+                rag=dict(corrective_retrieval_enabled=True, corrective_retrieval_max_rounds=1)
+            ),
+        )
+        empty = RagRetrievalContext(retrieval_question="q", sub_question_evidence_list=[])
+        rounds = [empty, self._ctx("second")]
+        engine = RagRetrievalEngine()
+
+        async def fake_retrieve(plan, tracer=None):
+            return rounds.pop(0)
+
+        async def fake_rewrite(question):
+            return "改写后的查询"
+
+        async def fake_sufficient(question, context):
+            return False
+
+        engine.retrieve = fake_retrieve
+        engine._rewrite_query = fake_rewrite
+        engine._evidence_is_sufficient = fake_sufficient
+
+        ctx = await engine.retrieve_with_correction(make_plan())
+        chunk_ids = {ev.chunk_id for se in ctx.sub_question_evidence_list for ev in se.evidences}
+        assert chunk_ids == {"second"}
+
+
+class TestChannelErrorVisibility:
+    """通道内部吞掉的异常必须能被归因为"通道故障"，否则会被读成"知识库为空"。"""
+
+    @pytest.mark.asyncio
+    async def test_swallowed_error_becomes_channel_error(self, monkeypatch):
+        class _BrokenChannel:
+            def __init__(self):
+                self.last_error = "embedding api down"
+
+            async def retrieve(self, sub_q):
+                return []
+
+        monkeypatch.setattr(
+            "app.rag.channels.vector.VectorRetrievalChannel", lambda: _BrokenChannel()
+        )
+        monkeypatch.setattr(
+            engine_module, "settings", make_settings(rag=dict(keyword_channel_enabled=False))
+        )
+
+        engine = RagRetrievalEngine()
+        notes: list[str] = []
+        results = await engine._parallel_channel_retrieve(SubQuestion(index=0, text="q"), 1, notes)
+
+        assert len(results) == 1
+        assert results[0].error_message == "embedding api down"
+        assert any("embedding api down" in n for n in notes)

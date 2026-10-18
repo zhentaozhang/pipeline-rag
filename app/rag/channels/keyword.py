@@ -74,9 +74,7 @@ class KeywordRetrievalChannel:
         # 过滤条件值类型混杂（str / int / list），显式标注避免被首个子句收敛成 str
         filter_clauses: list[dict[str, Any]] = []
         # 租户过滤必须 fail-closed：缺失/空白时收敛到 default，避免跨租户检索。
-        filter_clauses.append(
-            {"term": {"tenantId": (sub_q.tenant_id or "").strip() or "default"}}
-        )
+        filter_clauses.append({"term": {"tenantId": (sub_q.tenant_id or "").strip() or "default"}})
         if sub_q.doc_ids:
             filter_clauses.append(
                 {
@@ -115,6 +113,7 @@ class KeywordRetrievalChannel:
         }
 
     async def retrieve(self, sub_q: SubQuestion) -> list[Evidence]:
+        self.last_error = ""
         if not sub_q.text or not sub_q.text.strip():
             return []
 
@@ -161,6 +160,7 @@ class KeywordRetrievalChannel:
             return evidences
 
         except Exception as e:
+            self.last_error = f"elasticsearch query failed: {e}"
             logger.error(
                 "elasticsearch query failed, falling back to pgvector", error=str(e), exc_info=True
             )
@@ -256,6 +256,7 @@ class KeywordRetrievalChannel:
         try:
             rows = await _pg_fetch(sql, *args)
         except Exception as e:
+            self.last_error = f"pgvector keyword fallback failed: {e}"
             logger.error("pgvector keyword fallback failed", error=str(e))
             return evidences
 

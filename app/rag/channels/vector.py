@@ -31,6 +31,8 @@ class VectorRetrievalChannel:
 
     def __init__(self) -> None:
         self._openai = get_embedding_client()
+        # 内部吞掉的异常写在这里：引擎据此把"故障"与"真的空"区分开
+        self.last_error = ""
 
     async def _embed(self, text: str) -> list[float]:
         """调用 Embedding API 获取查询向量（带内存 LRU 缓存，避免重复计算）"""
@@ -148,6 +150,7 @@ class VectorRetrievalChannel:
         try:
             query_embedding = await self._embed(sub_q.text)
         except Exception as e:
+            self.last_error = f"embed failed: {e}"
             logger.error("failed to embed query", error=str(e), exc_info=True)
             return []
 
@@ -167,6 +170,7 @@ class VectorRetrievalChannel:
         try:
             rows = await _pg_fetch(sql, *args)
         except Exception as e:
+            self.last_error = f"pgvector query failed: {e}"
             logger.error("pgvector query failed", error=str(e), exc_info=True)
             return evidences
 

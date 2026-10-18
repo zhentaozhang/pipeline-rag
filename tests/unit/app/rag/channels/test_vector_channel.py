@@ -331,3 +331,18 @@ class TestRetrieve:
         monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
         await channel.retrieve(make_sub_question())
         assert captured["limit"] == 10
+
+
+@pytest.mark.asyncio
+async def test_embed_failure_records_last_error(monkeypatch):
+    from app.rag.channels.vector import VectorRetrievalChannel
+
+    channel = VectorRetrievalChannel()
+
+    async def _boom(text):
+        raise RuntimeError("embedding api down")
+
+    monkeypatch.setattr(channel, "_embed", _boom)
+    docs = await channel.retrieve(make_sub_question())
+    assert docs == []
+    assert "embedding" in channel.last_error
