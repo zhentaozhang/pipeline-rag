@@ -10,6 +10,10 @@ class LLMSettings(BaseSettings):
     api_key: str = ""
     model: str = "deepseek-v4-flash"
     temperature: float = 0.5
+    # 评测生成温度：None = 跟随 temperature；设 0.0 可让评测答案可复现
+    eval_temperature: float | None = None
+    # 采样种子：None = 不下发（部分厂商不支持该参数）
+    seed: int | None = None
     max_tokens: int = 5000
     embedding_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     embedding_api_key: str = ""

@@ -463,7 +463,7 @@ async def evaluate_single(
                 {"role": "system", "content": prompt_result.system_prompt},
                 {"role": "user", "content": prompt_result.user_prompt},
             ],
-            temperature=settings.llm.temperature,
+            temperature=_generation_temperature(),
             max_tokens=settings.llm.max_tokens,
         )
         import typing
@@ -688,6 +688,12 @@ def _latency_block(results: list[Any]) -> dict[str, Any]:
         block[f"latency_{stage}_samples"] = len(values)
     block["latency_samples"] = block.get("latency_total_samples", 0)
     return block
+
+
+def _generation_temperature() -> float:
+    """评测生成温度：eval_temperature 优先，否则沿用线上 temperature。"""
+    eval_temp = getattr(settings.llm, "eval_temperature", None)
+    return settings.llm.temperature if eval_temp is None else float(eval_temp)
 
 
 def _print_report(

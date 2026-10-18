@@ -421,6 +421,13 @@ class RagChatExecutor(ConversationExecutor):
 
                 retry_output = await run_output_filter("".join(self.task.answer_buffer))
                 if not retry_output.safe:
+                    # 与首轮一致：拦截后必须置位，否则后续引用校验/收尾逻辑仍按"正常回答"处理
+                    _answer_blocked = True
+                    logger.warning(
+                        "rag_answer_blocked_by_output_filter",
+                        reason=retry_output.reason,
+                        stage="retry_round",
+                    )
                     blocked = retry_output.blocked_text
                     self.task.answer_buffer.clear()
                     self.task.answer_buffer.append(blocked)

@@ -55,6 +55,12 @@ def _record_generation(
     )
 
 
+def _seed_kwargs() -> dict[str, Any]:
+    """采样种子：只有显式配置时才下发，默认请求体不变（保守）。"""
+    seed = getattr(settings.llm, "seed", None)
+    return {} if seed is None else {"seed": int(seed)}
+
+
 async def stream_llm_with_tools(
     task, system_prompt: str, user_prompt: str, emit_fn
 ) -> AsyncIterator[str]:
@@ -93,6 +99,7 @@ async def stream_llm_with_tools(
         "temperature": settings.llm.temperature,
         "max_tokens": settings.llm.max_tokens,
         "timeout": settings.llm.timeout_seconds,
+        **_seed_kwargs(),
     }
     if not is_dashscope_provider(resolve_provider(settings.llm.base_url)):
         base_kwargs["stream_options"] = {"include_usage": True}

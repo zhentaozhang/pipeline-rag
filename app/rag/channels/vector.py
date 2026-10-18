@@ -36,7 +36,8 @@ class VectorRetrievalChannel:
 
     async def _embed(self, text: str) -> list[float]:
         """调用 Embedding API 获取查询向量（带内存 LRU 缓存，避免重复计算）"""
-        cache_key = text.strip()
+        # 键里必须带模型：换 embedding 模型后旧向量不可复用
+        cache_key = f"{settings.llm.embedding_model}:{text.strip()}"
         if cache_key in _EMBED_CACHE:
             vec = _EMBED_CACHE.pop(cache_key)
             _EMBED_CACHE[cache_key] = vec

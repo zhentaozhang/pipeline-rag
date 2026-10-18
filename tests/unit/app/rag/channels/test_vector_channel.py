@@ -346,3 +346,41 @@ async def test_embed_failure_records_last_error(monkeypatch):
     docs = await channel.retrieve(make_sub_question())
     assert docs == []
     assert "embedding" in channel.last_error
+
+
+@pytest.mark.asyncio
+async def test_embed_cache_key_includes_model(monkeypatch):
+    """换 embedding 模型后不得复用旧模型的向量。"""
+    import types as _types
+
+    import app.rag.channels.vector as vector_module
+    from app.rag.channels.vector import VectorRetrievalChannel
+
+    calls = {"n": 0}
+
+    class _FakeEmbeddings:
+        async def create(self, model, input):
+            calls["n"] += 1
+            return _types.SimpleNamespace(data=[_types.SimpleNamespace(embedding=[0.1, 0.2])])
+
+    channel = VectorRetrievalChannel()
+    monkeypatch.setattr(
+        channel, "_openai", _types.SimpleNamespace(embeddings=_FakeEmbeddings())
+    )
+    monkeypatch.setattr(
+        vector_module,
+        "settings",
+        _types.SimpleNamespace(llm=_types.SimpleNamespace(embedding_model="model-a")),
+    )
+
+    await channel._embed("同一句话")
+    await channel._embed("同一句话")
+    assert calls["n"] == 1
+
+    monkeypatch.setattr(
+        vector_module,
+        "settings",
+        _types.SimpleNamespace(llm=_types.SimpleNamespace(embedding_model="model-b")),
+    )
+    await channel._embed("同一句话")
+    assert calls["n"] == 2
