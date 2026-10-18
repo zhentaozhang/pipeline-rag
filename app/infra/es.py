@@ -75,31 +75,97 @@ def get_es_breaker() -> CircuitBreaker:
     return _es_breaker
 
 
-async def _ensure_chunk_index() -> None:
-    """创建文档分块索引（幂等），优先使用 IK 分词器，不可用时降级为 standard"""
-    es = get_es()
-    analyzer = settings.es.analyzer
-    search_analyzer = settings.es.search_analyzer
+def _analyzer_chain(preferred: str, search: str) -> list[tuple[str, str]]:
+    """分词器降级链：配置值 → cjk 二元组 → standard。
 
+    为什么必须经过 cjk：standard analyzer 把中文切成**单字**，关键词通道因此退化成
+    "字符重叠"搜索（`match_phrase` 整句几乎不可能命中，`minimum_should_match` 被虚词
+    稀释）。`cjk` 是 ES 内建 analyzer（cjk_bigram），不装 IK 插件也能拿到接近
+    ik_max_word 的中文召回，是这里唯一正确的降级档位。
+    """
+    candidates: list[tuple[str, str]] = []
+    pref = (preferred or "").strip()
+    srch = (search or "").strip()
+    if not pref:
+        # 未配置：中文优先走 cjk，而不是把中文切单字的 standard
+        candidates = [("cjk", "cjk"), ("standard", "standard")]
+    elif "ik" in pref:
+        candidates = [(pref, srch or pref), ("cjk", "cjk"), ("standard", "standard")]
+    elif pref == "cjk":
+        candidates = [("cjk", "cjk"), ("standard", "standard")]
+    else:
+        # 显式配置了别的 analyzer：尊重用户选择，只保留 standard 兜底
+        candidates = [(pref, srch or pref), ("standard", "standard")]
+    seen: set[tuple[str, str]] = set()
+    chain: list[tuple[str, str]] = []
+    for pair in candidates:
+        if pair in seen:
+            continue
+        seen.add(pair)
+        chain.append(pair)
+    return chain
+
+
+async def _analyzer_available(es: AsyncElasticsearch, analyzer: str) -> bool:
+    """用 _analyze 探针确认 analyzer 真的可用（IK 插件缺失时这里会抛异常）。"""
     try:
+        await es.indices.analyze(analyzer=analyzer, text="试用期")
+        return True
+    except Exception as e:  # noqa: BLE001 - 探测失败即降级，任何异常都等价
+        logger.info("es analyzer unavailable", analyzer=analyzer, error=str(e))
+        return False
+
+
+async def _ensure_chunk_index() -> None:
+    """创建文档分块索引（幂等），按 ik → cjk → standard 顺序择优。"""
+    es = get_es()
+    exists = await es.indices.exists(index=CHUNK_INDEX)
+
+    for analyzer, search_analyzer in _analyzer_chain(
+        settings.es.analyzer, settings.es.search_analyzer
+    ):
+        if not await _analyzer_available(es, analyzer):
+            continue
         mapping = _build_chunk_mapping(analyzer, search_analyzer)
-        if await es.indices.exists(index=CHUNK_INDEX):
+        if exists:
             # 允许追加新字段，如 tenantId
-            await es.indices.put_mapping(index=CHUNK_INDEX, body=mapping["mappings"])
+            try:
+                await es.indices.put_mapping(index=CHUNK_INDEX, body=mapping["mappings"])
+            except Exception as e:
+                logger.warning(
+                    "elasticsearch chunk index mapping update failed",
+                    index=CHUNK_INDEX,
+                    error=str(e),
+                    exc_info=True,
+                )
+            await _warn_if_index_analyzer_mismatch(es, analyzer)
             return
         await es.indices.create(index=CHUNK_INDEX, body=mapping)
-        logger.info("elasticsearch chunk index created (IK)", index=CHUNK_INDEX)
-    except Exception as e:
-        logger.warning(
-            "IK analyzer unavailable or mapping update failed",
-            index=CHUNK_INDEX,
-            error=str(e),
-            exc_info=True,
+        logger.info(
+            "elasticsearch chunk index created", index=CHUNK_INDEX, analyzer=analyzer
         )
-        if not await es.indices.exists(index=CHUNK_INDEX):
-            mapping = _build_chunk_mapping("standard", "standard")
-            await es.indices.create(index=CHUNK_INDEX, body=mapping)
-            logger.info("elasticsearch chunk index created (standard)", index=CHUNK_INDEX)
+        return
+
+    logger.error("no usable analyzer for chunk index", index=CHUNK_INDEX)
+
+
+async def _warn_if_index_analyzer_mismatch(
+    es: AsyncElasticsearch, desired: str, *, index: str = CHUNK_INDEX
+) -> None:
+    """索引 analyzer 无法在线修改；不一致时必须喊出来，否则关键词通道静默劣化。"""
+    try:
+        current = await es.indices.get_mapping(index=index)
+        props = current[index]["mappings"]["properties"]
+        actual = (props.get("chunkText") or {}).get("analyzer")
+    except Exception:  # noqa: BLE001 - 只为告警，任何异常都不影响主流程
+        return
+    if actual and actual != desired:
+        logger.warning(
+            "es index analyzer mismatch (index is immutable; reindex to apply)",
+            index=index,
+            actual=actual,
+            desired=desired,
+        )
 
 
 def _build_chunk_mapping(analyzer: str, search_analyzer_str: str) -> dict:
@@ -158,28 +224,39 @@ NAVIGATION_INDEX = "pipeline_rag_navigation_index"
 
 
 async def _ensure_navigation_index() -> None:
-    """创建文档章节导航索引（幂等），优先 IK，不可用降级 standard"""
+    """创建文档章节导航索引（幂等），按 ik → cjk → standard 顺序择优。"""
     es = get_es()
-    analyzer = settings.es.analyzer
-    search_analyzer = settings.es.search_analyzer
+    exists = await es.indices.exists(index=NAVIGATION_INDEX)
 
-    try:
+    for analyzer, search_analyzer in _analyzer_chain(
+        settings.es.analyzer, settings.es.search_analyzer
+    ):
+        if not await _analyzer_available(es, analyzer):
+            continue
         mapping = _build_navigation_mapping(analyzer, search_analyzer)
-        if await es.indices.exists(index=NAVIGATION_INDEX):
-            await es.indices.put_mapping(index=NAVIGATION_INDEX, body=mapping["mappings"])
+        if exists:
+            try:
+                await es.indices.put_mapping(
+                    index=NAVIGATION_INDEX, body=mapping["mappings"]
+                )
+            except Exception as e:
+                logger.warning(
+                    "elasticsearch navigation index mapping update failed",
+                    index=NAVIGATION_INDEX,
+                    error=str(e),
+                    exc_info=True,
+                )
+            await _warn_if_index_analyzer_mismatch(es, analyzer, index=NAVIGATION_INDEX)
             return
         await es.indices.create(index=NAVIGATION_INDEX, body=mapping)
-        logger.info("elasticsearch navigation index created (IK)", index=NAVIGATION_INDEX)
-    except Exception as e:
-        logger.warning(
-            "IK analyzer unavailable or mapping update failed for navigation index",
-            error=str(e),
-            exc_info=True,
+        logger.info(
+            "elasticsearch navigation index created",
+            index=NAVIGATION_INDEX,
+            analyzer=analyzer,
         )
-        if not await es.indices.exists(index=NAVIGATION_INDEX):
-            mapping = _build_navigation_mapping("standard", "standard")
-            await es.indices.create(index=NAVIGATION_INDEX, body=mapping)
-            logger.info("elasticsearch navigation index created (standard)", index=NAVIGATION_INDEX)
+        return
+
+    logger.error("no usable analyzer for navigation index", index=NAVIGATION_INDEX)
 
 
 def _build_navigation_mapping(analyzer: str, search_analyzer_str: str) -> dict:

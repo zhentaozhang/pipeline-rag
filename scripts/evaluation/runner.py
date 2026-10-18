@@ -616,6 +616,16 @@ async def run_evaluation(
     return final
 
 
+def _jev_coverage() -> dict[str, Any]:
+    """JEV 决策覆盖率（P0-1）：证明 V3 跑的是 JEV，而不是 fail-open 回退。"""
+    try:
+        from app.infra.jev_client import jev_coverage
+
+        return jev_coverage()
+    except Exception:  # noqa: BLE001 - 埋点失败不应影响评测
+        return {"flags": {}, "totals": {"decided": 0, "failed": 0, "disabled": 0, "attempted": 0}}
+
+
 _LATENCY_STAGES = ("total", "retrieval", "generation")
 
 
@@ -882,6 +892,28 @@ def _print_report(
         for r in partial:
             logger.warning("    %6s  PARTIAL: %s", r.question_id, r.error)
 
+    cov = _jev_coverage()
+    totals = cov["totals"]
+    if totals["attempted"] or totals["disabled"]:
+        logger.info("  ├──────────────────────────────────────────────┤")
+        logger.info("  │ JEV 决策覆盖 (P0-1)                          │")
+        logger.info(
+            "  │ • 成功决策/尝试:  %4d / %4d                  │",
+            totals["decided"],
+            totals["attempted"],
+        )
+        logger.info("  │ • 回退失败:       %4d                        │", totals["failed"])
+        logger.info("  │ • 开关关闭跳过:   %4d                        │", totals["disabled"])
+        for flag, stat in sorted(cov["flags"].items()):
+            if not stat.get("calls"):
+                continue
+            logger.info(
+                "  │   - %-28s p50=%6.1fms p95=%6.1fms │",
+                flag,
+                stat["p50_ms"] or 0.0,
+                stat["p95_ms"] or 0.0,
+            )
+
     logger.info("%s", "=" * 60)
     return avg, stage_totals
 
@@ -1124,6 +1156,7 @@ if __name__ == "__main__":
                 {
                     "provenance": {
                         "judge_model": judge_model_name,
+                        "jev_coverage": _jev_coverage(),
                         "variant": args.variant or "custom",
                         "keyword_channel_enabled": _settings.rag.keyword_channel_enabled,
                         "rerank_enabled": _settings.rerank.enabled,

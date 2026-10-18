@@ -45,10 +45,25 @@ class KeywordRetrievalChannel:
                         "chunkText",
                     ],
                     "type": "best_fields",
-                    "minimum_should_match": "1<50%",
+                    "minimum_should_match": getattr(
+                        settings.rag, "keyword_minimum_should_match", "1<50%"
+                    ),
                 }
             },
         ]
+
+        # 可选：把 jieba 词项作为 should 子句注入（放宽候选池；默认关）
+        if getattr(settings.rag, "keyword_term_expansion_enabled", False):
+            from app.rag.keyword_extractor import extract_keyword_terms
+
+            seen = {query_text}
+            for term in extract_keyword_terms(query_text).split():
+                if len(term) < 2 or term in seen:
+                    continue
+                seen.add(term)
+                should_clauses.append({"match": {"chunkText": {"query": term, "boost": 1.5}}})
+                if len(seen) > 9:
+                    break
 
         # 针对改写提取的关键词单独注入 should 加权匹配，避免污染主查询语法
         if getattr(sub_q, "query_context_hints", None):

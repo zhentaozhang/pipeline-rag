@@ -93,6 +93,50 @@ class TestBuildEsQuery:
         assert len(filters) == 1
 
 
+class TestQueryLooseningConfig:
+    """P0-4：关键词通道候选池过小的两个可调点，都必须能被配置开关控制。"""
+
+    def test_minimum_should_match_defaults_to_strict(self):
+        q = KeywordRetrievalChannel._build_es_query("查询词", make_sub_question(), 10)
+        mm = [
+            c["multi_match"]["minimum_should_match"]
+            for c in q["query"]["bool"]["should"]
+            if "multi_match" in c
+        ]
+        assert mm == ["1<50%"]
+
+    def test_minimum_should_match_follows_setting(self, monkeypatch):
+        monkeypatch.setattr(
+            keyword_module.settings.rag, "keyword_minimum_should_match", "2", raising=False
+        )
+        q = KeywordRetrievalChannel._build_es_query("查询词", make_sub_question(), 10)
+        mm = [
+            c["multi_match"]["minimum_should_match"]
+            for c in q["query"]["bool"]["should"]
+            if "multi_match" in c
+        ]
+        assert mm == ["2"]
+
+    def test_term_expansion_disabled_by_default(self):
+        q = KeywordRetrievalChannel._build_es_query(
+            "试用期时长是如何确定的", make_sub_question(), 10
+        )
+        assert len(q["query"]["bool"]["should"]) == 4
+
+    def test_term_expansion_adds_jieba_terms(self, monkeypatch):
+        monkeypatch.setattr(
+            keyword_module.settings.rag, "keyword_term_expansion_enabled", True, raising=False
+        )
+        q = KeywordRetrievalChannel._build_es_query(
+            "试用期时长是如何确定的", make_sub_question(), 10
+        )
+        should = q["query"]["bool"]["should"]
+        assert len(should) > 4
+        added = [c for c in should if "match" in c and "chunkText" in c["match"]]
+        assert added, "应注入 chunkText 词项 should 子句"
+        assert all(len(c["match"]["chunkText"]["query"]) >= 2 for c in added)
+
+
 class TestBuildFallbackSql:
     def test_basic_structure(self):
         sql, args = KeywordRetrievalChannel._build_fallback_sql(

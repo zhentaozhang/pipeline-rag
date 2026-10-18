@@ -40,6 +40,58 @@ _jev_breaker = CircuitBreakerRegistry.get_or_register(
 )
 
 
+# ── 覆盖率埋点（P0-1）───────────────────────────────────────────────
+# 评测里"V3 与 V2 是否有区别"完全取决于 JEV 是否真的做了决策。
+# 服务不可达 / 开关关闭时 jev_decide 全部 fail-open 回退，报告上却看不出任何异常，
+# 所以这里按 flag 统计 decided / failed / disabled 与调用耗时，供评测报告直接引用。
+_COVERAGE: dict[str, dict[str, int]] = {}
+_COVERAGE_LATENCIES: dict[str, list[float]] = {}
+
+
+def reset_jev_coverage() -> None:
+    _COVERAGE.clear()
+    _COVERAGE_LATENCIES.clear()
+
+
+def _bump(flag: str, key: str) -> None:
+    stat = _COVERAGE.setdefault(flag, {"decided": 0, "failed": 0, "disabled": 0})
+    stat[key] = stat.get(key, 0) + 1
+
+
+def _percentile(values: list[float], pct: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    pos = (len(ordered) - 1) * min(100.0, max(0.0, pct)) / 100.0
+    lower = int(pos)
+    upper = min(lower + 1, len(ordered) - 1)
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * (pos - lower)
+
+
+def jev_coverage() -> dict[str, Any]:
+    """返回按 flag 聚合的决策覆盖情况（供评测报告 / 探针脚本引用）。"""
+    flags: dict[str, Any] = {}
+    totals = {"decided": 0, "failed": 0, "disabled": 0, "attempted": 0}
+    for flag, stat in _COVERAGE.items():
+        latencies = _COVERAGE_LATENCIES.get(flag, [])
+        flags[flag] = {
+            **stat,
+            "calls": len(latencies),
+            "p50_ms": (
+                round(_percentile(latencies, 50), 2) if latencies else None  # type: ignore[arg-type]
+            ),
+            "p95_ms": (
+                round(_percentile(latencies, 95), 2) if latencies else None  # type: ignore[arg-type]
+            ),
+        }
+        for key in ("decided", "failed", "disabled"):
+            totals[key] += stat.get(key, 0)
+    totals["attempted"] = totals["decided"] + totals["failed"]
+    return {"flags": flags, "totals": totals}
+
+
 class JEVClient:
     def __init__(self) -> None:
         settings = get_settings()
@@ -173,11 +225,17 @@ async def jev_decide(
     except Exception:  # noqa: BLE001 — 配置不可用按关闭处理
         enabled = False
     if not enabled:
+        _bump(flag, "disabled")
         return None
 
+    t0 = time.perf_counter()
     try:
         answers = await get_jev_client().system_one(state=state, questions=questions)
-        return parse(answers)
+        parsed = parse(answers)
     except Exception as e:  # noqa: BLE001 — 任何失败都回退到原路径
+        _bump(flag, "failed")
         logger.warning(f"{log_context} failed, falling back", error=str(e)[:120])
         return None
+    _COVERAGE_LATENCIES.setdefault(flag, []).append((time.perf_counter() - t0) * 1000)
+    _bump(flag, "decided")
+    return parsed

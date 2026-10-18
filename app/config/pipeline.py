@@ -53,6 +53,11 @@ class RAGSettings(BaseSettings):
     # 避免"未提供 .env 的部署/CI"回落到过窄的候选池（原 5/5/6/5）。
     vector_top_k: int = 50
     keyword_top_k: int = 50
+    # 关键词通道查询宽严度：ES multi_match 的 minimum_should_match。
+    # 默认值与历史行为一致；调松可扩大候选池（用 hard85 配对 bootstrap 判定收益）。
+    keyword_minimum_should_match: str = "1<50%"
+    # 是否把 jieba 词项作为 should 子句注入（默认关，避免改变既有排序行为）
+    keyword_term_expansion_enabled: bool = False
     candidate_top_k: int = 50
     final_top_k: int = 8
     min_vector_similarity: float = 0.55
