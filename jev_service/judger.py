@@ -8,12 +8,15 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections.abc import Callable
 from typing import Any
 
 import torch
 import torch.nn.functional as F
 
 logger = logging.getLogger("jev_service.judger")
+
+from jev_service.prompt_budget import fit_state_to_budget  # noqa: E402
 
 
 def _safe_encode_first_token(tokenizer, text: str) -> int:
@@ -105,6 +108,27 @@ class LocalJEVJudger:
         except ValueError:
             self._batch_chunk = 8
 
+        # Prompt 预算上限（token）：超限时截 state，绝不截判断标准/证据
+        try:
+            self._max_tokens = max(512, int(os.getenv("JEV_MAX_TOKENS", "4096") or 4096))
+        except ValueError:
+            self._max_tokens = 4096
+
+    def _count_tokens(self, text: str) -> int:
+        """真实分词长度（用于 Prompt 预算，不做任何截断）。"""
+        if not text:
+            return 0
+        return len(self.tokenizer.encode(text, add_special_tokens=False))
+
+    def _fit_state(self, state: str, build_prompt: Callable[[str], str]) -> str:
+        """只截 state，保证判断标准 / 证据 / assistant 标记完整（见 prompt_budget 模块说明）。"""
+        return fit_state_to_budget(
+            state,
+            count=self._count_tokens,
+            build_prompt=build_prompt,
+            max_tokens=self._max_tokens,
+        )
+
     def _truncate_state(self, state: str, max_chars: int = 4000) -> str:
         """保护性截断待评估上下文，双端保留首尾核心信息，确保提示词长度平稳且不截断关键线索"""
         s = (state or "").strip()
@@ -150,13 +174,14 @@ class LocalJEVJudger:
         """
         Noul 原语：输出真值判断结论与校准概率 [0.0, 1.0]
         """
-        safe_state = _sanitize_chatml(self._truncate_state(state))
+        raw_state = _sanitize_chatml(state)
+        safe_state = self._fit_state(raw_state, lambda s: self._build_noul_prompt(s, instructions))
         prompt = self._build_noul_prompt(safe_state, instructions)
         inputs = self.tokenizer(
             prompt,
             return_tensors="pt",
             truncation=True,
-            max_length=4096,
+            max_length=self._max_tokens,
         ).to(self.device)
 
         t0 = time.perf_counter()
@@ -197,13 +222,16 @@ class LocalJEVJudger:
 
         keys = list(options.keys())
         num_options = min(len(keys), len(self.labels))
-        safe_state = _sanitize_chatml(self._truncate_state(state))
+        raw_state = _sanitize_chatml(state)
+        safe_state = self._fit_state(
+            raw_state, lambda s: self._build_choice_prompt(s, instructions, options)
+        )
         prompt = self._build_choice_prompt(safe_state, instructions, options)
         inputs = self.tokenizer(
             prompt,
             return_tensors="pt",
             truncation=True,
-            max_length=4096,
+            max_length=self._max_tokens,
         ).to(self.device)
 
         t0 = time.perf_counter()
@@ -285,19 +313,25 @@ class LocalJEVJudger:
             q_name, q_inst = items[0]
             return {q_name: self.judge_noul(state, q_inst)}
 
-        safe_state = _sanitize_chatml(self._truncate_state(state))
+        raw_state = _sanitize_chatml(state)
         self.tokenizer.padding_side = "left"
         results = {}
         chunk_size = 4
         for chunk_idx in range(0, len(items), chunk_size):
             chunk_items = items[chunk_idx : chunk_idx + chunk_size]
-            prompts = [self._build_noul_prompt(safe_state, q_inst) for _, q_inst in chunk_items]
+            prompts = [
+                self._build_noul_prompt(
+                    self._fit_state(raw_state, lambda s, i=q_inst: self._build_noul_prompt(s, i)),
+                    q_inst,
+                )
+                for _, q_inst in chunk_items
+            ]
             inputs = self.tokenizer(
                 prompts,
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
-                max_length=4096,
+                max_length=self._max_tokens,
             ).to(self.device)
 
             t0 = time.perf_counter()
@@ -379,7 +413,7 @@ class LocalJEVJudger:
         if not questions:
             return {}
 
-        safe_state = _sanitize_chatml(self._truncate_state(state))
+        raw_state = _sanitize_chatml(state)
         self.tokenizer.padding_side = "left"
 
         # 构建每个问题的 prompt 与其候选键（同一批次共享一次前向）
@@ -397,9 +431,9 @@ class LocalJEVJudger:
                 or ""
             )
             if q_type == "noul":
-                entries.append(
-                    (q_name, "noul", self._build_noul_prompt(safe_state, str(q_inst)), None)
-                )
+                inst = str(q_inst)
+                fitted = self._fit_state(raw_state, lambda s, i=inst: self._build_noul_prompt(s, i))
+                entries.append((q_name, "noul", self._build_noul_prompt(fitted, inst), None))
             elif q_type == "choice":
                 opts = (
                     getattr(q_item, "options", None)
@@ -410,13 +444,12 @@ class LocalJEVJudger:
                     answers[q_name] = {"choice": "", "confidence": 0.0, "distribution": {}}
                     continue
                 keys = list(opts.keys())[: len(self.labels)]
+                inst = str(q_inst)
+                fitted = self._fit_state(
+                    raw_state, lambda s, i=inst, o=opts: self._build_choice_prompt(s, i, o)
+                )
                 entries.append(
-                    (
-                        q_name,
-                        "choice",
-                        self._build_choice_prompt(safe_state, str(q_inst), opts),
-                        keys,
-                    )
+                    (q_name, "choice", self._build_choice_prompt(fitted, inst, opts), keys)
                 )
             elif q_type == "score":
                 levels = (
@@ -429,13 +462,12 @@ class LocalJEVJudger:
                     continue
                 options = {lv: f"判定为【{lv}】等级" for lv in levels}
                 keys = list(options.keys())[: len(self.labels)]
+                inst = str(q_inst)
+                fitted = self._fit_state(
+                    raw_state, lambda s, i=inst, o=options: self._build_choice_prompt(s, i, o)
+                )
                 entries.append(
-                    (
-                        q_name,
-                        "score",
-                        self._build_choice_prompt(safe_state, str(q_inst), options),
-                        keys,
-                    )
+                    (q_name, "score", self._build_choice_prompt(fitted, inst, options), keys)
                 )
             else:
                 logger.warning("Unsupported JEV primitive type: %s", q_type)
@@ -449,7 +481,7 @@ class LocalJEVJudger:
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
-                max_length=4096,
+                max_length=self._max_tokens,
             ).to(self.device)
 
             t0 = time.perf_counter()
