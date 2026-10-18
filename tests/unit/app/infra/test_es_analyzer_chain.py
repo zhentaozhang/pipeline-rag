@@ -36,7 +36,10 @@ class TestAnalyzerChain:
 class TestChunkMapping:
     def test_cjk_mapping_has_no_ik_custom_analyzers(self):
         mapping = _build_chunk_mapping("cjk", "cjk")
-        assert "settings" not in mapping or not mapping["settings"]
+        # normalizer 与分词器无关，任何 analyzer 下都必须声明（派生 keyword 字段依赖它）
+        assert "analyzer" not in mapping.get("settings", {}).get("analysis", {})
+        props = mapping["mappings"]["properties"]
+        assert props["chunkText"]["analyzer"] == "cjk"
         props = mapping["mappings"]["properties"]
         for field in ("chunkText", "sectionPath", "documentName", "knowledgeScopeName"):
             assert props[field]["analyzer"] == "cjk"

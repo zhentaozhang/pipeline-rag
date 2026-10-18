@@ -1,5 +1,7 @@
 """Elasticsearch 客户端（关键词检索 + IK 分词）"""
 
+from typing import Any
+
 import structlog
 from elasticsearch import AsyncElasticsearch
 
@@ -167,17 +169,17 @@ async def _warn_if_index_analyzer_mismatch(
 
 
 def _build_chunk_mapping(analyzer: str, search_analyzer_str: str) -> dict:
-    return {
-        "settings": {
-            "analysis": {
-                "analyzer": {
-                    "ik_smart_analyzer": {"type": "custom", "tokenizer": "ik_smart"},
-                    "ik_max_word_analyzer": {"type": "custom", "tokenizer": "ik_max_word"},
-                }
-            }
+    # normalizer 与分词器无关，任何 analyzer 下都要有（docNameKeyword 写入依赖它）
+    analysis: dict[str, Any] = {
+        "normalizer": {"lowercase": {"type": "custom", "filter": ["lowercase"]}}
+    }
+    if "ik" in analyzer:
+        analysis["analyzer"] = {
+            "ik_smart_analyzer": {"type": "custom", "tokenizer": "ik_smart"},
+            "ik_max_word_analyzer": {"type": "custom", "tokenizer": "ik_max_word"},
         }
-        if "ik" in analyzer
-        else {},
+    return {
+        "settings": {"analysis": analysis},
         "mappings": {
             "dynamic": False,
             "properties": {
@@ -208,6 +210,13 @@ def _build_chunk_mapping(analyzer: str, search_analyzer_str: str) -> dict:
                 },
                 "businessCategory": {"type": "keyword"},
                 "documentTags": {"type": "keyword"},
+                # 派生精确字段（索引时由 enrich_chunk_document 回填）：
+                # 编号类值是闭集，必须 keyword + term 查询，不能交给分词器。
+                "clauseNumber": {"type": "keyword"},
+                "subClauseNumbers": {"type": "keyword"},
+                "docNameKeyword": {"type": "keyword", "normalizer": "lowercase"},
+                "gradeCodes": {"type": "keyword"},
+                "cityClasses": {"type": "keyword"},
                 "chunkText": {
                     "type": "text",
                     "analyzer": analyzer,

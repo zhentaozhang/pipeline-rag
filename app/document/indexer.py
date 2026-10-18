@@ -3,6 +3,8 @@
 同时将 Chunk 写入 PGVector（向量）+ ES（关键词），建立双通道检索基础
 """
 
+from typing import Any
+
 import structlog
 
 from app.common.utils import safe_int
@@ -10,6 +12,23 @@ from app.document.chunker import Chunk
 from app.infra.es import CHUNK_INDEX, get_es
 
 logger = structlog.get_logger(__name__)
+
+
+def enrich_chunk_document(doc: dict[str, Any]) -> dict[str, Any]:
+    """把编号类 token 写进派生 keyword 字段（供 term 查询精确定位）。
+
+    放在这里而不是 ES 侧：写入与查询必须共用同一套解析，否则两边永远对不上。
+    """
+    from app.rag.query_tokens import derive_chunk_tokens
+
+    derived = derive_chunk_tokens(doc.get("sectionPath"), doc.get("chunkText"))
+    return doc | {
+        "clauseNumber": derived["clauseNumber"],
+        "subClauseNumbers": derived["subClauseNumbers"],
+        "docNameKeyword": (doc.get("documentName") or "").strip(),
+        "gradeCodes": derived["gradeCodes"],
+        "cityClasses": derived["cityClasses"],
+    }
 
 
 class DocumentIndexer:
@@ -41,7 +60,6 @@ class DocumentIndexer:
     ) -> int:
         """批量写入 Elasticsearch（IK 分词索引）"""
         es = get_es()
-        from typing import Any
 
         # 清理该文档的旧 ES 索引，避免 pipeline 重跑后累积重复
         doc_id = (
@@ -69,28 +87,30 @@ class DocumentIndexer:
         for chunk in child_chunks:
             docs.append({"index": {"_index": CHUNK_INDEX, "_id": chunk.chunk_id}})
             docs.append(
-                {
-                    "chunkId": chunk.chunk_id,
-                    "tenantId": tenant_id,
-                    "documentId": getattr(chunk, "document_id", None)
-                    or document_id
-                    or safe_int(chunk.doc_id, default=0),
-                    "taskId": safe_int(task_id),
-                    "chunkNo": chunk.chunk_index,
-                    "documentName": doc_title,
-                    "sectionPath": chunk.section_path,
-                    "structureNodeId": safe_int(chunk.structure_node_id),
-                    "structureNodeType": chunk.structure_node_type
-                    if chunk.structure_node_type
-                    else 0,
-                    "canonicalPath": chunk.canonical_path,
-                    "itemIndex": chunk.item_index if chunk.item_index else 0,
-                    "knowledgeScopeCode": scope_code,
-                    "knowledgeScopeName": scope_name,
-                    "businessCategory": business_category,
-                    "documentTags": (document_tags or "").split(",") if document_tags else [],
-                    "chunkText": self._compose_index_text(chunk),
-                }
+                enrich_chunk_document(
+                    {
+                        "chunkId": chunk.chunk_id,
+                        "tenantId": tenant_id,
+                        "documentId": getattr(chunk, "document_id", None)
+                        or document_id
+                        or safe_int(chunk.doc_id, default=0),
+                        "taskId": safe_int(task_id),
+                        "chunkNo": chunk.chunk_index,
+                        "documentName": doc_title,
+                        "sectionPath": chunk.section_path,
+                        "structureNodeId": safe_int(chunk.structure_node_id),
+                        "structureNodeType": chunk.structure_node_type
+                        if chunk.structure_node_type
+                        else 0,
+                        "canonicalPath": chunk.canonical_path,
+                        "itemIndex": chunk.item_index if chunk.item_index else 0,
+                        "knowledgeScopeCode": scope_code,
+                        "knowledgeScopeName": scope_name,
+                        "businessCategory": business_category,
+                        "documentTags": (document_tags or "").split(",") if document_tags else [],
+                        "chunkText": self._compose_index_text(chunk),
+                    }
+                )
             )
 
         if docs:

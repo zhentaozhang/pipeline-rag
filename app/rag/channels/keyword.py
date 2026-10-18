@@ -80,6 +80,21 @@ class KeywordRetrievalChannel:
             should_clauses.append(
                 {"match": {"chunkText": {"query": f"{city_class}类城市", "boost": 2.0}}}
             )
+        # 派生 keyword 字段的精确 term：编号在语料里是闭集，term 命中比 phrase 更可靠
+        for clause in tokens.clauses:
+            should_clauses.append({"term": {"clauseNumber": {"value": clause, "boost": 10.0}}})
+        for subclause in tokens.subclauses:
+            should_clauses.append(
+                {"term": {"subClauseNumbers": {"value": subclause, "boost": 8.0}}}
+            )
+        for doc_name in tokens.doc_names:
+            should_clauses.append(
+                {"term": {"docNameKeyword": {"value": doc_name.lower(), "boost": 6.0}}}
+            )
+        for grade in tokens.grades:
+            should_clauses.append({"term": {"gradeCodes": {"value": grade, "boost": 4.0}}})
+        for city_class in tokens.city_classes:
+            should_clauses.append({"term": {"cityClasses": {"value": city_class, "boost": 3.0}}})
 
         # 可选：把 jieba 词项作为 should 子句注入（放宽候选池；默认关）
         if getattr(settings.rag, "keyword_term_expansion_enabled", False):

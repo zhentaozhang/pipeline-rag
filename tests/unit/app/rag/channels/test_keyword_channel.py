@@ -612,3 +612,31 @@ class TestQueryConstruction:
         sub = SubQuestion(index=0, text="那这个呢", retrieval_query="试用期时长 试用期", tenant_id="t1")
         await KeywordRetrievalChannel().retrieve(sub)
         assert "试用期时长" in json.dumps(captured["body"], ensure_ascii=False)
+
+
+class TestStructuredTermClauses:
+    """Task 5：编号类精确值必须以 term 命中派生 keyword 字段。"""
+
+    def test_clause_token_queries_clause_number_field(self):
+        q = KeywordRetrievalChannel._build_es_query(
+            "第九条 住宿费用限额", make_sub_question(), 10
+        )
+        should = q["query"]["bool"]["should"]
+        assert {"term": {"clauseNumber": {"value": "9", "boost": 10.0}}} in should
+
+    def test_subclause_grade_city_doc_terms(self):
+        q = KeywordRetrievalChannel._build_es_query(
+            "《差旅管理制度》9.1 总监级 M4+ A类城市", make_sub_question(), 10
+        )
+        should = q["query"]["bool"]["should"]
+        assert {"term": {"subClauseNumbers": {"value": "9.1", "boost": 8.0}}} in should
+        assert {
+            "term": {"docNameKeyword": {"value": "差旅管理制度", "boost": 6.0}}
+        } in should
+        assert {"term": {"gradeCodes": {"value": "M4+", "boost": 4.0}}} in should
+        assert {"term": {"cityClasses": {"value": "A", "boost": 3.0}}} in should
+
+    def test_no_term_clauses_without_structured_tokens(self):
+        q = KeywordRetrievalChannel._build_es_query("试用期时长如何确定", make_sub_question(), 10)
+        should = q["query"]["bool"]["should"]
+        assert not any("term" in clause for clause in should)

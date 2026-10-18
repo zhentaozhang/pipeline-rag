@@ -2,7 +2,11 @@
 
 import pytest
 
-from scripts.evaluation.migrate_es_index import build_target_mapping, verify_migration
+from scripts.evaluation.migrate_es_index import (
+    apply_derived_fields,
+    build_target_mapping,
+    verify_migration,
+)
 
 
 def test_target_mapping_uses_ik_analyzers():
@@ -27,3 +31,19 @@ def test_verify_migration_returns_summary_on_match():
         "target": 305,
         "matched": True,
     }
+
+
+def test_apply_derived_fields_backfills_keyword_tokens():
+    docs = [
+        {
+            "_id": "c1",
+            "documentName": "差旅制度",
+            "sectionPath": "第9条 住宿费用限额",
+            "chunkText": "**9.1** 总监级（M4+）A类城市",
+        }
+    ]
+    out = apply_derived_fields(docs)
+    assert out[0]["clauseNumber"] == ["9"]
+    assert out[0]["subClauseNumbers"] == ["9.1"]
+    assert out[0]["docNameKeyword"] == "差旅制度"
+    assert out[0]["cityClasses"] == ["A"]

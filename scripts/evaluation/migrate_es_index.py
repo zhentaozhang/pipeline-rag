@@ -26,6 +26,13 @@ from app.infra.es import _build_chunk_mapping
 logger = structlog.get_logger(__name__)
 
 
+def apply_derived_fields(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """迁移时回填派生 keyword 字段（复用索引侧同一套解析，避免两边分叉）。"""
+    from app.document.indexer import enrich_chunk_document
+
+    return [enrich_chunk_document(doc) for doc in docs]
+
+
 def build_target_mapping(analyzer: str, search_analyzer: str) -> dict[str, Any]:
     return _build_chunk_mapping(analyzer, search_analyzer)
 
@@ -55,12 +62,18 @@ def copy_index(
     analyzer: str,
     search_analyzer: str,
     dry_run: bool = False,
+    derived_fields: bool = False,
 ) -> dict[str, Any]:
     source = Elasticsearch(source_url)
     target = Elasticsearch(target_url)
     try:
         docs = _read_all(source, index)
         source_count = len(docs)
+        if derived_fields:
+            ids = [doc.pop("_id") for doc in docs]
+            docs = [
+                doc | {"_id": cid} for doc, cid in zip(apply_derived_fields(docs), ids, strict=True)
+            ]
         if dry_run:
             return {
                 "source": source_count,
@@ -96,6 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--index", default="pipeline_rag_document_chunk")
     parser.add_argument("--analyzer", default="ik_max_word")
     parser.add_argument("--search-analyzer", default="ik_smart")
+    parser.add_argument("--derived-fields", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     summary = copy_index(
@@ -105,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         analyzer=args.analyzer,
         search_analyzer=args.search_analyzer,
         dry_run=args.dry_run,
+        derived_fields=args.derived_fields,
     )
     print(json.dumps(summary, ensure_ascii=False))
     return 0
