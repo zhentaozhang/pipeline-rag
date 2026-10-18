@@ -79,3 +79,45 @@ async def test_llm_audit_error_marks_unknown_refs(monkeypatch):
     assert meta["unknown_refs"] == [1]
     assert bad == []
     assert answer == "答案[1]"
+
+
+@pytest.mark.asyncio
+async def test_dangling_citation_is_rejected_without_any_llm_call(monkeypatch):
+    """[7] 在只有 1 条证据时必然不成立：确定性判负，不该为此花一次模型调用。"""
+    monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
+    fallback = _Fallback()
+
+    answer, bad, meta = await verify_citations(fallback, "试用期一个月[7]", [{"content": "试用期"}], "问题")
+
+    assert fallback.calls == 0
+    assert meta["status"] == "deterministic_unsupported"
+    assert bad == [7]
+    assert "没有对应的证据" in answer
+
+
+@pytest.mark.asyncio
+async def test_fabricated_document_without_citation_is_caught(monkeypatch):
+    """最伤的失败模式：没有 [n]，却编了一份语料里不存在的文档。"""
+    monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
+    fallback = _Fallback()
+
+    answer, bad, meta = await verify_citations(
+        fallback,
+        "按《员工在职进修与专业资格考证补贴办法》第5.1条，A 类城市全额报销。",
+        [{"content": "第5条 试用期规定", "document_name": "01_员工手册.md"}],
+        "进修补贴怎么报",
+    )
+
+    assert fallback.calls == 0
+    assert meta["status"] == "deterministic_unsupported"
+    assert "员工在职进修与专业资格考证补贴办法" in answer
+    assert bad == []
+
+
+def test_needs_citation_check_covers_uncited_hallucination():
+    from app.chat.answer_grounding import needs_citation_check
+
+    refs = [{"content": "第5条 试用期规定", "document_name": "01_员工手册.md"}]
+    assert needs_citation_check("答案[1]", refs) is True
+    assert needs_citation_check("答案", refs) is False
+    assert needs_citation_check("按《不存在的办法》执行", refs) is True

@@ -15,10 +15,10 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.chat.answer_grounding import needs_citation_check
 from app.chat.citation_verifier import (
     citation_verify_enabled,
     dedupe_references,
-    extract_citations,
     verify_citations,
 )
 from app.chat.schema import ExecutionPlan
@@ -232,7 +232,7 @@ class RagChatExecutor(ConversationExecutor):
             settings.rag.citation_verify_parallel_enabled
             and citation_verify_enabled()
             and self.task.references
-            and extract_citations(answer)
+            and needs_citation_check(answer, self.task.references)
         ):
             return
         from app.common.llm_client import get_chat_client
@@ -314,6 +314,9 @@ class RagChatExecutor(ConversationExecutor):
                         "child_chunk_id": ev.child_chunk_id or str(ev.chunk_id),
                         "child_chunk_text": ev.child_chunk_text or "",
                         "section_title": ev.section_title or "",
+                        # 落地校验需要真实文档名/章节路径（title 是兼容字段，可能是章节路径）
+                        "document_name": ev.document_name or "",
+                        "section_path": ev.section_path or "",
                         "content": (ev.content or "")[:2000],
                     }
                 )

@@ -15,10 +15,10 @@ from typing import Any
 
 import structlog
 
+from app.chat.answer_grounding import audit_grounding, grounding_note
 from app.config import get_settings
 
 logger = structlog.get_logger(__name__)
-
 CITATION_RE = re.compile(r"\[(\d+)\]")
 
 
@@ -68,6 +68,18 @@ async def verify_citations(
     返回 (修正后 answer, 不支持/无法核实的引用编号列表, 元信息)。
     仅追加说明，不改写正文（正文已流式发出）。
     """
+    # 零成本确定性兜底（先于一切模型调用）：悬空引用 / 不存在的文档名 / 不存在的条款号
+    # 这三类问题不需要判分模型就能判负，也覆盖"没有 [n] 但编造了一份文档"的失败模式。
+    grounding = audit_grounding(answer, references or [])
+    if grounding.blocking:
+        meta = {
+            "status": "deterministic_unsupported",
+            "unsupported": list(grounding.unsupported_citations),
+            "grounding": grounding.to_meta(),
+        }
+        logger.warning("answer grounding failed", **grounding.to_meta())
+        return answer + grounding_note(grounding), list(grounding.unsupported_citations), meta
+
     refs = extract_citations(answer)
     if not refs:
         return answer, [], {"status": "no_citation"}

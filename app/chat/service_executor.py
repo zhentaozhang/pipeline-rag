@@ -439,6 +439,7 @@ async def execute_stream(
     _answer_full = "".join(state.full_answer)
     if _answer_full:
         try:
+            from app.chat.answer_grounding import audit_grounding
             from app.chat.citation_verifier import (
                 citation_verify_enabled,
                 extract_citations,
@@ -446,6 +447,9 @@ async def execute_stream(
             )
 
             _refs = extract_citations(_answer_full)
+            _ref_input = list(state.collected_references or []) or list(task.references or [])
+            # 确定性落地检查是零成本的，先跑它：没有 [n] 但编造了文档名/条款号也要进校验
+            _grounding = audit_grounding(_answer_full, _ref_input)
             logger.info(
                 "citation verify enter",
                 conversation_id=conversation_id,
@@ -454,12 +458,11 @@ async def execute_stream(
                 task_ref_count=len(task.references or []),
                 enabled=citation_verify_enabled(),
             )
-            if citation_verify_enabled() and _refs:
+            if citation_verify_enabled() and (_refs or _grounding.blocking):
                 from app.common.llm_client import get_chat_client
                 from app.infra.model_fallback import ModelFallbackManager
 
                 _fallback = ModelFallbackManager(client=get_chat_client())
-                _ref_input = list(state.collected_references or []) or list(task.references or [])
                 # P1-c：优先复用 RagChatExecutor 与质量自审并发预跑的校验结果
                 _task = getattr(task, "_citation_task", None)
                 _base_answer = _answer_full
@@ -501,12 +504,16 @@ async def execute_stream(
                             references=_ref_input,
                             question=effective_verify_q,
                         )
+                _acc = 1.0 - (len(_bad_refs) / max(1, len(_refs)))
+                if not _refs and (_vmeta.get("grounding") or {}).get("issues"):
+                    # 没有 [n] 却编造了文档/条款：不能因为"没有引用编号"就算 100% 准确
+                    _acc = 0.0
                 tracer.attach_score(
                     "citation_accuracy",
-                    1.0 - (len(_bad_refs) / max(1, len(_refs))),
+                    _acc,
                     reason=f"verify {_vmeta.get('status')}",
                 )
-                if _bad_refs and _verified != _base_answer:
+                if _verified != _base_answer:
                     state.full_answer.append(_verified[len(_base_answer) :])
                     # 回答正文已流式发出，追加说明对用户不可见——
                     # 通过独立 SSE 事件提示（用户可见），并落库修正
