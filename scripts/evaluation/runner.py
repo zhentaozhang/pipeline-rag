@@ -724,6 +724,19 @@ def _generation_temperature() -> float:
     return settings.llm.temperature if eval_temp is None else float(eval_temp)
 
 
+def evaluate_gates(
+    gates: list[tuple[str, float, float | None]],
+) -> tuple[list[str], list[tuple[str, float, float]]]:
+    """判定门禁：阈值 0 跳过；样本缺失记 skipped；低于阈值记 violations。"""
+    skipped = [name for name, threshold, value in gates if threshold > 0 and value is None]
+    violations = [
+        (name, threshold, float(value))
+        for name, threshold, value in gates
+        if threshold > 0 and value is not None and float(value) < threshold
+    ]
+    return skipped, violations
+
+
 def _fmt_num(value: float | None, width: int = 5) -> str:
     """无有效评分样本时显示 N/A，避免与"真实 0 分"混淆。"""
     return f"{'N/A':<{width}}" if value is None else f"{value:.3f}"
@@ -1052,6 +1065,8 @@ if __name__ == "__main__":
     parser.add_argument("--min-precision", type=float, default=0.6)
     parser.add_argument("--min-recall", type=float, default=0.6)
     parser.add_argument("--min-correctness", type=float, default=0.6)
+    # 检索层门禁：0 = 跳过；用 chunk_id 口径的 R@5（不依赖 LLM judge，可在 retrieval-only 下跑）
+    parser.add_argument("--min-recall-ids", type=float, default=0.0)
     parser.add_argument("--json-report", type=str, default="", help="Write JSON report to path")
     parser.add_argument(
         "--gold-file",
@@ -1453,18 +1468,24 @@ if __name__ == "__main__":
             )
 
     # 门禁判定：阈值 0 表示跳过该指标；retrieval_only 模式下跳过生成指标门禁
+    gates: list[tuple[str, float, float | None]] = []
+    if args.min_recall_ids > 0:
+        # 检索层门禁不依赖 judge，任何模式下都应生效
+        gates.append(("recall_at_5_ids", args.min_recall_ids, avg.get("recall_at_5_ids")))
     if not args.retrieval_only and not args.no_judge:
-        gates = [
-            ("faithfulness", args.min_faithfulness, avg["faithfulness"]),
-            ("answer_relevancy", args.min_relevancy, avg["answer_relevancy"]),
-            ("context_precision", args.min_precision, avg["context_precision"]),
-            ("context_recall", args.min_recall, avg["context_recall"]),
-            ("answer_correctness", args.min_correctness, avg["answer_correctness"]),
-        ]
-        skipped = [g[0] for g in gates if g[1] > 0 and g[2] is None]
+        gates.extend(
+            [
+                ("faithfulness", args.min_faithfulness, avg["faithfulness"]),
+                ("answer_relevancy", args.min_relevancy, avg["answer_relevancy"]),
+                ("context_precision", args.min_precision, avg["context_precision"]),
+                ("context_recall", args.min_recall, avg["context_recall"]),
+                ("answer_correctness", args.min_correctness, avg["answer_correctness"]),
+            ]
+        )
+    if gates:
+        skipped, violations = evaluate_gates(gates)
         if skipped:
             logger.warning("门禁跳过（无有效样本）：%s", ", ".join(skipped))
-        violations = [g for g in gates if g[1] > 0 and g[2] is not None and g[2] < g[1]]
         if violations:
             for name, threshold, actual in violations:
                 logger.error("GATE FAILED: %s = %.3f < %.3f", name, actual, threshold)

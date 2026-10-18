@@ -298,6 +298,49 @@ def paired_bootstrap_delta(
     }
 
 
+def paired_hit_counts(base_hits: dict[str, float], opt_hits: dict[str, float]) -> tuple[int, int]:
+    """统计配对二元结果的"只有 base 命中 / 只有 opt 命中"两个不一致格。"""
+    only_base = 0
+    only_opt = 0
+    for qid, base_value in base_hits.items():
+        if qid not in opt_hits:
+            continue
+        base_hit = float(base_value) >= 1.0
+        opt_hit = float(opt_hits[qid]) >= 1.0
+        if base_hit and not opt_hit:
+            only_base += 1
+        elif opt_hit and not base_hit:
+            only_opt += 1
+    return only_base, only_opt
+
+
+def mcnemar_exact(only_base: int, only_opt: int) -> float:
+    """McNemar 精确检验（二项双尾），返回 p 值。
+
+    只看不一致对：在"两次跑没有差别"的零假设下，不一致对应对称分布（p=0.5），
+    因此 p = 2 * P(X <= min(b, c))，X ~ Binomial(b+c, 0.5)。
+    """
+    n = only_base + only_opt
+    if n == 0:
+        return 1.0
+    k = min(only_base, only_opt)
+    tail = sum(math.comb(n, i) for i in range(k + 1)) / (2**n)
+    return min(1.0, 2 * tail)
+
+
+def extract_hit_map(
+    report: dict[str, Any], metric: str, threshold: float = 1.0
+) -> dict[str, float]:
+    """从报告 results 里抽出 {question_id: 是否命中}（召回类指标是 0/1）。"""
+    hits: dict[str, float] = {}
+    for row in report.get("results") or []:
+        qid = str(row.get("question_id", ""))
+        value = row.get(metric)
+        if qid and isinstance(value, (int, float)):
+            hits[qid] = 1.0 if float(value) >= threshold else 0.0
+    return hits
+
+
 def extract_metric_series(
     base_report: dict[str, Any], opt_report: dict[str, Any], metric: str
 ) -> tuple[list[float], list[float]]:

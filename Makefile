@@ -45,6 +45,10 @@ test-integration: ## 运行集成测试（需要本地数据库环境就绪）
 
 check: lint format-check typecheck test ## 本地全量质量门禁（推代码前必跑）
 
+eval-gate: ## 检索回归门禁（chunk_id 口径 R@5；不含 LLM judge）
+	uv run python -m scripts.evaluation.runner --round gate --retrieval-only --no-rewrite \
+		--channels both --gold-file reports/gold_llm.json --min-recall-ids 0.90
+
 eval-ab: ## JEV 决策 A/B 门禁（需 jev-service 可达；不可达则跳过）
 	uv run python -m scripts.evaluation.decision_ab --all --backends jev \
 		--min-recall 0.8 --min-precision 0.85 --min-f1 0.8
