@@ -58,8 +58,10 @@ class KeywordRetrievalChannel:
 
         # 过滤条件值类型混杂（str / int / list），显式标注避免被首个子句收敛成 str
         filter_clauses: list[dict[str, Any]] = []
-        if sub_q.tenant_id:
-            filter_clauses.append({"term": {"tenantId": sub_q.tenant_id}})
+        # 租户过滤必须 fail-closed：缺失/空白时收敛到 default，避免跨租户检索。
+        filter_clauses.append(
+            {"term": {"tenantId": (sub_q.tenant_id or "").strip() or "default"}}
+        )
         if sub_q.doc_ids:
             filter_clauses.append(
                 {
@@ -170,10 +172,10 @@ class KeywordRetrievalChannel:
             + ") AS similarity FROM pipeline_rag_document_embedding WHERE 1=1"
         )
 
-        if sub_q.tenant_id:
-            sql += f" AND tenant_id = ${idx}"
-            args.append(sub_q.tenant_id)
-            idx += 1
+        # 与 ES 主路径一致：租户 fail-closed 到 default。
+        sql += f" AND tenant_id = ${idx}"
+        args.append((sub_q.tenant_id or "").strip() or "default")
+        idx += 1
         if sub_q.scope_code:
             sql += f" AND metadata_json->>'scope_code' = ${idx}"
             args.append(sub_q.scope_code)

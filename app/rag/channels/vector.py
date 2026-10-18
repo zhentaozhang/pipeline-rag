@@ -69,10 +69,12 @@ class VectorRetrievalChannel:
         args: list[Any] = [embedding_str]
         param_idx = 2
 
-        if sub_q.tenant_id:
-            sql += f" AND tenant_id = ${param_idx}"
-            args.append(sub_q.tenant_id)
-            param_idx += 1
+        # 租户过滤必须 fail-closed：tenant_id 缺失/空白时收敛到 default，
+        # 绝不允许退化为跨租户全表检索。
+        tenant_id = (sub_q.tenant_id or "").strip() or "default"
+        sql += f" AND tenant_id = ${param_idx}"
+        args.append(tenant_id)
+        param_idx += 1
 
         if sub_q.scope_code:
             sql += f" AND metadata_json->>'scope_code' = ${param_idx}"

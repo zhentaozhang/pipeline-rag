@@ -29,6 +29,11 @@ class TestBuildEsQuery:
         q = KeywordRetrievalChannel._build_es_query("q", make_sub_question(tenant_id="租户A"), 10)
         assert {"term": {"tenantId": "租户A"}} in q["query"]["bool"]["filter"]
 
+    def test_empty_tenant_falls_back_to_default(self):
+        """tenant_id 缺失时必须 fail-closed 到 default，而不是跨租户检索。"""
+        q = KeywordRetrievalChannel._build_es_query("q", make_sub_question(tenant_id=""), 10)
+        assert {"term": {"tenantId": "default"}} in q["query"]["bool"]["filter"]
+
     def test_doc_ids_filter_filters_invalid(self):
         q = KeywordRetrievalChannel._build_es_query(
             "q", make_sub_question(doc_ids=["5", "abc", "0"]), 10

@@ -52,10 +52,24 @@ def make_channel(monkeypatch):
 
 class TestBuildSql:
     def test_embedding_first_param(self):
-        sql, args = VectorRetrievalChannel._build_sql(make_sub_question(), "[1,2]", 10)
+        sql, args = VectorRetrievalChannel._build_sql(
+            make_sub_question(tenant_id="t1"), "[1,2]", 10
+        )
         assert args[0] == "[1,2]"
         assert "1 - (embedding <=> $1::vector) AS similarity" in sql
-        assert "ORDER BY embedding <=> $1::vector ASC LIMIT $2" in sql
+        assert "ORDER BY embedding <=> $1::vector ASC LIMIT $3" in sql
+
+    def test_empty_tenant_falls_back_to_default(self):
+        """tenant_id 缺失时必须 fail-closed 到 default，而不是跨租户全表检索。"""
+        sql, args = VectorRetrievalChannel._build_sql(make_sub_question(tenant_id=""), "[1]", 10)
+        assert "AND tenant_id = $2" in sql
+        assert args[1] == "default"
+
+    def test_blank_tenant_falls_back_to_default(self):
+        sql, args = VectorRetrievalChannel._build_sql(
+            make_sub_question(tenant_id="   "), "[1]", 10
+        )
+        assert args[1] == "default"
 
     def test_tenant_and_scope(self):
         sub = make_sub_question(tenant_id="t1", scope_code="s1")
