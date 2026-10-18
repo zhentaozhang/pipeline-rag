@@ -141,3 +141,71 @@ async def test_uncited_quantitative_claim_is_reported_but_not_blocking(monkeypat
     assert meta["status"] == "jev_judged"
     assert meta["uncited_claims"] == ["另有 300 元餐补。"]
     assert bad == []
+
+
+class _RecordingJev:
+    """记录每次 system_one 的 payload，用于验证分片与证据截断。"""
+
+    def __init__(self, score: float = 0.9, fail_on_call: int | None = None):
+        self.score = score
+        self.fail_on_call = fail_on_call
+        self.calls: list[dict] = []
+
+    async def system_one(self, state, questions):
+        self.calls.append({"state": state, "questions": dict(questions)})
+        if self.fail_on_call is not None and len(self.calls) - 1 == self.fail_on_call:
+            raise RuntimeError("jev down")
+        return {k: {"noul": self.score, "is_true": True} for k in questions}
+
+
+@pytest.mark.asyncio
+async def test_citation_evidence_is_capped_and_prefers_the_hit_paragraph(monkeypatch):
+    """单条证据只送被引用的那一段（<=400 字符），不再把 1200 字整块塞进判据。"""
+    monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
+    jev = _RecordingJev()
+    monkeypatch.setattr("app.infra.jev_client.get_jev_client", lambda: jev)
+
+    ref = {
+        "content": "父块正文" * 300,
+        "child_chunk_text": "第9条 住宿费用限额：总监级及以上（M4+）A类城市 800 元/晚。",
+    }
+    await verify_citations(_Fallback(), "答案[1]", [ref], "住宿标准？")
+
+    assert len(jev.calls) == 1
+    instruction = jev.calls[0]["questions"]["cite_1"]["instructions"]
+    assert "800 元/晚" in instruction, "被引用的精确命中文段必须完整保留"
+    assert "已截断" not in instruction
+    assert len(instruction) <= 600, f"判据过长会挤掉证据：{len(instruction)}"
+
+
+@pytest.mark.asyncio
+async def test_many_citations_are_sharded_into_small_requests(monkeypatch):
+    """10 条引用必须切成 <=4 条一片的多次请求，避免单请求塞爆上下文。"""
+    monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
+    jev = _RecordingJev()
+    monkeypatch.setattr("app.infra.jev_client.get_jev_client", lambda: jev)
+
+    refs = [{"content": f"证据{i}的正文内容", "child_chunk_text": ""} for i in range(1, 11)]
+    answer = "答案" + "".join(f"[{i}]" for i in range(1, 11))
+    _, bad, meta = await verify_citations(_Fallback(), answer, refs, "问题")
+
+    assert len(jev.calls) == 3, f"10 条引用应切成 3 片，实际 {len(jev.calls)}"
+    assert all(len(c["questions"]) <= 4 for c in jev.calls)
+    assert meta["status"] == "jev_judged"
+    assert bad == []
+
+
+@pytest.mark.asyncio
+async def test_failed_shard_escalates_instead_of_silently_passing(monkeypatch):
+    """某一片 JEV 失败时，该片引用必须视为未知并升级 LLM，不能默认通过。"""
+    monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
+    jev = _RecordingJev(fail_on_call=1)
+    monkeypatch.setattr("app.infra.jev_client.get_jev_client", lambda: jev)
+    fallback = _Fallback()
+
+    refs = [{"content": f"证据{i}", "child_chunk_text": ""} for i in range(1, 11)]
+    answer = "答案" + "".join(f"[{i}]" for i in range(1, 11))
+    _, _, meta = await verify_citations(fallback, answer, refs, "问题")
+
+    assert fallback.calls == 1, "分片失败必须走 LLM 审计"
+    assert meta["status"] == "judged"

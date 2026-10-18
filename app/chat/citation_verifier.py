@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
@@ -55,6 +56,39 @@ def _reference_content(ref: dict[str, Any] | Any, fallback_id: int, max_chars: i
 
         return text[:max_chars]
     return str(ref)[:max_chars]
+
+
+_CITATION_SHARD_SIZE = 4
+_CITATION_EVIDENCE_CHARS = 400
+
+
+def _citation_evidence(ref: dict[str, Any] | Any, fallback_id: int, max_chars: int = 400) -> str:
+    """取"被引用的那一段"作为判据：优先精确命中的子块，父块上下文只在有空位时追加。
+
+    与 ``_reference_content`` 的区别：后者以父块全文为主（最多 1200 字符），
+    放进 noul 判据会挤掉其他引用，且触发服务端左截断后证据反而丢失。
+    """
+    if not isinstance(ref, dict):
+        return str(ref)[:max_chars]
+    child = (ref.get("child_chunk_text") or "").strip()
+    full = (
+        ref.get("content")
+        or ref.get("excerpt")
+        or ref.get("snippet")
+        or ref.get("chunk_text")
+        or ""
+    ).strip()
+    if child:
+        if len(child) >= max_chars:
+            return child[:max_chars]
+        room = max_chars - len(child) - len("【上下文】")
+        if room > 80 and full and child not in full:
+            return f"{child}\n【上下文】{full[:room]}"
+        return child
+    if full:
+        return full[:max_chars]
+    title = (ref.get("title") or "").strip()
+    return (title or f"(证据 {fallback_id}，无文本)")[:max_chars]
 
 
 def _grounding_extra(grounding: Any) -> dict[str, Any]:
@@ -107,21 +141,42 @@ async def verify_citations(
 
             jev = get_jev_client()
             evidence_map = {
-                i + 1: _reference_content(r, i + 1, max_chars=1200)
+                i + 1: _citation_evidence(r, i + 1, max_chars=_CITATION_EVIDENCE_CHARS)
                 for i, r in enumerate(references)
             }
-            questions = {
-                f"cite_{ref_n}": {
-                    "type": "noul",
-                    "instructions": (
-                        f"回答中带有 [{ref_n}] 编号的引用论断，是否确实被以下证据内容直接支持（无推测、无捏造）？\n"
-                        f"证据[{ref_n}]：{evidence_map.get(ref_n, '（该引用编号无对应证据内容）')}"
-                    ),
-                }
-                for ref_n in refs
-            }
             state = f"用户问题：{question}\n\nAI 生成的带有引用编号的完整回答：\n{answer}"
-            answers = await jev.system_one(state=state, questions=questions)
+            # 分片：每片 <=4 条引用。单请求塞 10+ 条会把判据挤到 4096 token 之外
+            # （服务端左截断先砍判断标准），既慢又判不准。
+            shards = [
+                refs[i : i + _CITATION_SHARD_SIZE]
+                for i in range(0, len(refs), _CITATION_SHARD_SIZE)
+            ]
+            answers: dict[str, Any] = {}
+
+            async def _judge_shard(shard: list[int]) -> dict[str, Any]:
+                questions = {
+                    f"cite_{ref_n}": {
+                        "type": "noul",
+                        "instructions": (
+                            f"回答中带有 [{ref_n}] 编号的引用论断，是否确实被以下证据内容直接支持（无推测、无捏造）？\n"
+                            f"证据[{ref_n}]：{evidence_map.get(ref_n, '（该引用编号无对应证据内容）')}"
+                        ),
+                    }
+                    for ref_n in shard
+                }
+                return await jev.system_one(state=state, questions=questions)
+
+            shard_results = await asyncio.gather(
+                *[_judge_shard(shard) for shard in shards], return_exceptions=True
+            )
+            for shard, result in zip(shards, shard_results, strict=False):
+                if isinstance(result, BaseException):
+                    # 该片失败 -> 这些引用保持"无分数"，走升级通道，绝不默认通过
+                    logger.warning(
+                        "citation verify shard failed", refs=shard, error=str(result)[:120]
+                    )
+                    continue
+                answers.update(result or {})
 
             threshold = getattr(jev_cfg, "citation_confidence_threshold", 0.60)
             review_low = getattr(jev_cfg, "citation_review_low", 0.45)
