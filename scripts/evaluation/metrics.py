@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import math
+import random
 import re
+from typing import Any
 
 import structlog
 
@@ -236,3 +238,84 @@ def _parse_score(text: str) -> float:
     if nums:
         return float(nums[-1])
     return 0.0
+
+
+# ── 配对 bootstrap：判定两次评测差值是否显著 ──────────────────────────────
+
+
+def paired_bootstrap_delta(
+    base: list[float],
+    opt: list[float],
+    *,
+    n_boot: int = 2000,
+    seed: int = 42,
+    alpha: float = 0.05,
+) -> dict[str, Any]:
+    """对同一批问题上的指标差值做配对 bootstrap，返回 delta / CI / 双侧 p。
+
+    逐题配对后重采样题目索引（同一索引两边同时取），保留问题难度分布，
+    比直接比较两个均值更不容易把噪声当成收益。
+    """
+    if len(base) != len(opt):
+        raise ValueError(f"paired series length mismatch: {len(base)} vs {len(opt)}")
+
+    n = len(base)
+    if n == 0:
+        return {
+            "n": 0,
+            "delta": 0.0,
+            "ci_low": 0.0,
+            "ci_high": 0.0,
+            "p_value": 1.0,
+            "significant": False,
+        }
+
+    diffs = [float(o) - float(b) for b, o in zip(base, opt)]
+    delta = sum(diffs) / n
+
+    rng = random.Random(seed)
+    boot: list[float] = []
+    for _ in range(n_boot):
+        total = 0.0
+        for _ in range(n):
+            total += diffs[rng.randrange(n)]
+        boot.append(total / n)
+    boot.sort()
+
+    lo = boot[int(alpha / 2 * n_boot)]
+    hi = boot[min(n_boot - 1, int((1 - alpha / 2) * n_boot))]
+    le = sum(1 for x in boot if x <= 0) / n_boot
+    ge = sum(1 for x in boot if x >= 0) / n_boot
+    p_value = min(1.0, 2 * min(le, ge))
+
+    return {
+        "n": n,
+        "delta": delta,
+        "ci_low": lo,
+        "ci_high": hi,
+        "p_value": p_value,
+        "significant": bool(lo > 0 or hi < 0),
+    }
+
+
+def extract_metric_series(
+    base_report: dict[str, Any], opt_report: dict[str, Any], metric: str
+) -> tuple[list[float], list[float]]:
+    """按 question_id 对齐两份报告的逐题指标，取交集（顺序以 base 为准）。"""
+    base_by_id = {
+        r.get("question_id"): r.get(metric)
+        for r in base_report.get("results", [])
+        if r.get(metric) is not None
+    }
+    opt_by_id = {
+        r.get("question_id"): r.get(metric)
+        for r in opt_report.get("results", [])
+        if r.get(metric) is not None
+    }
+    base_vals: list[float] = []
+    opt_vals: list[float] = []
+    for qid, b in base_by_id.items():
+        if qid in opt_by_id:
+            base_vals.append(float(b))
+            opt_vals.append(float(opt_by_id[qid]))
+    return base_vals, opt_vals

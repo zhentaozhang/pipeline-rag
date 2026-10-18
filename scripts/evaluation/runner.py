@@ -859,6 +859,34 @@ if __name__ == "__main__":
             arrow = "▲" if delta > 0.005 else ("▼" if delta < -0.005 else "＝")
             print(f"  {metric:<20} {b:.3f} → {o:.3f}  {arrow} {delta:+.3f}")
 
+        # 配对 bootstrap：85 题量级下 ±0.02 的均值差可能完全来自噪声，
+        # 因此对逐题指标做配对重采样，给出 95% CI 与显著性判定。
+        from scripts.evaluation.metrics import (
+            extract_metric_series,
+            paired_bootstrap_delta,
+        )
+
+        print("\n=== 显著性（配对 bootstrap，2000 次重采样，按 question_id 配对）===")
+        for metric in (
+            "recall_at_5",
+            "recall_at_final_k",
+            "mrr",
+            "ndcg_at_5",
+            "ndcg_at_final_k",
+            "faithfulness",
+            "context_recall",
+        ):
+            b_vals, o_vals = extract_metric_series(base, opt, metric)
+            if not b_vals:
+                continue
+            r = paired_bootstrap_delta(b_vals, o_vals)
+            verdict = "显著" if r["significant"] else "噪声（不足以判定）"
+            print(
+                f"  {metric:<18} Δ{r['delta']:+.4f}  "
+                f"95%CI[{r['ci_low']:+.4f}, {r['ci_high']:+.4f}]  "
+                f"p={r['p_value']:.3f}  n={r['n']}  {verdict}"
+            )
+
     # 门禁判定：阈值 0 表示跳过该指标；retrieval_only 模式下跳过生成指标门禁
     if not args.retrieval_only:
         gates = [

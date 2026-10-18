@@ -79,3 +79,77 @@ async def test_compute_answer_correctness_proxy():
             ground_truth_answer="为转正薪酬的80%",
         )
         assert score == 0.95
+
+
+class TestPairedBootstrapDelta:
+    """配对 bootstrap：判断两次评测的差值是不是噪声。"""
+
+    def test_identical_series_has_zero_delta(self):
+        from scripts.evaluation.metrics import paired_bootstrap_delta
+
+        base = [1.0, 0.5, 0.0, 0.8, 0.2]
+        r = paired_bootstrap_delta(base, list(base))
+        assert r["delta"] == pytest.approx(0.0)
+        assert r["ci_low"] == pytest.approx(0.0)
+        assert r["ci_high"] == pytest.approx(0.0)
+        assert r["significant"] is False
+
+    def test_clear_improvement_is_significant(self):
+        from scripts.evaluation.metrics import paired_bootstrap_delta
+
+        base = [0.0, 0.1, 0.2, 0.0, 0.1, 0.0, 0.2, 0.1, 0.0, 0.2]
+        opt = [x + 0.5 for x in base]
+        r = paired_bootstrap_delta(base, opt)
+        assert r["delta"] == pytest.approx(0.5)
+        assert r["ci_low"] > 0
+        assert r["significant"] is True
+
+    def test_mixed_noise_is_not_significant(self):
+        from scripts.evaluation.metrics import paired_bootstrap_delta
+
+        base = [0.0, 1.0] * 10
+        opt = [0.1, 0.9] * 10
+        r = paired_bootstrap_delta(base, opt)
+        assert r["delta"] == pytest.approx(0.0)
+        assert r["significant"] is False
+        assert r["ci_low"] < 0 < r["ci_high"]
+
+    def test_deterministic_with_seed(self):
+        from scripts.evaluation.metrics import paired_bootstrap_delta
+
+        base = [0.1 * i for i in range(20)]
+        opt = [0.1 * i + 0.05 for i in range(20)]
+        r1 = paired_bootstrap_delta(base, opt, seed=7)
+        r2 = paired_bootstrap_delta(base, opt, seed=7)
+        assert r1 == r2
+
+    def test_length_mismatch_raises(self):
+        from scripts.evaluation.metrics import paired_bootstrap_delta
+
+        with pytest.raises(ValueError):
+            paired_bootstrap_delta([0.1, 0.2], [0.1])
+
+    def test_empty_series(self):
+        from scripts.evaluation.metrics import paired_bootstrap_delta
+
+        r = paired_bootstrap_delta([], [])
+        assert r["delta"] == pytest.approx(0.0)
+        assert r["significant"] is False
+
+    def test_extract_metric_series_pairs_by_question_id(self):
+        from scripts.evaluation.metrics import extract_metric_series
+
+        base = {"results": [{"question_id": "a", "recall_at_5": 1.0}, {"question_id": "b", "recall_at_5": 0.0}]}
+        opt = {"results": [{"question_id": "b", "recall_at_5": 1.0}, {"question_id": "a", "recall_at_5": 1.0}]}
+        b_vals, o_vals = extract_metric_series(base, opt, "recall_at_5")
+        assert b_vals == [1.0, 0.0]
+        assert o_vals == [1.0, 1.0]
+
+    def test_extract_metric_series_skips_missing_questions(self):
+        from scripts.evaluation.metrics import extract_metric_series
+
+        base = {"results": [{"question_id": "a", "recall_at_5": 1.0}, {"question_id": "b", "recall_at_5": 0.0}]}
+        opt = {"results": [{"question_id": "a", "recall_at_5": 0.0}]}
+        b_vals, o_vals = extract_metric_series(base, opt, "recall_at_5")
+        assert b_vals == [1.0]
+        assert o_vals == [0.0]
