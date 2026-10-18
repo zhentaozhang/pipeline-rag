@@ -30,6 +30,14 @@ _DOC_NAME_RE = re.compile(r"《([^》]{2,80})》")
 _CLAUSE_RE = re.compile(r"第\s*(\d{1,3}(?:\.\d{1,3})?|[零一二三四五六七八九十]{1,3})\s*条")
 _CITATION_RE = re.compile(r"\[(\d+)\]")
 _SENTENCE_RE = re.compile(r"(?<=[。！？!?；;\n])")
+_CLAUSE_SPLIT_RE = re.compile(r"[，,、]")
+
+# 量化断言：出现数字 + 计量单位/条款形式，这类句子最需要可溯源
+_QUANT_RE = re.compile(
+    r"(\d+(?:\.\d+)?\s*(?:元|块|天|日|个月|月|年|%|％|次|小时|人|晚|公里|km|倍|万))"
+    r"|(?:\d+(?:\.\d+)?\s*条)"
+    r"|第\s*(?:\d{1,3}|[零一二三四五六七八九十]{1,3})\s*条"
+)
 
 _NEGATION_CUES = (
     "未收录",
@@ -76,6 +84,8 @@ class GroundingIssue:
 class GroundingReport:
     dangling_citations: tuple[int, ...] = ()
     issues: tuple[GroundingIssue, ...] = ()
+    # 含数值/条款但没有任何引用编号的句子（可溯源性问题，只报告不阻断）
+    uncited_claims: tuple[str, ...] = ()
 
     @property
     def blocking(self) -> bool:
@@ -97,6 +107,7 @@ class GroundingReport:
     def to_meta(self) -> dict[str, Any]:
         return {
             "dangling_citations": list(self.dangling_citations),
+            "uncited_claims": [c[:80] for c in self.uncited_claims],
             "issues": [
                 {"kind": i.kind, "claim": i.claim, "citations": list(i.citations)}
                 for i in self.issues
@@ -212,6 +223,7 @@ def audit_grounding(
 
     dangling: list[int] = []
     issues: list[GroundingIssue] = []
+    uncited: list[str] = []
 
     for sentence in _sentences(answer):
         cited = []
@@ -222,6 +234,13 @@ def audit_grounding(
                     cited.append(n)
             elif n not in dangling:
                 dangling.append(n)
+        # 量化断言按"逗号级片段"判定：一个长句里混了带引用和不带引用的数值很常见
+        for fragment in _CLAUSE_SPLIT_RE.split(sentence):
+            frag = fragment.strip()
+            if not frag or _CITATION_RE.search(frag):
+                continue
+            if _QUANT_RE.search(frag):
+                uncited.append(frag)
         scope = [by_id[n] for n in cited] if cited else refs
 
         for m in _DOC_NAME_RE.finditer(sentence):
@@ -246,6 +265,7 @@ def audit_grounding(
     return GroundingReport(
         dangling_citations=tuple(dangling),
         issues=tuple(issues),
+        uncited_claims=tuple(uncited),
     )
 
 

@@ -57,6 +57,15 @@ def _reference_content(ref: dict[str, Any] | Any, fallback_id: int, max_chars: i
     return str(ref)[:max_chars]
 
 
+def _grounding_extra(grounding: Any) -> dict[str, Any]:
+    """把"含数值却没有引用"的句子挂到元信息上（只观测，不阻断）。"""
+    uncited = getattr(grounding, "uncited_claims", ()) or ()
+    if not uncited:
+        return {}
+    logger.info("uncited_quantitative_claims", count=len(uncited))
+    return {"uncited_claims": [c[:80] for c in uncited]}
+
+
 async def verify_citations(
     fallback: Any,
     answer: str,
@@ -80,9 +89,11 @@ async def verify_citations(
         logger.warning("answer grounding failed", **grounding.to_meta())
         return answer + grounding_note(grounding), list(grounding.unsupported_citations), meta
 
+    extra = _grounding_extra(grounding)
+
     refs = extract_citations(answer)
     if not refs:
-        return answer, [], {"status": "no_citation"}
+        return answer, [], {"status": "no_citation", **extra}
     if not references:
         note = "\n\n（注：回答中标注的引用未能从当前知识库证据核实，请以官方文件为准。）"
         return answer + note, refs, {"status": "no_evidence"}
@@ -147,6 +158,7 @@ async def verify_citations(
                     "unsupported": unsupported,
                     "scores": scores,
                     "missing_scores": missing,
+                    **extra,
                 }
                 logger.info("citation verify JEV judge", **_meta)
 
@@ -212,7 +224,12 @@ async def verify_citations(
 
         data = _parse_json(raw)
         unsupported = [int(x) for x in data.get("unsupported", []) if str(x).isdigit()]
-        _meta = {"status": "judged", "judge_raw": raw[:200], "unsupported": unsupported}
+        _meta = {
+            "status": "judged",
+            "judge_raw": raw[:200],
+            "unsupported": unsupported,
+            **extra,
+        }
         logger.info("citation verify judge", **_meta)
     except Exception as e:  # noqa: BLE001
         logger.warning("citation verify failed, skip", error=str(e)[:120])

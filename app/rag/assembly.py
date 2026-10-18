@@ -198,9 +198,12 @@ class PromptAssemblyService:
         return result, reference_map
 
     def _build_system_prompt(self, plan) -> str:
+        custom = bool(
+            settings.rag.answer_system_prompt and settings.rag.answer_system_prompt.strip()
+        )
         base = (
             settings.rag.answer_system_prompt.strip()
-            if settings.rag.answer_system_prompt and settings.rag.answer_system_prompt.strip()
+            if custom
             else (
                 "你是 Pipeline RAG 的企业知识问答助手。\n"
                 "你必须严格基于给定证据回答，不要编造证据中没有出现的事实。\n"
@@ -213,6 +216,14 @@ class PromptAssemblyService:
                 "如果引用了证据，请在对应句子末尾标注 [1][2] 这样的引用编号。"
             )
         )
+        # 只对默认提示词追加：用户自定义 system prompt 时不去改写它的语义
+        if not custom and getattr(settings.rag, "answer_grounding_contract_enabled", True):
+            base += (
+                "\n证据对齐要求：\n"
+                "1) 凡是金额、天数、比例、期限、条款号等可核对的具体值，必须在该句末尾标注引用编号；\n"
+                "2) 多条款/多档位问题请逐条列出（条款号 → 适用条件 → 具体数值），不要合并成一段概括；\n"
+                "3) 若某个具体值在所有证据中都找不到，直接说明未找到，不要给出推测值或近似值。"
+            )
         # D 项：回答长度上限约束（RAG_ANSWER_MAX_CHARS>0 时注入）
         if (getattr(settings.rag, "answer_max_chars", 0) or 0) > 0:
             base += (

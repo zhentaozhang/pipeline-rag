@@ -117,3 +117,29 @@ def test_grounding_note_names_the_offending_claims() -> None:
 
 def test_grounding_note_is_empty_when_clean() -> None:
     assert grounding_note(audit_grounding("试用期一个月[1]。", [HANDBOOK])) == ""
+
+
+_QUANT: dict = {
+    "content": "第9条 住宿费用限额 9.1 总监级及以上 800元/晚 A类城市",
+    "document_name": "02_差旅制度.md",
+}
+
+
+def test_uncited_quantitative_claim_is_reported() -> None:
+    """数值句没有引用编号 ⇒ 不可溯源（只报告，不阻断）。"""
+    report = audit_grounding("住宿上限是 800 元/晚，A 类城市。", [_QUANT])
+
+    assert report.blocking is False
+    assert report.uncited_claims == ("住宿上限是 800 元/晚",)
+
+
+def test_cited_quantitative_claim_is_not_reported() -> None:
+    report = audit_grounding("住宿上限是 800 元/晚[1]。", [_QUANT])
+
+    assert report.uncited_claims == ()
+
+
+def test_qualitative_sentence_is_not_reported() -> None:
+    report = audit_grounding("试用期由劳动合同期限决定。", [HANDBOOK])
+
+    assert report.uncited_claims == ()

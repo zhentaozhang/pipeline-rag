@@ -547,13 +547,40 @@ class TestWidenedFinalTopK:
     def test_sixteen_typical_parents_all_render(self):
         """实测父块正文均值约 270 字符；16 块约 4.3k，远低于 per_subquestion=8000。"""
         svc = PromptAssemblyService()
-        evs = [
-            make_ev(chunk_id=f"c{i}", ref_id=i, content="甲" * 270)
-            for i in range(1, 17)
-        ]
+        evs = [make_ev(chunk_id=f"c{i}", ref_id=i, content="甲" * 270) for i in range(1, 17)]
         budget = PromptBudget(20000, 8000)
         out = svc._append_references(evs, set(), budget)
 
         assert budget.rendered_reference_count == 16
         assert budget.omitted_reference_count == 0
         assert "[16] 文档：" in out
+
+
+class TestAnswerGroundingContract:
+    """生成侧证据对齐合同：数值必须带引用、多条款题逐条对齐。"""
+
+    def test_contract_is_injected_by_default(self, monkeypatch):
+        # 本机 .env 配了自定义 RAG_ANSWER_SYSTEM_PROMPT，这里显式构造"内置提示词"场景
+        import types
+
+        fake_rag = types.SimpleNamespace(
+            answer_system_prompt="",
+            answer_max_chars=0,
+            answer_grounding_contract_enabled=True,
+        )
+        monkeypatch.setattr("app.rag.assembly.settings", types.SimpleNamespace(rag=fake_rag))
+        prompt = PromptAssemblyService()._build_system_prompt(make_plan())
+        assert "逐条" in prompt
+        assert "引用编号" in prompt
+
+    def test_contract_can_be_disabled(self, monkeypatch):
+        import types
+
+        fake_rag = types.SimpleNamespace(
+            answer_system_prompt="",
+            answer_max_chars=0,
+            answer_grounding_contract_enabled=False,
+        )
+        monkeypatch.setattr("app.rag.assembly.settings", types.SimpleNamespace(rag=fake_rag))
+        prompt = PromptAssemblyService()._build_system_prompt(make_plan())
+        assert "逐条列出" not in prompt

@@ -87,7 +87,9 @@ async def test_dangling_citation_is_rejected_without_any_llm_call(monkeypatch):
     monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
     fallback = _Fallback()
 
-    answer, bad, meta = await verify_citations(fallback, "试用期一个月[7]", [{"content": "试用期"}], "问题")
+    answer, bad, meta = await verify_citations(
+        fallback, "试用期一个月[7]", [{"content": "试用期"}], "问题"
+    )
 
     assert fallback.calls == 0
     assert meta["status"] == "deterministic_unsupported"
@@ -121,3 +123,21 @@ def test_needs_citation_check_covers_uncited_hallucination():
     assert needs_citation_check("答案[1]", refs) is True
     assert needs_citation_check("答案", refs) is False
     assert needs_citation_check("按《不存在的办法》执行", refs) is True
+
+
+@pytest.mark.asyncio
+async def test_uncited_quantitative_claim_is_reported_but_not_blocking(monkeypatch):
+    """没引用编号的数值句：不阻断（可能是常识），但必须能在元信息里看到。"""
+    monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
+    monkeypatch.setattr(
+        "app.infra.jev_client.get_jev_client", lambda: _FakeJev({"cite_1": {"noul": 0.9}})
+    )
+    fallback = _Fallback()
+
+    answer, bad, meta = await verify_citations(
+        fallback, "住宿上限 800 元/晚[1]，另有 300 元餐补。", [{"content": "800元/晚"}], "住宿标准"
+    )
+
+    assert meta["status"] == "jev_judged"
+    assert meta["uncited_claims"] == ["另有 300 元餐补。"]
+    assert bad == []
