@@ -19,6 +19,23 @@ from scripts.evaluation.runner import _build_plan
 logger = structlog.get_logger(__name__)
 
 
+def build_probe_row(
+    question_id: str,
+    hits: list[str],
+    gold: set[str] | None,
+    *,
+    top_k: int,
+    extra_gold: set[str] | None = None,
+) -> dict[str, Any]:
+    """构造一行探针结果。gold 必须是 list（JSON 报告里 set 不可序列化）。"""
+    merged = {str(g) for g in (gold or set())} | {str(g) for g in (extra_gold or set())}
+    return {
+        "question_id": question_id,
+        "hits": [str(h) for h in hits][:top_k],
+        "gold": sorted(merged),
+    }
+
+
 def summarize_probe(rows: list[dict[str, Any]], *, k: int) -> dict[str, Any]:
     """聚合探针结果（纯函数，便于单测）。"""
     if not rows:
@@ -76,12 +93,13 @@ async def probe(channel: str, *, top_k: int, gold: dict[str, dict]) -> list[dict
                 evidences = await impl.retrieve(sub_q)
                 hits.extend(str(ev.chunk_id) for ev in evidences[:top_k])
             rows.append(
-                {
-                    "question_id": q.id,
-                    "hits": hits[:top_k],
-                    "gold": set((gold.get(q.id) or {}).get("relevant_chunk_ids") or [])
-                    | set(q.relevant_chunk_ids or []),
-                }
+                build_probe_row(
+                    q.id,
+                    hits,
+                    (gold.get(q.id) or {}).get("relevant_chunk_ids") or [],
+                    top_k=top_k,
+                    extra_gold=q.relevant_chunk_ids or [],
+                )
             )
     finally:
         await close_es()
