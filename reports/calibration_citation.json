@@ -1,0 +1,1557 @@
+{
+  "overall": {
+    "n": 240,
+    "positives": 40,
+    "negatives": 200,
+    "base_rate": 0.16666666666666666,
+    "auc": 0.847625,
+    "ece": 0.2450041666666667,
+    "threshold": 0.5,
+    "true_pass_rate": 0.85,
+    "false_pass_rate": 0.34,
+    "pass_rate_at_threshold": 0.425,
+    "balanced_accuracy_at_0.5": 0.7549999999999999,
+    "usable": false,
+    "suggested_threshold": {
+      "threshold": 0.9553,
+      "true_pass_rate": 0.5,
+      "false_pass_rate": 0.05,
+      "precision": 0.6666666666666666
+    }
+  },
+  "by_kind": {
+    "condition_drop": {
+      "n": 40,
+      "positives": 0,
+      "negatives": 40,
+      "base_rate": 0.0,
+      "auc": null,
+      "ece": 0.6039950000000001,
+      "threshold": 0.5,
+      "true_pass_rate": null,
+      "false_pass_rate": 0.625,
+      "pass_rate_at_threshold": 0.625,
+      "balanced_accuracy_at_0.5": null,
+      "usable": false,
+      "suggested_threshold": null
+    },
+    "doc_swap": {
+      "n": 40,
+      "positives": 0,
+      "negatives": 40,
+      "base_rate": 0.0,
+      "auc": null,
+      "ece": 0.068775,
+      "threshold": 0.5,
+      "true_pass_rate": null,
+      "false_pass_rate": 0.025,
+      "pass_rate_at_threshold": 0.025,
+      "balanced_accuracy_at_0.5": null,
+      "usable": false,
+      "suggested_threshold": null
+    },
+    "negation_flip": {
+      "n": 40,
+      "positives": 0,
+      "negatives": 40,
+      "base_rate": 0.0,
+      "auc": null,
+      "ece": 0.5353699999999999,
+      "threshold": 0.5,
+      "true_pass_rate": null,
+      "false_pass_rate": 0.6,
+      "pass_rate_at_threshold": 0.6,
+      "balanced_accuracy_at_0.5": null,
+      "usable": false,
+      "suggested_threshold": null
+    },
+    "number_tamper": {
+      "n": 40,
+      "positives": 0,
+      "negatives": 40,
+      "base_rate": 0.0,
+      "auc": null,
+      "ece": 0.34748249999999997,
+      "threshold": 0.5,
+      "true_pass_rate": null,
+      "false_pass_rate": 0.375,
+      "pass_rate_at_threshold": 0.375,
+      "balanced_accuracy_at_0.5": null,
+      "usable": false,
+      "suggested_threshold": null
+    },
+    "topic_drift": {
+      "n": 40,
+      "positives": 0,
+      "negatives": 40,
+      "base_rate": 0.0,
+      "auc": null,
+      "ece": 0.13810250000000002,
+      "threshold": 0.5,
+      "true_pass_rate": null,
+      "false_pass_rate": 0.075,
+      "pass_rate_at_threshold": 0.075,
+      "balanced_accuracy_at_0.5": null,
+      "usable": false,
+      "suggested_threshold": null
+    },
+    "verbatim": {
+      "n": 40,
+      "positives": 40,
+      "negatives": 0,
+      "base_rate": 1.0,
+      "auc": null,
+      "ece": 0.2237,
+      "threshold": 0.5,
+      "true_pass_rate": 0.85,
+      "false_pass_rate": null,
+      "pass_rate_at_threshold": 0.85,
+      "balanced_accuracy_at_0.5": null,
+      "usable": false,
+      "suggested_threshold": null
+    }
+  },
+  "rows": [
+    {
+      "case_id": "verbatim-002-2111417685869854731",
+      "kind": "verbatim",
+      "prob": 0.5506,
+      "label": 1
+    },
+    {
+      "case_id": "verbatim-001-2111417698897362959",
+      "kind": "verbatim",
+      "prob": 0.9963,
+      "label": 1
+    },
+    {
+      "case_id": "doc_swap-001-2111417698897362959",
+      "kind": "doc_swap",
+      "prob": 0.0019,
+      "label": 0
+    },
+    {
+      "case_id": "topic_drift-001-2111417698897362959",
+      "kind": "topic_drift",
+      "prob": 0.0233,
+      "label": 0
+    },
+    {
+      "case_id": "topic_drift-002-2111417685869854731",
+      "kind": "topic_drift",
+      "prob": 0.0122,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-002-2111417685869854731",
+      "kind": "doc_swap",
+      "prob": 0.0083,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-001-2111417685869854731",
+      "kind": "number_tamper",
+      "prob": 0.3961,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-003-2111418510977531922",
+      "kind": "verbatim",
+      "prob": 0.9923,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-003-2111418510977531922",
+      "kind": "topic_drift",
+      "prob": 0.1097,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-003-2111418510977531922",
+      "kind": "doc_swap",
+      "prob": 0.0122,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-002-2111418510977531922",
+      "kind": "number_tamper",
+      "prob": 0.0031,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-004-2111417700247928838",
+      "kind": "verbatim",
+      "prob": 0.9974,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-004-2111417700247928838",
+      "kind": "topic_drift",
+      "prob": 0.0162,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-004-2111417700247928838",
+      "kind": "doc_swap",
+      "prob": 0.0656,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-003-2111417700247928838",
+      "kind": "number_tamper",
+      "prob": 0.0027,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-001-2111417700247928838",
+      "kind": "condition_drop",
+      "prob": 0.4378,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-005-2111417700247928832",
+      "kind": "verbatim",
+      "prob": 0.3886,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-005-2111417700247928832",
+      "kind": "topic_drift",
+      "prob": 0.1403,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-005-2111417700247928832",
+      "kind": "doc_swap",
+      "prob": 0.3381,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-004-2111417700247928832",
+      "kind": "number_tamper",
+      "prob": 0.2689,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-006-2111417694161993730",
+      "kind": "verbatim",
+      "prob": 0.9604,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-006-2111417694161993730",
+      "kind": "topic_drift",
+      "prob": 0.0656,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-006-2111417694161993730",
+      "kind": "doc_swap",
+      "prob": 0.0124,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-005-2111417694161993730",
+      "kind": "number_tamper",
+      "prob": 0.6225,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-002-2111417694161993730",
+      "kind": "condition_drop",
+      "prob": 0.906,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-007-2111417692308111368",
+      "kind": "verbatim",
+      "prob": 0.9838,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-007-2111417692308111368",
+      "kind": "topic_drift",
+      "prob": 0.1192,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-007-2111417692308111368",
+      "kind": "doc_swap",
+      "prob": 0.0018,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-006-2111417692308111368",
+      "kind": "number_tamper",
+      "prob": 0.9815,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-008-2111417685869854735",
+      "kind": "verbatim",
+      "prob": 0.5156,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-008-2111417685869854735",
+      "kind": "topic_drift",
+      "prob": 0.0583,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-008-2111417685869854735",
+      "kind": "doc_swap",
+      "prob": 0.0219,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-007-2111417685869854735",
+      "kind": "number_tamper",
+      "prob": 0.3558,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-003-2111417685869854735",
+      "kind": "condition_drop",
+      "prob": 0.4649,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-009-2111417685869854732",
+      "kind": "verbatim",
+      "prob": 0.0888,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-009-2111417685869854732",
+      "kind": "topic_drift",
+      "prob": 0.0331,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-009-2111417685869854732",
+      "kind": "doc_swap",
+      "prob": 0.0039,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-008-2111417685869854732",
+      "kind": "number_tamper",
+      "prob": 0.8105,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-004-2111417685869854732",
+      "kind": "condition_drop",
+      "prob": 0.3208,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-010-2111417706296115209",
+      "kind": "verbatim",
+      "prob": 0.3998,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-010-2111417706296115209",
+      "kind": "topic_drift",
+      "prob": 0.0056,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-010-2111417706296115209",
+      "kind": "doc_swap",
+      "prob": 0.0914,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-009-2111417706296115209",
+      "kind": "number_tamper",
+      "prob": 0.0056,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-001-2111417706296115209",
+      "kind": "negation_flip",
+      "prob": 0.4455,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-011-2111417706296115207",
+      "kind": "verbatim",
+      "prob": 0.9994,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-011-2111417706296115207",
+      "kind": "topic_drift",
+      "prob": 0.0017,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-011-2111417706296115207",
+      "kind": "doc_swap",
+      "prob": 0.0043,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-010-2111417706296115207",
+      "kind": "number_tamper",
+      "prob": 0.0583,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-002-2111417706296115207",
+      "kind": "negation_flip",
+      "prob": 0.9196,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-012-2111418510977531927",
+      "kind": "verbatim",
+      "prob": 0.9979,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-012-2111418510977531927",
+      "kind": "topic_drift",
+      "prob": 0.0307,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-012-2111418510977531927",
+      "kind": "doc_swap",
+      "prob": 0.0145,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-013-2111417767214186498",
+      "kind": "verbatim",
+      "prob": 0.5813,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-013-2111417767214186498",
+      "kind": "topic_drift",
+      "prob": 0.3923,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-013-2111417767214186498",
+      "kind": "doc_swap",
+      "prob": 0.0316,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-011-2111417767214186498",
+      "kind": "number_tamper",
+      "prob": 0.3849,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-014-2111417698897362950",
+      "kind": "verbatim",
+      "prob": 0.9988,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-014-2111417698897362950",
+      "kind": "topic_drift",
+      "prob": 0.2282,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-014-2111417698897362950",
+      "kind": "doc_swap",
+      "prob": 0.0032,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-005-2111417698897362950",
+      "kind": "condition_drop",
+      "prob": 0.2598,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-015-2111417694161993746",
+      "kind": "verbatim",
+      "prob": 0.6826,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-015-2111417694161993746",
+      "kind": "topic_drift",
+      "prob": 0.0032,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-015-2111417694161993746",
+      "kind": "doc_swap",
+      "prob": 0.1541,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-012-2111417694161993746",
+      "kind": "number_tamper",
+      "prob": 0.5429,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-006-2111417694161993746",
+      "kind": "condition_drop",
+      "prob": 0.0637,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-016-2111417694161993739",
+      "kind": "verbatim",
+      "prob": 0.8808,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-016-2111417694161993739",
+      "kind": "topic_drift",
+      "prob": 0.005,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-016-2111417694161993739",
+      "kind": "doc_swap",
+      "prob": 0.0024,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-013-2111417694161993739",
+      "kind": "number_tamper",
+      "prob": 0.5312,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-007-2111417694161993739",
+      "kind": "condition_drop",
+      "prob": 0.8741,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-017-2111417692308111373",
+      "kind": "verbatim",
+      "prob": 0.9196,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-017-2111417692308111373",
+      "kind": "topic_drift",
+      "prob": 0.0666,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-017-2111417692308111373",
+      "kind": "doc_swap",
+      "prob": 0.046,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-018-2111417690865270790",
+      "kind": "verbatim",
+      "prob": 0.5078,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-018-2111417690865270790",
+      "kind": "topic_drift",
+      "prob": 0.0706,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-018-2111417690865270790",
+      "kind": "doc_swap",
+      "prob": 0.0103,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-014-2111417690865270790",
+      "kind": "number_tamper",
+      "prob": 0.2227,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-008-2111417690865270790",
+      "kind": "condition_drop",
+      "prob": 0.1624,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-019-2111417694161993751",
+      "kind": "verbatim",
+      "prob": 0.9967,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-019-2111417694161993751",
+      "kind": "topic_drift",
+      "prob": 0.0276,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-019-2111417694161993751",
+      "kind": "doc_swap",
+      "prob": 0.0021,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-015-2111417694161993751",
+      "kind": "number_tamper",
+      "prob": 0.3381,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-020-2111417695911018518",
+      "kind": "verbatim",
+      "prob": 0.9907,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-020-2111417695911018518",
+      "kind": "topic_drift",
+      "prob": 0.023,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-020-2111417695911018518",
+      "kind": "doc_swap",
+      "prob": 0.0029,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-016-2111417695911018518",
+      "kind": "number_tamper",
+      "prob": 0.0268,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-003-2111417695911018518",
+      "kind": "negation_flip",
+      "prob": 0.9803,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-021-2111417706296115208",
+      "kind": "verbatim",
+      "prob": 0.6619,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-021-2111417706296115208",
+      "kind": "topic_drift",
+      "prob": 0.0093,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-021-2111417706296115208",
+      "kind": "doc_swap",
+      "prob": 0.0038,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-017-2111417706296115208",
+      "kind": "number_tamper",
+      "prob": 0.0434,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-009-2111417706296115208",
+      "kind": "condition_drop",
+      "prob": 0.566,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-022-2111417696863125525",
+      "kind": "verbatim",
+      "prob": 0.9947,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-022-2111417696863125525",
+      "kind": "topic_drift",
+      "prob": 0.6298,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-022-2111417696863125525",
+      "kind": "doc_swap",
+      "prob": 0.0008,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-018-2111417696863125525",
+      "kind": "number_tamper",
+      "prob": 0.0078,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-023-2111417700247928848",
+      "kind": "verbatim",
+      "prob": 0.2227,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-023-2111417700247928848",
+      "kind": "topic_drift",
+      "prob": 0.1176,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-023-2111417700247928848",
+      "kind": "doc_swap",
+      "prob": 0.0034,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-019-2111417700247928848",
+      "kind": "number_tamper",
+      "prob": 0.0396,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-010-2111417700247928848",
+      "kind": "condition_drop",
+      "prob": 0.9161,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-024-2111417690865270788",
+      "kind": "verbatim",
+      "prob": 0.5583,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-024-2111417690865270788",
+      "kind": "topic_drift",
+      "prob": 0.2598,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-024-2111417690865270788",
+      "kind": "doc_swap",
+      "prob": 0.0108,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-020-2111417690865270788",
+      "kind": "number_tamper",
+      "prob": 0.1824,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-025-2111417694161993741",
+      "kind": "verbatim",
+      "prob": 0.9983,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-025-2111417694161993741",
+      "kind": "topic_drift",
+      "prob": 0.3558,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-025-2111417694161993741",
+      "kind": "doc_swap",
+      "prob": 0.0075,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-021-2111417694161993741",
+      "kind": "number_tamper",
+      "prob": 0.0264,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-011-2111417694161993741",
+      "kind": "condition_drop",
+      "prob": 0.8824,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-026-2111417767218380802",
+      "kind": "verbatim",
+      "prob": 0.9924,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-026-2111417767218380802",
+      "kind": "topic_drift",
+      "prob": 0.1603,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-026-2111417767218380802",
+      "kind": "doc_swap",
+      "prob": 0.0053,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-022-2111417767218380802",
+      "kind": "number_tamper",
+      "prob": 0.7691,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-027-2111417702097616900",
+      "kind": "verbatim",
+      "prob": 0.8439,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-027-2111417702097616900",
+      "kind": "topic_drift",
+      "prob": 0.8222,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-027-2111417702097616900",
+      "kind": "doc_swap",
+      "prob": 0.3886,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-023-2111417702097616900",
+      "kind": "number_tamper",
+      "prob": 0.6723,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-004-2111417702097616900",
+      "kind": "negation_flip",
+      "prob": 0.7663,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-028-2111417700247928845",
+      "kind": "verbatim",
+      "prob": 0.9944,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-028-2111417700247928845",
+      "kind": "topic_drift",
+      "prob": 0.0044,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-028-2111417700247928845",
+      "kind": "doc_swap",
+      "prob": 0.0021,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-024-2111417700247928845",
+      "kind": "number_tamper",
+      "prob": 0.0172,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-012-2111417700247928845",
+      "kind": "condition_drop",
+      "prob": 0.7311,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-029-2111417696863125517",
+      "kind": "verbatim",
+      "prob": 0.133,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-029-2111417696863125517",
+      "kind": "topic_drift",
+      "prob": 0.0067,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-029-2111417696863125517",
+      "kind": "doc_swap",
+      "prob": 0.0026,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-030-2111417706291920898",
+      "kind": "verbatim",
+      "prob": 0.9803,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-030-2111417706291920898",
+      "kind": "topic_drift",
+      "prob": 0.0008,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-030-2111417706291920898",
+      "kind": "doc_swap",
+      "prob": 0.0018,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-025-2111417706291920898",
+      "kind": "number_tamper",
+      "prob": 0.0032,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-031-2111417706291920897",
+      "kind": "verbatim",
+      "prob": 0.9417,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-031-2111417706291920897",
+      "kind": "topic_drift",
+      "prob": 0.0069,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-031-2111417706291920897",
+      "kind": "doc_swap",
+      "prob": 0.0099,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-026-2111417706291920897",
+      "kind": "number_tamper",
+      "prob": 0.9372,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-013-2111417706291920897",
+      "kind": "condition_drop",
+      "prob": 0.8991,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-032-2111417706291920899",
+      "kind": "verbatim",
+      "prob": 0.9987,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-032-2111417706291920899",
+      "kind": "topic_drift",
+      "prob": 0.5351,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-032-2111417706291920899",
+      "kind": "doc_swap",
+      "prob": 0.0024,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-027-2111417706291920899",
+      "kind": "number_tamper",
+      "prob": 0.0107,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-014-2111417706291920899",
+      "kind": "condition_drop",
+      "prob": 0.8888,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-033-2111417767218380800",
+      "kind": "verbatim",
+      "prob": 0.5622,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-033-2111417767218380800",
+      "kind": "topic_drift",
+      "prob": 0.3107,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-033-2111417767218380800",
+      "kind": "doc_swap",
+      "prob": 0.3702,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-028-2111417767218380800",
+      "kind": "number_tamper",
+      "prob": 0.5429,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-005-2111417767218380800",
+      "kind": "negation_flip",
+      "prob": 0.9185,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-034-2111417690865270805",
+      "kind": "verbatim",
+      "prob": 0.566,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-034-2111417690865270805",
+      "kind": "topic_drift",
+      "prob": 0.002,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-034-2111417690865270805",
+      "kind": "doc_swap",
+      "prob": 0.0096,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-029-2111417690865270805",
+      "kind": "number_tamper",
+      "prob": 0.6442,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-006-2111417690865270805",
+      "kind": "negation_flip",
+      "prob": 0.4111,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-015-2111417690865270805",
+      "kind": "condition_drop",
+      "prob": 0.8032,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-035-2111417695911018501",
+      "kind": "verbatim",
+      "prob": 0.2846,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-035-2111417695911018501",
+      "kind": "topic_drift",
+      "prob": 0.0093,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-035-2111417695911018501",
+      "kind": "doc_swap",
+      "prob": 0.0103,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-030-2111417695911018501",
+      "kind": "number_tamper",
+      "prob": 0.0326,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-007-2111417695911018501",
+      "kind": "negation_flip",
+      "prob": 0.0967,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-036-2111417702097616906",
+      "kind": "verbatim",
+      "prob": 0.997,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-036-2111417702097616906",
+      "kind": "topic_drift",
+      "prob": 0.2783,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-036-2111417702097616906",
+      "kind": "doc_swap",
+      "prob": 0.5583,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-031-2111417702097616906",
+      "kind": "number_tamper",
+      "prob": 0.0839,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-008-2111417702097616906",
+      "kind": "negation_flip",
+      "prob": 0.7635,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-037-2111417692308111371",
+      "kind": "verbatim",
+      "prob": 0.9904,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-037-2111417692308111371",
+      "kind": "topic_drift",
+      "prob": 0.4302,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-037-2111417692308111371",
+      "kind": "doc_swap",
+      "prob": 0.0656,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-038-2111417690164822019",
+      "kind": "verbatim",
+      "prob": 0.9137,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-038-2111417690164822019",
+      "kind": "topic_drift",
+      "prob": 0.0914,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-038-2111417690164822019",
+      "kind": "doc_swap",
+      "prob": 0.4378,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-032-2111417690164822019",
+      "kind": "number_tamper",
+      "prob": 0.696,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-039-2111417694161993749",
+      "kind": "verbatim",
+      "prob": 0.9931,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-039-2111417694161993749",
+      "kind": "topic_drift",
+      "prob": 0.0203,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-039-2111417694161993749",
+      "kind": "doc_swap",
+      "prob": 0.0289,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-033-2111417694161993749",
+      "kind": "number_tamper",
+      "prob": 0.1144,
+      "label": 0
+    },
+    {
+      "case_id": "verbatim-040-2111417706296115202",
+      "kind": "verbatim",
+      "prob": 0.9955,
+      "label": 1
+    },
+    {
+      "case_id": "topic_drift-040-2111417706296115202",
+      "kind": "topic_drift",
+      "prob": 0.0408,
+      "label": 0
+    },
+    {
+      "case_id": "doc_swap-040-2111417706296115202",
+      "kind": "doc_swap",
+      "prob": 0.0024,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-034-2111417702097616901",
+      "kind": "number_tamper",
+      "prob": 0.0124,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-035-2111418510977531909",
+      "kind": "number_tamper",
+      "prob": 0.6334,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-036-2111417702097616896",
+      "kind": "number_tamper",
+      "prob": 0.3381,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-009-2111417702097616896",
+      "kind": "negation_flip",
+      "prob": 0.1755,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-016-2111417702097616896",
+      "kind": "condition_drop",
+      "prob": 0.2422,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-037-2111417692308111367",
+      "kind": "number_tamper",
+      "prob": 0.9638,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-017-2111417692308111367",
+      "kind": "condition_drop",
+      "prob": 0.9621,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-038-2111417706296115204",
+      "kind": "number_tamper",
+      "prob": 0.6261,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-010-2111417706296115204",
+      "kind": "negation_flip",
+      "prob": 0.7154,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-011-2111417695911018512",
+      "kind": "negation_flip",
+      "prob": 0.9621,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-039-2111417690865270801",
+      "kind": "number_tamper",
+      "prob": 0.5583,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-012-2111417690865270801",
+      "kind": "negation_flip",
+      "prob": 0.566,
+      "label": 0
+    },
+    {
+      "case_id": "number_tamper-040-2111417696863125512",
+      "kind": "number_tamper",
+      "prob": 0.3923,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-018-2111417690865270806",
+      "kind": "condition_drop",
+      "prob": 0.3775,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-019-2111417698897362948",
+      "kind": "condition_drop",
+      "prob": 0.686,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-013-2111417706296115206",
+      "kind": "negation_flip",
+      "prob": 0.0967,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-020-2111417706296115206",
+      "kind": "condition_drop",
+      "prob": 0.4187,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-021-2111417706291920901",
+      "kind": "condition_drop",
+      "prob": 0.8289,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-014-2111417695911018506",
+      "kind": "negation_flip",
+      "prob": 0.0039,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-022-2111417690865270791",
+      "kind": "condition_drop",
+      "prob": 0.3849,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-015-2111417695911018508",
+      "kind": "negation_flip",
+      "prob": 0.6077,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-016-2111417702097616902",
+      "kind": "negation_flip",
+      "prob": 0.8222,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-023-2111417702097616902",
+      "kind": "condition_drop",
+      "prob": 0.8903,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-024-2111417690865270800",
+      "kind": "condition_drop",
+      "prob": 0.6334,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-025-2111417695911018502",
+      "kind": "condition_drop",
+      "prob": 0.6893,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-026-2111417692308111374",
+      "kind": "condition_drop",
+      "prob": 0.5545,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-017-2111417695911018513",
+      "kind": "negation_flip",
+      "prob": 0.0901,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-018-2111417695911018504",
+      "kind": "negation_flip",
+      "prob": 0.8056,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-019-2111417698897362956",
+      "kind": "negation_flip",
+      "prob": 0.8741,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-020-2111417694161993758",
+      "kind": "negation_flip",
+      "prob": 0.0284,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-027-2111417694161993734",
+      "kind": "condition_drop",
+      "prob": 0.9674,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-021-2111417767218380809",
+      "kind": "negation_flip",
+      "prob": 0.8856,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-028-2111417700247928844",
+      "kind": "condition_drop",
+      "prob": 0.5889,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-022-2111417696863125523",
+      "kind": "negation_flip",
+      "prob": 0.6478,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-029-2111417696863125523",
+      "kind": "condition_drop",
+      "prob": 0.6114,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-023-2111417690164822018",
+      "kind": "negation_flip",
+      "prob": 0.4111,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-030-2111417694161993748",
+      "kind": "condition_drop",
+      "prob": 0.2539,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-031-2111417700247928837",
+      "kind": "condition_drop",
+      "prob": 0.2814,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-024-2111417690164822022",
+      "kind": "negation_flip",
+      "prob": 0.5234,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-025-2111418510977531928",
+      "kind": "negation_flip",
+      "prob": 0.9988,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-032-2111417696863125531",
+      "kind": "condition_drop",
+      "prob": 0.0628,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-026-2111417690865270804",
+      "kind": "negation_flip",
+      "prob": 0.5234,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-033-2111417696863125530",
+      "kind": "condition_drop",
+      "prob": 0.9417,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-027-2111417767218380808",
+      "kind": "negation_flip",
+      "prob": 0.8129,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-028-2111417767218380810",
+      "kind": "negation_flip",
+      "prob": 0.991,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-029-2111417767218380805",
+      "kind": "negation_flip",
+      "prob": 0.9707,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-034-2111417685874049039",
+      "kind": "condition_drop",
+      "prob": 0.7982,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-035-2111418510977531929",
+      "kind": "condition_drop",
+      "prob": 0.4073,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-036-2111417700247928834",
+      "kind": "condition_drop",
+      "prob": 0.8758,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-037-2111417696863125532",
+      "kind": "condition_drop",
+      "prob": 0.7491,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-030-2111417696863125521",
+      "kind": "negation_flip",
+      "prob": 0.0368,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-031-2111417695911018517",
+      "kind": "negation_flip",
+      "prob": 0.8791,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-032-2111417690865270803",
+      "kind": "negation_flip",
+      "prob": 0.7461,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-033-2111417706296115201",
+      "kind": "negation_flip",
+      "prob": 0.2254,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-034-2111417695911018500",
+      "kind": "negation_flip",
+      "prob": 0.0054,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-038-2111417695911018500",
+      "kind": "condition_drop",
+      "prob": 0.2451,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-035-2111417695911018519",
+      "kind": "negation_flip",
+      "prob": 0.637,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-039-2111417695911018519",
+      "kind": "condition_drop",
+      "prob": 0.5775,
+      "label": 0
+    },
+    {
+      "case_id": "condition_drop-040-2111417700247928836",
+      "kind": "condition_drop",
+      "prob": 0.9553,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-036-2111417695911018516",
+      "kind": "negation_flip",
+      "prob": 0.0815,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-037-2111417695911018510",
+      "kind": "negation_flip",
+      "prob": 0.9325,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-038-2111417696863125519",
+      "kind": "negation_flip",
+      "prob": 0.0331,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-039-2111417706296115203",
+      "kind": "negation_flip",
+      "prob": 0.0037,
+      "label": 0
+    },
+    {
+      "case_id": "negation_flip-040-2111417696863125524",
+      "kind": "negation_flip",
+      "prob": 0.0203,
+      "label": 0
+    }
+  ],
+  "errors": []
+}
