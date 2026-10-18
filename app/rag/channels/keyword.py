@@ -1,8 +1,12 @@
 """
 关键词检索通道（Elasticsearch + IK 分词）
 
-使用 match_phrase + multi_match (BestFields) 查询，
-IK 分词器处理中文，相对阈值过滤弱命中（score < top_score * keyword_relative_score_floor）
+查询构造分两路（Task 4 起）：
+1. 自然语言部分走 multi_match（operator=or），由 IK 分词后按词命中 —— 不再用整句 match_phrase，
+   因为整句 phrase 在中文里几乎不可能命中（实测 78/78 零命中）；
+2. 编号类精确值（第 N 条 / 9.1 / M4+ / A类城市 / 《文档名》）由 `app.rag.query_tokens` 抽出，
+   走独立的高 boost 子句，避免被自然语言部分稀释。
+相对阈值过滤弱命中（score < top_score * keyword_score_ratio）
 """
 
 from typing import Any
@@ -23,34 +27,59 @@ settings = get_settings()
 class KeywordRetrievalChannel:
     """
     基于 Elasticsearch 的全文关键词匹配。
-      - match_phrase: sectionPath^8, chunkText^5, documentName^4
-      - multi_match (BestFields): sectionPath^6, documentName^4, knowledgeScopeName^3, chunkText
+      - multi_match (operator=or): sectionPath^3, documentName^2, knowledgeScopeName^1, chunkText
+      - 结构化子句: 第N条 / N.M / 《文档名》 / 职级 / 城市类别（由 query_tokens 抽取）
       - 可选 filter 子句：文档路由、章节路径、结构化导航
       - 最低 should 匹配: minimum_should_match=1
     """
 
     @staticmethod
     def _build_es_query(query_text: str, sub_q: SubQuestion, limit: int) -> dict:
-        should_clauses = [
-            {"match_phrase": {"sectionPath": {"query": query_text, "boost": 8.0}}},
-            {"match_phrase": {"chunkText": {"query": query_text, "boost": 5.0}}},
-            {"match_phrase": {"documentName": {"query": query_text, "boost": 4.0}}},
+        from app.rag.query_tokens import extract_query_tokens
+
+        tokens = extract_query_tokens(query_text)
+        should_clauses: list[dict[str, Any]] = [
             {
                 "multi_match": {
                     "query": query_text,
                     "fields": [
-                        "sectionPath^6",
-                        "documentName^4",
-                        "knowledgeScopeName^3",
+                        "sectionPath^3",
+                        "documentName^2",
+                        "knowledgeScopeName^1",
                         "chunkText",
                     ],
                     "type": "best_fields",
+                    # operator=or：中文整句 phrase 几乎不可能命中（实测 78/78 零命中），
+                    # 改成"部分词命中即可"，再用 minimum_should_match 控制下限。
+                    "operator": "or",
                     "minimum_should_match": getattr(
-                        settings.rag, "keyword_minimum_should_match", "1<50%"
+                        settings.rag, "keyword_minimum_should_match", "2<60%"
                     ),
                 }
-            },
+            }
         ]
+        # 结构化精确值：编号/子条款/文档名/职级/城市类别，各自独立加权
+        for clause in tokens.clauses:
+            should_clauses.append(
+                {"match_phrase": {"sectionPath": {"query": f"第{clause}条", "boost": 8.0}}}
+            )
+            should_clauses.append(
+                {"match_phrase": {"chunkText": {"query": f"第{clause}条", "boost": 4.0}}}
+            )
+        for subclause in tokens.subclauses:
+            should_clauses.append(
+                {"match_phrase": {"chunkText": {"query": subclause, "boost": 6.0}}}
+            )
+        for doc_name in tokens.doc_names:
+            should_clauses.append(
+                {"match_phrase": {"documentName": {"query": doc_name, "boost": 5.0}}}
+            )
+        for grade in tokens.grades:
+            should_clauses.append({"match": {"chunkText": {"query": grade, "boost": 3.0}}})
+        for city_class in tokens.city_classes:
+            should_clauses.append(
+                {"match": {"chunkText": {"query": f"{city_class}类城市", "boost": 2.0}}}
+            )
 
         # 可选：把 jieba 词项作为 should 子句注入（放宽候选池；默认关）
         if getattr(settings.rag, "keyword_term_expansion_enabled", False):
@@ -117,7 +146,15 @@ class KeywordRetrievalChannel:
         if not sub_q.text or not sub_q.text.strip():
             return []
 
-        query_text = (getattr(sub_q, "retrieval_query", None) or sub_q.text or "").strip()
+        # 查询文本选源：默认用干净问句；retrieval_query 是"问题+jieba 关键词长串"，
+        # 整串进检索只会稀释信号（留成配置项便于回滚/对照）。
+        source = getattr(settings.rag, "keyword_query_source", "question")
+        query_text = (
+            (getattr(sub_q, "retrieval_query", None) or sub_q.text)
+            if source == "retrieval_query"
+            else sub_q.text
+        ) or ""
+        query_text = query_text.strip()
         query_text = normalize_step_numeral(query_text)
         logger.debug("keyword channel query", query=query_text[:50])
 

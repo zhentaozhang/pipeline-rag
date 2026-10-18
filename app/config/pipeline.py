@@ -55,7 +55,10 @@ class RAGSettings(BaseSettings):
     keyword_top_k: int = 50
     # 关键词通道查询宽严度：ES multi_match 的 minimum_should_match。
     # 默认值与历史行为一致；调松可扩大候选池（用 hard85 配对 bootstrap 判定收益）。
-    keyword_minimum_should_match: str = "1<50%"
+    # 查询文本选源：question=干净问句（默认）；retrieval_query=旧行为（问题+jieba 关键词长串）
+    keyword_query_source: str = "question"
+    # multi_match(operator=or) 的最低命中比例；"2<60%"=命中数<2 时全匹配，否则 60%
+    keyword_minimum_should_match: str = "1<30%"
     # 是否把 jieba 词项作为 should 子句注入（默认关，避免改变既有排序行为）
     keyword_term_expansion_enabled: bool = False
     # ES 零命中时是否回退 PG 全表 LIKE。默认保行为（true），但它是无索引全表扫描，

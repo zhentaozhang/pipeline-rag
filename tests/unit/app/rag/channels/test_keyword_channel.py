@@ -15,15 +15,48 @@ def make_sub_question(**overrides):
 
 class TestBuildEsQuery:
     def test_should_clauses(self):
+        """Task 4 起：只有一条 multi_match（OR）+ 命中的结构化子句，不再有整句 match_phrase。"""
         q = KeywordRetrievalChannel._build_es_query("查询词", make_sub_question(), 10)
         should = q["query"]["bool"]["should"]
-        assert len(should) == 4
-        assert should[0] == {"match_phrase": {"sectionPath": {"query": "查询词", "boost": 8.0}}}
-        assert should[1] == {"match_phrase": {"chunkText": {"query": "查询词", "boost": 5.0}}}
-        assert should[2] == {"match_phrase": {"documentName": {"query": "查询词", "boost": 4.0}}}
-        assert should[3]["multi_match"]["type"] == "best_fields"
+        assert len(should) == 1
+        assert should[0]["multi_match"]["type"] == "best_fields"
+        assert should[0]["multi_match"]["operator"] == "or"
+        assert should[0]["multi_match"]["fields"] == [
+            "sectionPath^3",
+            "documentName^2",
+            "knowledgeScopeName^1",
+            "chunkText",
+        ]
         assert q["query"]["bool"]["minimum_should_match"] == 1
         assert q["size"] == 10
+
+    def test_no_whole_sentence_match_phrase(self):
+        q = KeywordRetrievalChannel._build_es_query("查询词", make_sub_question(), 10)
+        for clause in q["query"]["bool"]["should"]:
+            if "match_phrase" in clause:
+                payload = clause["match_phrase"]
+                body = payload[next(iter(payload))]
+                query = body["query"] if isinstance(body, dict) else body
+                assert query != "查询词"
+
+    def test_clause_token_adds_structured_clause(self):
+        q = KeywordRetrievalChannel._build_es_query(
+            "第9条规定了什么", make_sub_question(text="第9条规定了什么"), 10
+        )
+        should = q["query"]["bool"]["should"]
+        assert {"match_phrase": {"sectionPath": {"query": "第9条", "boost": 8.0}}} in should
+        assert {"match_phrase": {"chunkText": {"query": "第9条", "boost": 4.0}}} in should
+        assert q["query"]["bool"]["should"][0]["multi_match"]["query"] == "第9条规定了什么"
+
+    def test_structured_tokens_cover_doc_grade_city_subclause(self):
+        q = KeywordRetrievalChannel._build_es_query(
+            "《差旅管理制度》9.1 总监级 M4+ A类城市", make_sub_question(), 10
+        )
+        should = q["query"]["bool"]["should"]
+        assert {"match_phrase": {"chunkText": {"query": "9.1", "boost": 6.0}}} in should
+        assert {"match_phrase": {"documentName": {"query": "差旅管理制度", "boost": 5.0}}} in should
+        assert {"match": {"chunkText": {"query": "M4+", "boost": 3.0}}} in should
+        assert {"match": {"chunkText": {"query": "A类城市", "boost": 2.0}}} in should
 
     def test_tenant_filter(self):
         q = KeywordRetrievalChannel._build_es_query("q", make_sub_question(tenant_id="租户A"), 10)
@@ -103,7 +136,7 @@ class TestQueryLooseningConfig:
             for c in q["query"]["bool"]["should"]
             if "multi_match" in c
         ]
-        assert mm == ["1<50%"]
+        assert mm == ["1<30%"]
 
     def test_minimum_should_match_follows_setting(self, monkeypatch):
         monkeypatch.setattr(
@@ -121,7 +154,8 @@ class TestQueryLooseningConfig:
         q = KeywordRetrievalChannel._build_es_query(
             "试用期时长是如何确定的", make_sub_question(), 10
         )
-        assert len(q["query"]["bool"]["should"]) == 4
+        # Task 4 起基础查询只有 1 条 multi_match；词扩充开启时会多出若干 match 子句
+        assert len(q["query"]["bool"]["should"]) == 1
 
     def test_term_expansion_adds_jieba_terms(self, monkeypatch):
         monkeypatch.setattr(
@@ -526,3 +560,55 @@ class TestZeroHitFallback:
 
         await channel.retrieve(make_sub_question(text="问题"))
         assert called["fallback"] is True
+
+
+class TestQueryConstruction:
+    """Task 4：查询文本必须用干净问句，结构化 token 走独立子句。"""
+
+    async def test_retrieve_uses_clean_question_not_augmented_retrieval_query(
+        self, monkeypatch
+    ):
+        import json
+
+        captured: dict = {}
+
+        class _FakeES:
+            async def search(self, index=None, body=None, **kwargs):
+                captured["body"] = body
+                return {"hits": {"hits": []}}
+
+        monkeypatch.setattr(keyword_module, "get_es", lambda: _FakeES())
+        monkeypatch.setattr(
+            keyword_module.settings.rag, "keyword_pg_fallback_enabled", False, raising=False
+        )
+        sub = SubQuestion(
+            index=0,
+            text="第9条规定了什么",
+            retrieval_query="第9条规定了什么 规定 什么 第 九条",
+            tenant_id="t1",
+        )
+        await KeywordRetrievalChannel().retrieve(sub)
+        dumped = json.dumps(captured["body"], ensure_ascii=False)
+        assert "规定 什么 第" not in dumped
+        assert "第9条规定了什么" in dumped
+
+    async def test_retrieve_can_fall_back_to_retrieval_query(self, monkeypatch):
+        import json
+
+        captured: dict = {}
+
+        class _FakeES:
+            async def search(self, index=None, body=None, **kwargs):
+                captured["body"] = body
+                return {"hits": {"hits": []}}
+
+        monkeypatch.setattr(keyword_module, "get_es", lambda: _FakeES())
+        monkeypatch.setattr(
+            keyword_module.settings.rag, "keyword_query_source", "retrieval_query", raising=False
+        )
+        monkeypatch.setattr(
+            keyword_module.settings.rag, "keyword_pg_fallback_enabled", False, raising=False
+        )
+        sub = SubQuestion(index=0, text="那这个呢", retrieval_query="试用期时长 试用期", tenant_id="t1")
+        await KeywordRetrievalChannel().retrieve(sub)
+        assert "试用期时长" in json.dumps(captured["body"], ensure_ascii=False)
