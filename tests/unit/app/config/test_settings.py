@@ -108,8 +108,10 @@ class TestPipelineSettings:
 
     def test_rag_budget_defaults(self, monkeypatch):
         s = RAGSettings(_env_file=None)
-        assert s.prompt_budget_total == 5200
-        assert s.prompt_budget_per_subquestion == 2200
+        # 与 .env / .env.example 的运行真值同源（此前代码默认 5200/2200 与实际部署背离）
+        assert s.prompt_budget_total == 20000
+        assert s.prompt_budget_per_subquestion == 8000
+        assert s.parent_evidence_max_chars == 4000
         assert s.max_sub_questions == 4
         assert s.no_evidence_reply.startswith("当前没有")
         assert s.knowledge_route_confidence_threshold == 0.40

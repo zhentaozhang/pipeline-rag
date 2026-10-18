@@ -133,6 +133,9 @@ class KeywordRetrievalChannel:
             hits = res.get("hits", {}).get("hits", [])
 
             if not hits:
+                if not getattr(settings.rag, "keyword_pg_fallback_enabled", True):
+                    logger.info("keyword_zero_hit_fallback_disabled", query=query_text[:50])
+                    return []
                 return await self._fallback_pgvector(query_text, sub_q, limit)
 
             evidences: list[Evidence] = []

@@ -58,6 +58,9 @@ class RAGSettings(BaseSettings):
     keyword_minimum_should_match: str = "1<50%"
     # 是否把 jieba 词项作为 should 子句注入（默认关，避免改变既有排序行为）
     keyword_term_expansion_enabled: bool = False
+    # ES 零命中时是否回退 PG 全表 LIKE。默认保行为（true），但它是无索引全表扫描，
+    # 高并发下应关闭；关掉后该子查询只由向量通道兜底（实测关键词通道召回贡献为 0）。
+    keyword_pg_fallback_enabled: bool = True
     candidate_top_k: int = 50
     final_top_k: int = 8
     min_vector_similarity: float = 0.55
@@ -72,9 +75,9 @@ class RAGSettings(BaseSettings):
     adaptive_keyword_bias: float = 1.6
     adaptive_vector_bias: float = 1.6
     context_window_safety_margin: float = 0.15
-    prompt_budget_total: int = 5200
-    prompt_budget_per_subquestion: int = 2200
-    parent_evidence_max_chars: int = 2200
+    prompt_budget_total: int = 20000
+    prompt_budget_per_subquestion: int = 8000
+    parent_evidence_max_chars: int = 4000
     # 单条引用渲染上限（P1）：此前硬编码 1100，导致父块预算(2200/4000)在实际 Prompt 中失效。
     reference_snippet_max_chars: int = 2000
     # 评测裁判可见上下文上限（与生成侧预算对齐，避免"裁判看到的证据 < 模型看到的证据"）。
@@ -82,7 +85,10 @@ class RAGSettings(BaseSettings):
     # 召回归因覆盖判定阈值（诊断用，可配）。
     stage_attribution_cover_ratio: float = 0.35
     # 向量通道门限：默认绝对阈值；>0 时改用相对阈值 top_score*ratio（生产由 .env 开启 0.35）。
-    vector_relative_ratio: float = 0.0
+    # 向量相对门限：保留 top_similarity*ratio 以上的命中。0.35 为 .env / .env.example 的
+    # 运行真值；hard85 实测关掉(0)差异不显著（R@5 −0.0043, p=0.913），故沿用 0.35
+    # 以保持单一真值与既有线上行为一致。
+    vector_relative_ratio: float = 0.35
     vector_near_miss_ratio: float = 0.85
     # R1 条件重排：第一阶段 top-1 相似度 >= 该值时跳过重排（0=关闭）。
     rerank_skip_min_similarity: float = 0.0

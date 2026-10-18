@@ -19,6 +19,17 @@ settings = get_settings()
 
 
 class PromptBudget:
+    """Prompt 装填预算。
+
+    单位统一约定（此前含糊，容易误读成 token）：
+    - 本预算的计数单位是**字符数**（`try_consume(len(block))`），
+      `settings.rag.prompt_budget_total / per_subquestion` 同样是字符；
+    - token 估算（`_estimate_tokens`，CJK 感知）只用于**上下文窗口溢出保护**，
+      不参与本预算扣减。
+    改成 token 口径会把可用上下文放大约 1.5 倍（中文 1 字≈1.5 token 的倒数），
+    属于独立优化，必须单独 A/B 后再动。
+    """
+
     def __init__(self, total_budget: int, per_sub_question_budget: int):
         self.total_budget = max(0, total_budget)
         self.per_sub_question_budget = max(0, per_sub_question_budget)

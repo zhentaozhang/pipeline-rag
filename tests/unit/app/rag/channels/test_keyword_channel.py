@@ -257,9 +257,7 @@ class TestEvidenceMetadata:
         )
         monkeypatch.setattr(keyword_module, "get_es", lambda: FakeEs())
         monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
-        results = await KeywordRetrievalChannel().retrieve(
-            make_sub_question(text="配置数据库连接")
-        )
+        results = await KeywordRetrievalChannel().retrieve(make_sub_question(text="配置数据库连接"))
         ev = results[0]
         assert ev.document_name == "差旅制度"
         assert ev.section_path == "2. 报销 > 2.3 住宿标准"
@@ -452,3 +450,79 @@ class TestRetrieve:
         monkeypatch.setattr("app.infra.pg.fetch", fake_fetch)
         channel = KeywordRetrievalChannel()
         assert await channel.retrieve(make_sub_question(text="配置数据库")) == []
+
+
+class TestZeroHitFallback:
+    """ES 零命中时是否回退 PG 全表 LIKE，必须是显式开关（默认保行为）。"""
+
+    @pytest.mark.asyncio
+    async def test_fallback_skipped_when_disabled(self, monkeypatch):
+        import app.rag.channels.keyword as keyword_module
+        from app.rag.channels.keyword import KeywordRetrievalChannel
+
+        class _FakeEs:
+            async def search(self, index, body):
+                return {"hits": {"hits": []}}
+
+        monkeypatch.setattr(
+            keyword_module,
+            "settings",
+            types.SimpleNamespace(
+                rag=types.SimpleNamespace(
+                    keyword_top_k=50,
+                    max_channel_top_k=50,
+                    keyword_minimum_should_match="1<50%",
+                    keyword_term_expansion_enabled=False,
+                    keyword_pg_fallback_enabled=False,
+                )
+            ),
+        )
+        monkeypatch.setattr(keyword_module, "get_es", lambda: _FakeEs())
+
+        called = {"fallback": False}
+
+        async def _fail(*args, **kwargs):
+            called["fallback"] = True
+            return []
+
+        channel = KeywordRetrievalChannel()
+        monkeypatch.setattr(channel, "_fallback_pgvector", _fail)
+
+        evidences = await channel.retrieve(make_sub_question(text="问题"))
+        assert evidences == []
+        assert called["fallback"] is False
+
+    @pytest.mark.asyncio
+    async def test_fallback_runs_by_default(self, monkeypatch):
+        import app.rag.channels.keyword as keyword_module
+        from app.rag.channels.keyword import KeywordRetrievalChannel
+
+        class _FakeEs:
+            async def search(self, index, body):
+                return {"hits": {"hits": []}}
+
+        monkeypatch.setattr(
+            keyword_module,
+            "settings",
+            types.SimpleNamespace(
+                rag=types.SimpleNamespace(
+                    keyword_top_k=50,
+                    max_channel_top_k=50,
+                    keyword_minimum_should_match="1<50%",
+                    keyword_term_expansion_enabled=False,
+                )
+            ),
+        )
+        monkeypatch.setattr(keyword_module, "get_es", lambda: _FakeEs())
+
+        called = {"fallback": False}
+
+        async def _fallback(*args, **kwargs):
+            called["fallback"] = True
+            return []
+
+        channel = KeywordRetrievalChannel()
+        monkeypatch.setattr(channel, "_fallback_pgvector", _fallback)
+
+        await channel.retrieve(make_sub_question(text="问题"))
+        assert called["fallback"] is True
