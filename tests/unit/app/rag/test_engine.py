@@ -1,3 +1,4 @@
+import asyncio
 import types
 
 import pytest
@@ -724,3 +725,42 @@ class TestChannelErrorVisibility:
         assert len(results) == 1
         assert results[0].error_message == "embedding api down"
         assert any("embedding api down" in n for n in notes)
+
+
+class TestNotesOrdering:
+    """并行子问题写入的 notes 必须按子问题序号稳定排序，否则同一输入每次顺序不同。"""
+
+    @pytest.mark.asyncio
+    async def test_notes_are_ordered_by_sub_question_index(self, monkeypatch):
+        monkeypatch.setattr(
+            engine_module,
+            "settings",
+            make_settings(rag=dict(sub_question_max_concurrency=3)),
+        )
+
+        class _SlowChannel:
+            """索引越小的通道越慢，制造"完成顺序 ≠ 发起顺序"。"""
+
+            async def retrieve(self, sub_q):
+                if sub_q.index == 0:
+                    await asyncio.sleep(0.03)
+                else:
+                    await asyncio.sleep(0)
+                raise RuntimeError(f"boom-{sub_q.index}")
+
+        monkeypatch.setattr(
+            "app.rag.channels.vector.VectorRetrievalChannel", lambda: _SlowChannel()
+        )
+
+        engine = RagRetrievalEngine()
+        plan = make_plan(
+            sub_questions=[
+                SubQuestion(index=0, text="问题零"),
+                SubQuestion(index=1, text="问题一"),
+            ],
+            retrieval_sub_questions=["问题零", "问题一"],
+        )
+        ctx = await engine.retrieve(plan)
+        notes = [n for n in ctx.retrieval_notes if "检索失败或超时" in n]
+        # note 里的序号是 1-based：必须 1 在前、2 在后，而不是按完成顺序
+        assert [n.split("子问题")[1][0] for n in notes] == ["1", "1", "2", "2"]

@@ -696,14 +696,21 @@ def _generation_temperature() -> float:
     return settings.llm.temperature if eval_temp is None else float(eval_temp)
 
 
+def _fmt_num(value: float | None, width: int = 5) -> str:
+    """无有效评分样本时显示 N/A，避免与"真实 0 分"混淆。"""
+    return f"{'N/A':<{width}}" if value is None else f"{value:.3f}"
+
+
 def _print_report(
     results: list[EvalResult], run_tag: str
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """打印报告并返回各指标平均分与阶段归因统计（供门禁与溯源）"""
 
-    def _avg(vals: list[float]) -> float:
+    def _avg(vals: list[float]) -> float | None:
+        # 无样本一律 None：返回 0.0 会让"没评"与"真实 0 分"混为一谈，
+        # 也会把均值拉低、把门禁判失败。
         if not vals:
-            return 0.0
+            return None
         return sum(vals) / len(vals)
 
     completed = [r for r in results if r.status == "completed"]
@@ -847,8 +854,7 @@ def _print_report(
     )
 
     def _fmt(samples: list[float]) -> str:
-        # 无有效评分样本时显示 N/A，避免与"真实 0 分"混淆
-        return f"{_avg(samples):.3f}" if samples else "N/A  "
+        return _fmt_num(_avg(samples))
 
     logger.info("  ├──────────────────────┬──────────┤")
     logger.info("  │ Faithfulness         │ %s    │", _fmt(faithfulness))
@@ -857,16 +863,16 @@ def _print_report(
     logger.info("  │ Answer Correctness   │ %s    │", _fmt(correctness))
     logger.info("  │ Context Recall       │ %s    │", _fmt(recall))
     logger.info(
-        "  │ Recall@5 / Recall@%-2d │ %.3f / %.3f │",
+        "  │ Recall@5 / Recall@%-2d │ %s / %s │",
         eval_depth,
-        avg.get("recall_at_5", 0.0),
-        avg.get("recall_at_final_k", 0.0),
+        _fmt_num(avg.get("recall_at_5")),
+        _fmt_num(avg.get("recall_at_final_k")),
     )
     logger.info(
-        "  │ MRR / nDCG@%-2d        │ %.3f / %.3f │",
+        "  │ MRR / nDCG@%-2d        │ %s / %s │",
         eval_depth,
-        avg.get("mrr", 0.0),
-        avg.get("ndcg_at_final_k", 0.0),
+        _fmt_num(avg.get("mrr")),
+        _fmt_num(avg.get("ndcg_at_final_k")),
     )
     if refusal["refusal_cases"]:
         logger.info(
@@ -1338,8 +1344,12 @@ if __name__ == "__main__":
         for metric in sorted(set(b_avg) | set(o_avg)):
             if metric.startswith("latency_"):
                 continue  # 延迟单位是 ms，单独成表
-            b = b_avg.get(metric, 0.0)
-            o = o_avg.get(metric, 0.0)
+            b = b_avg.get(metric)
+            o = o_avg.get(metric)
+            if b is None or o is None:
+                if b != o:
+                    print(f"  {metric:<20} {_fmt_num(b)} → {_fmt_num(o)}  (样本不足，不比差值)")
+                continue
             delta = o - b
             arrow = "▲" if delta > 0.005 else ("▼" if delta < -0.005 else "＝")
             print(f"  {metric:<20} {b:.3f} → {o:.3f}  {arrow} {delta:+.3f}")
@@ -1408,7 +1418,10 @@ if __name__ == "__main__":
             ("context_recall", args.min_recall, avg["context_recall"]),
             ("answer_correctness", args.min_correctness, avg["answer_correctness"]),
         ]
-        violations = [g for g in gates if g[1] > 0 and g[2] < g[1]]
+        skipped = [g[0] for g in gates if g[1] > 0 and g[2] is None]
+        if skipped:
+            logger.warning("门禁跳过（无有效样本）：%s", ", ".join(skipped))
+        violations = [g for g in gates if g[1] > 0 and g[2] is not None and g[2] < g[1]]
         if violations:
             for name, threshold, actual in violations:
                 logger.error("GATE FAILED: %s = %.3f < %.3f", name, actual, threshold)

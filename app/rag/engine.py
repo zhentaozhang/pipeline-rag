@@ -136,20 +136,25 @@ class RagRetrievalEngine:
 
         _collected_spans: list[SpanContext] = []
 
-        async def _retrieve_with_timeout(sq: SubQuestion, idx: int) -> SubQuestionEvidence:
+        async def _retrieve_with_timeout(
+            sq: SubQuestion, idx: int
+        ) -> tuple[SubQuestionEvidence, list[str]]:
+            # 每个子问题用局部 notes，结束后按序号合并 —— 否则并行完成顺序会污染提示词顺序
+            local_notes: list[str] = []
             try:
-                return await asyncio.wait_for(
+                evidence = await asyncio.wait_for(
                     self._retrieve_one(
                         sq,
                         idx + 1,
                         plan,
                         context.used_channels,
-                        context.retrieval_notes,
+                        local_notes,
                         collected_spans_out=_collected_spans,
                         tracer=tracer,
                     ),
                     timeout=per_sub_timeout,
                 )
+                return evidence, local_notes
             except Exception as e:
                 # 体检 C5：静默降级可见化
                 from app.observability.metrics import DEGRADATION_TOTAL
@@ -162,7 +167,7 @@ class RagRetrievalEngine:
                     error=str(e),
                     exc_info=True,
                 )
-                context.retrieval_notes.append(f"子问题{idx + 1}检索失败或超时，已自动忽略。")
+                local_notes.append(f"子问题{idx + 1}检索失败或超时，已自动忽略。")
                 return SubQuestionEvidence(
                     sub_question=sq,
                     evidences=[],
@@ -170,19 +175,22 @@ class RagRetrievalEngine:
                     fused_candidate_count=0,
                     parent_candidate_count=0,
                     reranked_candidate_count=0,
-                )
+                ), local_notes
 
         max_concurrency = max(1, getattr(settings.rag, "sub_question_max_concurrency", 3))
         semaphore = asyncio.Semaphore(max_concurrency)
 
         async def _throttled_retrieve_with_timeout(
             sq: SubQuestion, idx: int
-        ) -> SubQuestionEvidence:
+        ) -> tuple[SubQuestionEvidence, list[str]]:
             async with semaphore:
                 return await _retrieve_with_timeout(sq, idx)
 
         tasks = [_throttled_retrieve_with_timeout(sq, i) for i, sq in enumerate(sub_questions)]
-        evidence_list = await asyncio.gather(*tasks)
+        gathered = await asyncio.gather(*tasks)
+        evidence_list = [item[0] for item in gathered]
+        for _, sub_notes in gathered:
+            context.retrieval_notes.extend(sub_notes)
 
         # 把并行阶段收集的 span 挂到 tracer 上（此时不再并发）
         if tracer and _collected_spans:
