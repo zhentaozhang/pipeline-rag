@@ -13,6 +13,9 @@ class EvalQuestion(BaseModel):
     ground_truth_answer: str
     relevant_contexts: list[str] = Field(default_factory=list)
     relevant_document_ids: list[str] = Field(default_factory=list)
+    # Task 1：chunk 级标注（按 ID 精确判定召回）。为空时由 ground_gold_chunks 由片段对齐得到。
+    relevant_chunk_ids: list[str] = Field(default_factory=list)
+    relevant_parent_ids: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -69,6 +72,15 @@ class EvalResult(BaseModel):
     mrr: float | None = None  # 排序质量：首个命中的排名倒数
     ndcg_at_5: float | None = None  # 排序质量：nDCG@5
     ndcg_at_final_k: float | None = None  # 排序质量：nDCG@final_top_k
+    # Task 1：按证据 ID 判定的指标（None = 该题无 gold，不计入均值）
+    retrieved_chunk_ids: list[str] = Field(default_factory=list)
+    retrieved_parent_ids: list[str] = Field(default_factory=list)
+    recall_at_5_ids: float | None = None
+    recall_at_final_k_ids: float | None = None
+    mrr_ids: float | None = None
+    ndcg_at_5_ids: float | None = None
+    recall_at_5_parent_ids: float | None = None
+    recall_at_final_k_parent_ids: float | None = None
     generation_ms: float | None = None
     total_ms: float | None = None
 

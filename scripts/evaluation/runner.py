@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -53,8 +54,11 @@ def _build_plan(
     )
 
 
-def _extract_context_texts(ctx) -> list[str]:
-    """从 RagRetrievalContext 提取检索到的证据文本，去重并按重排/综合得分降序排列"""
+def _ordered_evidences(ctx) -> list:
+    """按最终展示顺序取出证据（去重），文本与 ID 序列共用同一份顺序。
+
+    去重键：优先 chunk_id，缺失时退化为内容前 64 字符（与旧实现一致）。
+    """
     seen_chunk_ids: set[str] = set()
     all_evidences = []
     for sqe in ctx.sub_question_evidence_list:
@@ -74,13 +78,144 @@ def _extract_context_texts(ctx) -> list[str]:
         ),
         reverse=True,
     )
+    return all_evidences
+
+
+def _extract_context_texts(ctx) -> list[str]:
+    """从 RagRetrievalContext 提取检索到的证据文本，去重并按重排/综合得分降序排列"""
     texts: list[str] = []
-    for ev in all_evidences:
+    for ev in _ordered_evidences(ctx):
         ref_prefix = (
             f"[{ev.reference_id}] " if getattr(ev, "reference_id", None) is not None else ""
         )
         texts.append(f"{ref_prefix}{ev.content}")
     return texts
+
+
+def _extract_context_ids(ctx) -> list[str]:
+    """与 ``_extract_context_texts`` 同序的 chunk_id 序列（Task 1 的召回判定依据）。"""
+    ids: list[str] = []
+    for ev in _ordered_evidences(ctx):
+        cid = getattr(ev, "chunk_id", None)
+        if cid is None:
+            continue
+        key = str(cid).strip()
+        if key:
+            ids.append(key)
+    return ids
+
+
+def _extract_context_parent_ids(ctx) -> list[str]:
+    """与 ``_extract_context_texts`` 同序的 parent_block_id 序列（章节级召回判定）。"""
+    ids: list[str] = []
+    for ev in _ordered_evidences(ctx):
+        pid = getattr(ev, "parent_block_id", None)
+        if pid is None:
+            continue
+        key = str(pid).strip()
+        if key:
+            ids.append(key)
+    return ids
+
+
+async def _load_indexed_chunks() -> list[dict[str, Any]]:
+    """加载已入库 chunk（id / 父块 / 文本），供 gold 片段对齐使用。"""
+    from sqlalchemy import select
+
+    from app.db.models.document import DocumentChunk
+    from app.db.session import get_session_factory
+
+    factory = get_session_factory()
+    if factory is None:
+        return []
+    async with factory() as session:
+        rows = await session.execute(
+            select(
+                DocumentChunk.id,
+                DocumentChunk.parent_block_id,
+                DocumentChunk.chunk_text,
+            )
+        )
+        return [
+            {"chunk_id": row[0], "parent_block_id": row[1], "chunk_text": row[2]}
+            for row in rows.all()
+            if row[2]
+        ]
+
+
+def _apply_id_metrics(
+    result,
+    question,
+    grounded: dict[str, list[str]],
+    eval_depth: int,
+) -> None:
+    """按 chunk_id 判定召回（Task 1）。
+
+    gold 优先取题目显式标注的 ``relevant_chunk_ids``，否则使用片段对齐结果。
+    该题无 gold（拒答题）时指标保持 None，不计入均值。
+    """
+    from scripts.evaluation.metrics import (
+        compute_id_mrr,
+        compute_id_ndcg_at_k,
+        compute_id_recall_at_k,
+    )
+
+    gold_chunks = list(getattr(question, "relevant_chunk_ids", None) or []) or list(
+        grounded.get("relevant_chunk_ids") or []
+    )
+    gold_parents = list(getattr(question, "relevant_parent_ids", None) or []) or list(
+        grounded.get("relevant_parent_ids") or []
+    )
+    retrieved = list(result.retrieved_chunk_ids or [])
+    retrieved_parents = list(result.retrieved_parent_ids or [])
+
+    result.recall_at_5_ids = compute_id_recall_at_k(retrieved, gold_chunks, 5)
+    result.recall_at_final_k_ids = compute_id_recall_at_k(retrieved, gold_chunks, eval_depth)
+    result.mrr_ids = compute_id_mrr(retrieved, gold_chunks)
+    result.ndcg_at_5_ids = compute_id_ndcg_at_k(retrieved, gold_chunks, 5)
+    result.recall_at_5_parent_ids = compute_id_recall_at_k(retrieved_parents, gold_parents, 5)
+    result.recall_at_final_k_parent_ids = compute_id_recall_at_k(
+        retrieved_parents, gold_parents, eval_depth
+    )
+
+
+def _load_gold_file(path: str) -> dict[str, dict[str, list[str]]]:
+    """读取预生成的 gold 文件（失败返回空映射，调用方降级为词法对齐）。"""
+    import json
+
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.warning(
+            "gold file load failed, falling back to lexical grounding", path=path, error=str(e)
+        )
+        return {}
+    questions = payload.get("questions") if isinstance(payload, dict) else None
+    if not isinstance(questions, dict):
+        logger.warning("gold file has no questions map", path=path)
+        return {}
+    logger.info("gold file loaded", path=path, questions=len(questions), meta=payload.get("meta"))
+    return questions
+
+
+async def _ground_dataset_gold(
+    dataset: list, *, gold_file: str = ""
+) -> dict[str, dict[str, list[str]]]:
+    """把评测集的 gold 文本片段对齐成 chunk_id（失败时降级为空映射，不影响主流程）。"""
+    if not dataset:
+        return {}
+    if gold_file:
+        return _load_gold_file(gold_file)
+    try:
+        chunks = await _load_indexed_chunks()
+    except Exception as e:
+        logger.warning("gold grounding skipped: cannot load chunks", error=str(e))
+        return {}
+    if not chunks:
+        return {}
+    from scripts.evaluation.gold_grounding import ground_gold_chunks
+
+    return ground_gold_chunks(dataset, chunks)
 
 
 def _compute_stage_attribution(
@@ -225,6 +360,8 @@ async def evaluate_single(
         ctx = await engine.retrieve_with_correction(plan)
         result.retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
         result.retrieved_contexts = _extract_context_texts(ctx)
+        result.retrieved_chunk_ids = _extract_context_ids(ctx)
+        result.retrieved_parent_ids = _extract_context_parent_ids(ctx)
         result.stage_attribution = _compute_stage_attribution(q.relevant_contexts, ctx)
     except Exception as e:
         result.status = "failed"
@@ -322,6 +459,9 @@ async def run_evaluation(
     await init_pg()
     await init_es()
 
+    # Task 1：gold 片段对齐成 chunk_id（确定性映射，不需要人工或 LLM 标注）
+    grounded_gold = await _ground_dataset_gold(dataset, gold_file=args.gold_file)
+
     try:
         engine = RagRetrievalEngine()
         eval_service = RAGEvaluationService()
@@ -371,6 +511,7 @@ async def run_evaluation(
             r.mrr = compute_mrr(r.retrieved_contexts, rel)
             r.ndcg_at_5 = compute_ndcg_at_k(r.retrieved_contexts, rel, 5)
             r.ndcg_at_final_k = compute_ndcg_at_k(r.retrieved_contexts, rel, eval_depth)
+            _apply_id_metrics(r, dataset[i], grounded_gold.get(dataset[i].id) or {}, eval_depth)
             final.append(r)
         else:
             final.append(
@@ -430,6 +571,21 @@ def _print_report(
     mrr = [r.mrr for r in completed if r.mrr is not None]
     ndcg5 = [r.ndcg_at_5 for r in completed if r.ndcg_at_5 is not None]
     ndcg_final = [r.ndcg_at_final_k for r in completed if r.ndcg_at_final_k is not None]
+    # Task 1：按证据 ID 判定的召回（None = 该题无 gold，不进均值）
+    recall5_ids = [r.recall_at_5_ids for r in completed if r.recall_at_5_ids is not None]
+    recall_final_ids = [
+        r.recall_at_final_k_ids for r in completed if r.recall_at_final_k_ids is not None
+    ]
+    mrr_ids = [r.mrr_ids for r in completed if r.mrr_ids is not None]
+    ndcg5_ids = [r.ndcg_at_5_ids for r in completed if r.ndcg_at_5_ids is not None]
+    recall5_pids = [
+        r.recall_at_5_parent_ids for r in completed if r.recall_at_5_parent_ids is not None
+    ]
+    recall_final_pids = [
+        r.recall_at_final_k_parent_ids
+        for r in completed
+        if r.recall_at_final_k_parent_ids is not None
+    ]
 
     avg = {
         "faithfulness": _avg(faithfulness),
@@ -442,6 +598,14 @@ def _print_report(
         "context_precision": _avg(precision),
         "answer_correctness": _avg(correctness),
         "context_recall": _avg(recall),
+        # Task 1：chunk 级（主口径）与章节级（辅助口径）
+        "recall_at_5_ids": _avg(recall5_ids),
+        "recall_at_final_k_ids": _avg(recall_final_ids),
+        "mrr_ids": _avg(mrr_ids),
+        "ndcg_at_5_ids": _avg(ndcg5_ids),
+        "recall_at_5_parent_ids": _avg(recall5_pids),
+        "recall_at_final_k_parent_ids": _avg(recall_final_pids),
+        "grounded_questions": len(recall5_ids),
     }
 
     stage_totals: dict[str, Any] = {
@@ -581,6 +745,12 @@ if __name__ == "__main__":
     parser.add_argument("--min-recall", type=float, default=0.6)
     parser.add_argument("--min-correctness", type=float, default=0.6)
     parser.add_argument("--json-report", type=str, default="", help="Write JSON report to path")
+    parser.add_argument(
+        "--gold-file",
+        type=str,
+        default="",
+        help="预生成的 gold chunk_id 文件（scripts.evaluation.ground_gold 产出）；缺省时用词法自动对齐",
+    )
     parser.add_argument(
         "--judge-model",
         type=str,
@@ -826,6 +996,13 @@ if __name__ == "__main__":
                             "mrr": r.mrr,
                             "ndcg_at_5": r.ndcg_at_5,
                             "ndcg_at_final_k": r.ndcg_at_final_k,
+                            "recall_at_5_ids": r.recall_at_5_ids,
+                            "recall_at_final_k_ids": r.recall_at_final_k_ids,
+                            "mrr_ids": r.mrr_ids,
+                            "ndcg_at_5_ids": r.ndcg_at_5_ids,
+                            "recall_at_5_parent_ids": r.recall_at_5_parent_ids,
+                            "recall_at_final_k_parent_ids": r.recall_at_final_k_parent_ids,
+                            "retrieved_chunk_ids": r.retrieved_chunk_ids,
                             "retrieval_ms": round(r.retrieval_ms, 1) if r.retrieval_ms else None,
                             "generation_ms": round(r.generation_ms, 1) if r.generation_ms else None,
                         }
@@ -875,6 +1052,10 @@ if __name__ == "__main__":
             "ndcg_at_final_k",
             "faithfulness",
             "context_recall",
+            "recall_at_5_ids",
+            "recall_at_final_k_ids",
+            "mrr_ids",
+            "ndcg_at_5_ids",
         ):
             b_vals, o_vals = extract_metric_series(base, opt, metric)
             if not b_vals:

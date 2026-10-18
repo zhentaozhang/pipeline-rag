@@ -319,3 +319,85 @@ def extract_metric_series(
             base_vals.append(float(b))
             opt_vals.append(float(opt_by_id[qid]))
     return base_vals, opt_vals
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Task 1：按证据 ID 判定的召回指标
+#
+# 旧口径（compute_recall_at_k）拿 gold 片段和"提升后的父块全文（≤4000 字符）"
+# 做字符 bigram 重合判定，8 条上下文 ≈3 万字符，几乎必然命中 → R@K 虚高。
+# 检索结果本身带 chunk_id / parent_block_id，直接按 ID 精确判定排名质量。
+# gold 为空（拒答题）返回 None，由调用方剔除，不再记 0 分拉低均值。
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _id_key(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _id_set(values: Any) -> set[str]:
+    if not values:
+        return set()
+    return {key for raw in values if (key := _id_key(raw))}
+
+
+def compute_id_recall_at_k(
+    retrieved_ids: list[Any],
+    gold_ids: set[Any] | list[Any] | tuple[Any, ...],
+    k: int,
+) -> float | None:
+    """Recall@K：前 K 条证据的 ID 覆盖了多少条 gold ID。
+
+    返回 None 表示该题没有 gold（拒答题/空标注），不应计入均值。
+    """
+    gold = _id_set(gold_ids)
+    if not gold:
+        return None
+    if k <= 0:
+        return 0.0
+    top = {key for raw in (retrieved_ids or [])[:k] if (key := _id_key(raw))}
+    if not top:
+        return 0.0
+    return round(len(gold & top) / len(gold), 4)
+
+
+def compute_id_mrr(
+    retrieved_ids: list[Any],
+    gold_ids: set[Any] | list[Any] | tuple[Any, ...],
+) -> float | None:
+    """MRR：首个命中 gold ID 的名次倒数（1-based）。"""
+    gold = _id_set(gold_ids)
+    if not gold:
+        return None
+    for rank, raw in enumerate(retrieved_ids or [], start=1):
+        if _id_key(raw) in gold:
+            return round(1.0 / rank, 4)
+    return 0.0
+
+
+def compute_id_ndcg_at_k(
+    retrieved_ids: list[Any],
+    gold_ids: set[Any] | list[Any] | tuple[Any, ...],
+    k: int,
+) -> float | None:
+    """nDCG@k（二值相关性，每条 gold 只计一次增益）。"""
+    gold = _id_set(gold_ids)
+    if not gold:
+        return None
+    if k <= 0:
+        return 0.0
+    seen: set[str] = set()
+    gains: list[float] = []
+    for raw in (retrieved_ids or [])[:k]:
+        key = _id_key(raw)
+        if key and key in gold and key not in seen:
+            seen.add(key)
+            gains.append(1.0)
+        else:
+            gains.append(0.0)
+    dcg = sum(gain / math.log2(i + 2) for i, gain in enumerate(gains))
+    ideal_n = min(k, len(gold))
+    idcg = sum(1.0 / math.log2(i + 2) for i in range(ideal_n))
+    return round(dcg / idcg, 4) if idcg > 0 else 0.0
