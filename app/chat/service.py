@@ -215,6 +215,7 @@ class BusinessChatService:
                     question,
                     chat_mode_label(chat_mode),
                     request.doc_ids,
+                    tenant_id=getattr(request, "tenant_id", "default") or "default",
                 )
 
         try:
@@ -309,6 +310,7 @@ class BusinessChatService:
                         request.doc_ids,
                         cacheable_events,
                         "".join(state.full_answer),
+                        tenant_id=getattr(request, "tenant_id", "default") or "default",
                     )
 
         except asyncio.CancelledError:

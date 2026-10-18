@@ -6,7 +6,7 @@
 
 安全边界（保守设计）：
 - 仅当会话无历史上下文（摘要为空）时缓存/命中——多轮上下文不会污染缓存
-- 缓存键 = 规范化问题 + 模式 + 文档集（跨会话复用，不绑定会话）
+- 缓存键 = 租户 + 规范化问题 + 模式 + 文档集（跨会话复用，不绑定会话）
 - TTL 默认 24h；仅 RETRIEVAL 类确定性问答（通过 chat_mode 判断）
 """
 
@@ -41,14 +41,20 @@ def _normalize_question(question: str) -> str:
     return "".join(question.lower().split())
 
 
-def build_cache_key(question: str, chat_mode: ChatQueryMode | str, doc_ids: list[str]) -> str:
+def build_cache_key(
+    question: str,
+    chat_mode: ChatQueryMode | str,
+    doc_ids: list[str],
+    tenant_id: str = "default",
+) -> str:
     """缓存键：规范化问题 + 规范化模式 + 文档集（跨会话复用）。
 
     ChatQueryMode 是 IntEnum；若直接 f-string 会写入数字标签，且与 str 标签
     的缓存键不一致。先统一转为 ``auto`` / ``retrieval`` / ``open_chat``。
     """
     mode = chat_mode_label(chat_mode)
-    raw = f"{_normalize_question(question)}|{mode}|{','.join(sorted(doc_ids))}"
+    tenant = (tenant_id or "default").strip() or "default"
+    raw = f"{tenant}|{_normalize_question(question)}|{mode}|{','.join(sorted(doc_ids))}"
     digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()
     return f"{_KEY_PREFIX}:{digest}"
 
@@ -79,13 +85,18 @@ async def has_history(db: Any, conversation_id: str) -> bool:
 
 
 async def lookup(
-    db: Any, conversation_id: str, question: str, chat_mode: str, doc_ids: list[str]
+    db: Any,
+    conversation_id: str,
+    question: str,
+    chat_mode: str,
+    doc_ids: list[str],
+    tenant_id: str = "default",
 ) -> CacheHit | None:
     """缓存查询：命中返回可回放事件；否则 None。Redis 异常静默降级（不阻断）"""
     if not is_cacheable(chat_mode, await has_history(db, conversation_id)):
         return None
     try:
-        key = build_cache_key(question, chat_mode, doc_ids)
+        key = build_cache_key(question, chat_mode, doc_ids, tenant_id=tenant_id)
         raw = await get_redis().get(key)
         if not raw:
             return None
@@ -109,13 +120,14 @@ async def store(
     doc_ids: list[str],
     events: list[str],
     answer: str,
+    tenant_id: str = "default",
 ) -> None:
     """写入缓存（仅确定性问答 + 无历史 + 非失败/停止轮）"""
     try:
         if not is_cacheable(chat_mode, await has_history(db, conversation_id)):
             return
         settings = get_settings().chat_cache
-        key = build_cache_key(question, chat_mode, doc_ids)
+        key = build_cache_key(question, chat_mode, doc_ids, tenant_id=tenant_id)
         payload = json.dumps({"events": events, "answer": answer}, ensure_ascii=False)
         ttl_seconds = settings.ttl_hours * 3600
         redis = get_redis()

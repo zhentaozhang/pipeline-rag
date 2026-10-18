@@ -121,3 +121,52 @@ async def test_lookup_skips_when_history_exists(monkeypatch):
     hit = await rc.lookup(_FakeDb(), "c1", "问题", "auto", [])
     assert hit is None
     assert called["get"] is False  # 未访问 Redis
+
+
+def test_cache_key_is_tenant_scoped():
+    """不同租户必须拿到不同键，否则会读到别家的答案与引用。"""
+    a = build_cache_key("什么是 RAG", "auto", ["d1"], tenant_id="tenant-a")
+    b = build_cache_key("什么是 RAG", "auto", ["d1"], tenant_id="tenant-b")
+    assert a != b
+    same = build_cache_key("什么是 RAG", "auto", ["d1"], tenant_id="tenant-a")
+    assert a == same
+
+
+@pytest.mark.asyncio
+async def test_lookup_and_store_are_tenant_scoped(monkeypatch):
+    from app.chat.response_cache import lookup, store
+
+    captured = {"get": None, "set": None}
+
+    class _FakeRedis:
+        async def get(self, key):
+            captured["get"] = key
+            return None
+
+        async def set(self, key, value, ex=None):
+            captured["set"] = key
+
+    import app.chat.response_cache as rc
+
+    monkeypatch.setattr(rc, "get_redis", lambda: _FakeRedis())
+
+    async def _no_history(db, cid):
+        return False
+
+    monkeypatch.setattr(rc, "has_history", _no_history)
+
+    class _FakeDb:
+        pass
+
+    await lookup(_FakeDb(), "c1", "问题", "auto", [], tenant_id="tenant-a")
+    key_a = captured["get"]
+    await lookup(_FakeDb(), "c1", "问题", "auto", [], tenant_id="tenant-b")
+    assert captured["get"] != key_a
+
+    await store(
+        _FakeDb(), "c1", "问题", "auto", [], ['data: {"type": "done"}'], "答案", tenant_id="tenant-a"
+    )
+    await store(
+        _FakeDb(), "c1", "问题", "auto", [], ['data: {"type": "done"}'], "答案", tenant_id="tenant-b"
+    )
+    assert captured["set"] != key_a  # 最后一次写入的是 tenant-b 的键
