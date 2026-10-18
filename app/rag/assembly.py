@@ -310,8 +310,9 @@ class PromptAssemblyService:
 
         builder = []
         omitted = False
+        ordered = self._ordered_evidences(evidences, budget)
 
-        for ev in self._ordered_evidences(evidences, budget):
+        for idx, ev in enumerate(ordered):
             unique_key = self._unique_key(ev)
             if unique_key in rendered_keys:
                 reuse_line = f"- 复用证据 [{ev.reference_id or ''}]"
@@ -334,7 +335,9 @@ class PromptAssemblyService:
                         if ev.source_type == "web"
                         else self._document_header(ev)
                     )
-                    max_content_len = available - len(header) - 10
+                    # 软窗口最多占用剩余预算的一半：单个超长父块不允许饿死后续证据
+                    window_budget = available // 2 if idx < len(ordered) - 1 else available
+                    max_content_len = window_budget - len(header) - 10
                     if max_content_len >= 150:
                         anchor = getattr(ev, "child_chunk_text", None)
                         soft_content = self._extract_soft_window(
@@ -352,10 +355,11 @@ class PromptAssemblyService:
                 if not consumed:
                     omitted = True
                     budget.mark_omitted(self._reference_summary(ev, "超出上下文预算，已省略"))
-                    break
+                    # 跳过该块继续尝试后续证据（更小的块仍可能装得下），不中断整个循环
+                    continue
 
         if omitted:
-            builder.append("- 其余证据因上下文预算限制已省略")
+            builder.append("- 部分证据因上下文预算限制已省略")
 
         return "\n".join(builder)
 

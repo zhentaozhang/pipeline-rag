@@ -309,8 +309,34 @@ class TestAppendReferences:
         out = svc._append_references(evs, set(), budget)
         assert budget.rendered_reference_count == 1
         assert budget.omitted_reference_count == 1
-        assert "- 其余证据因上下文预算限制已省略" in out
+        assert "- 部分证据因上下文预算限制已省略" in out
         assert "DOCUMENT:c2" not in out.split("\n")[-1]
+
+    def test_oversized_block_does_not_starve_following_evidence(self):
+        """单个超长父块只能占用剩余预算的一半，后面的小块仍必须有机会进入。"""
+        svc = PromptAssemblyService()
+        evs = [
+            make_ev(chunk_id="c1", ref_id=1, content="a" * 5000),
+            make_ev(chunk_id="c2", ref_id=2, content="b" * 100),
+        ]
+        budget = PromptBudget(600, 600)
+        out = svc._append_references(evs, set(), budget)
+        assert "[1] 文档：" in out
+        assert "[2] 文档：" in out
+        assert budget.rendered_reference_count == 2
+
+    def test_skipped_block_does_not_break_remaining_loop(self):
+        """放不下的块应跳过而不是中断整个循环（break → continue）。"""
+        svc = PromptAssemblyService()
+        evs = [
+            make_ev(chunk_id="c1", ref_id=1, content="a" * 5000),
+            make_ev(chunk_id="c2", ref_id=2, content="b" * 20),
+        ]
+        budget = PromptBudget(300, 300)
+        out = svc._append_references(evs, set(), budget)
+        assert "[2] 文档：" in out
+        assert budget.omitted_reference_count == 1
+        assert budget.rendered_reference_count == 1
 
 
 class TestBuildEvidenceBlocks:
@@ -453,7 +479,7 @@ class TestAssemble:
         sub.evidences = [make_ev(chunk_id="c1", ref_id=1)]
         result = svc.assemble(make_plan(), [sub])
         assert result.omitted_reference_count == 1
-        assert "其余证据因上下文预算限制已省略" in result.user_prompt
+        assert "部分证据因上下文预算限制已省略" in result.user_prompt
 
     def test_dedup_applied_in_assemble(self, monkeypatch):
         import types
