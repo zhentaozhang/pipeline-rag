@@ -662,6 +662,13 @@ class RagRetrievalEngine:
                 )
             )
 
+        # ── 父块级重排（实验，默认关）──────────────────────────────
+        # 子块级重排打分的文本 ≠ 最终喂给 LLM 的父块文本；这一步在提升之后再
+        # 按"模型真正看到的文本"打一次分，把两者对齐。
+        parent_candidates = await self._maybe_rerank_parents(
+            sub_q.text, parent_candidates, sub_question_index, notes
+        )
+
         final_docs = parent_candidates[: settings.rag.final_top_k]
 
         self._mark_selection(final_docs, sub_question_index, channel_results, notes)
@@ -808,6 +815,67 @@ class RagRetrievalEngine:
         if first_rr >= top_rr - margin:
             reranked.insert(0, reranked.pop(idx))
         return reranked
+
+    async def _maybe_rerank_parents(
+        self,
+        query: str,
+        parents: list[Evidence],
+        sub_question_index: int,
+        notes: list[str],
+    ) -> list[Evidence]:
+        """对父块按"最终喂给 LLM 的文本"重排一次（实验开关，默认关）。
+
+        只重排前 top_n 个父块，其余保持原序追加，避免为长尾多花一次 API 成本。
+        失败时保留原顺序（fail-open），不影响主链路。
+        """
+        if not getattr(settings.rag, "parent_rerank_enabled", False):
+            return parents
+        if not settings.rerank.enabled or not parents:
+            return parents
+
+        top_n = int(getattr(settings.rag, "parent_rerank_top_n", 20) or 20)
+        max_chars = int(getattr(settings.rag, "parent_rerank_max_chars", 2000) or 2000)
+        head, tail = parents[:top_n], parents[top_n:]
+        probes = [
+            e.model_copy(update={"title": "", "content": (e.content or "")[:max_chars]})
+            for e in head
+        ]
+        try:
+            from app.rag.reranker import Reranker
+
+            scored = await Reranker().rerank(query, probes)
+            score_by_key = {
+                str(e.chunk_id or (e.content or "")[:64]): e.rerank_score for e in scored
+            }
+            blend = float(getattr(settings.rag, "parent_rerank_blend", 1.0) or 0.0)
+            blended: dict[str, float] = {}
+            for e in head:
+                key = str(e.chunk_id or (e.content or "")[:64])
+                parent_score = score_by_key.get(key) or 0.0
+                child_score = float(getattr(e, "rerank_score", 0.0) or 0.0)
+                blended[key] = blend * parent_score + (1.0 - blend) * child_score
+            result = sorted(
+                (
+                    e.model_copy(
+                        update={"rerank_score": blended[str(e.chunk_id or (e.content or "")[:64])]}
+                    )
+                    for e in head
+                ),
+                key=lambda e: -(e.rerank_score or 0.0),
+            )
+            notes.append(
+                f"子问题{sub_question_index}已做父块级重排：{len(result)} 条（top_n={top_n}）。"
+            )
+            logger.info(
+                "parent_rerank_applied",
+                sub_question_index=sub_question_index,
+                scored=len(result),
+            )
+            return result + tail
+        except Exception as e:  # noqa: BLE001 - 重排失败必须降级而非中断检索
+            notes.append(f"子问题{sub_question_index}父块重排失败，保留原顺序：{str(e)[:60]}")
+            logger.warning("parent_rerank_failed", error=str(e), exc_info=True)
+            return parents
 
     async def _maybe_rerank(
         self,

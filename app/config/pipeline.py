@@ -81,6 +81,13 @@ class RAGSettings(BaseSettings):
     prompt_budget_total: int = 20000
     prompt_budget_per_subquestion: int = 8000
     parent_evidence_max_chars: int = 4000
+    # 父块级重排（实验）：在父块提升之后再对 top-N 父块打一次分，让重排看到
+    # "最终喂给 LLM 的文本"而不是子块。默认关闭，由 hard85/115 评测判定是否采纳。
+    parent_rerank_enabled: bool = False
+    parent_rerank_top_n: int = 20
+    parent_rerank_max_chars: int = 2000
+    # 父块分与子块分的混合权重：1.0 = 纯父块分，0.0 = 纯子块分（等价于只重排子块）。
+    parent_rerank_blend: float = 1.0
     # 单条引用渲染上限（P1）：此前硬编码 1100，导致父块预算(2200/4000)在实际 Prompt 中失效。
     reference_snippet_max_chars: int = 2000
     # 评测裁判可见上下文上限（与生成侧预算对齐，避免"裁判看到的证据 < 模型看到的证据"）。
