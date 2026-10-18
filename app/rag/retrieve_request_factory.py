@@ -44,7 +44,11 @@ _BUSINESS_CATEGORY_HINTS: list[str] = []
 _DOCUMENT_TAG_HINTS: list[str] = []
 
 # ── 短追问检测词 ──────────────────────────────────────────────────────────
-_SHORT_FOLLOW_UP_HINTS = {"它", "这个", "那个", "刚才", "前面", "上面"}
+# 只收录"必须有上文才成立"的指代/回指线索；长度本身不再作为判定依据
+# （中文问句普遍 < 12 字，按长度判定会把绝大多数完整问题误判成追问）。
+_SHORT_FOLLOW_UP_HINTS = {"它", "这个", "那个", "刚才", "前面", "上面", "上述", "这些", "那些"}
+# 追问一定是短句；超过该长度的问句即便含指代词也按完整问题处理。
+_SHORT_FOLLOW_UP_MAX_LEN = 20
 
 
 class DocumentRetrieveRequestFactory:
@@ -222,11 +226,17 @@ class DocumentRetrieveRequestFactory:
         }
 
     def _looks_like_short_follow_up(self, question: str) -> bool:
-        if not question or not question.strip():
-            return False
+        """判定是否为"缺上文就不成立"的短追问。
+
+        旧实现 ``len(normalized) < 12 → True`` 会把几乎所有中文问句判成追问，
+        进而把"问题+关键词"拼接串写进 ``sub_q.text``，污染 Embedding/Reranker。
+        现在要求同时满足：短句 + 含指代/回指线索。
+        """
         normalized = (question or "").strip()
-        if len(normalized) < 12:
-            return True
+        if not normalized:
+            return False
+        if len(normalized) > _SHORT_FOLLOW_UP_MAX_LEN:
+            return False
         return any(hint in normalized for hint in _SHORT_FOLLOW_UP_HINTS)
 
     def _extract_meaningful_terms(self, question: str) -> list[str]:

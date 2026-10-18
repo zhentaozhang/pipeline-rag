@@ -50,6 +50,29 @@ class TestBuild:
         assert sub.text.startswith("如何配置")
         assert sub.retrieval_query.startswith("如何配置")
 
+    async def test_short_standalone_question_keeps_clean_text(self):
+        """短问句但无追问线索（代词/续问词）→ 增强串不得写进 sub_q.text。
+
+        旧实现用 len(text) < 12 判定"短追问"，中文问题几乎都 < 12 字，
+        导致 Embedding / Reranker 吃到"问题+关键词"的拼接噪声。
+        """
+        factory = DocumentRetrieveRequestFactory()
+        sub = make_sub_question(text="员工试用期多久")
+        plan = make_plan([sub], keywords=["试用期", "转正"])
+        await factory.build(plan)
+        assert sub.text == "员工试用期多久"
+        assert sub.retrieval_query != sub.text
+        assert "转正" in sub.retrieval_query
+
+    async def test_short_follow_up_still_uses_augmented_text(self):
+        """真追问（含代词/续问线索）仍需用增强串补齐上下文。"""
+        factory = DocumentRetrieveRequestFactory()
+        sub = make_sub_question(text="那这个呢")
+        plan = make_plan([sub], keywords=["试用期"])
+        await factory.build(plan)
+        assert sub.text == sub.retrieval_query
+        assert "试用期" in sub.text
+
     async def test_doc_ids_injected_from_plan(self):
         factory = DocumentRetrieveRequestFactory()
         sub = make_sub_question()
@@ -71,7 +94,9 @@ class TestQueryAugmentation:
         sub = make_sub_question(text="如何配置", query_context_hints=["配置", "部署"])
         plan = make_plan([sub])
         await factory.build(plan)
-        assert sub.text == "如何配置 配置 部署"
+        # 增强串只进 retrieval_query；sub_q.text 保持干净供 Embedding/Reranker 使用
+        assert sub.retrieval_query == "如何配置 配置 部署"
+        assert sub.text == "如何配置"
 
     async def test_keyword_hints_dedup_and_limit(self):
         factory = DocumentRetrieveRequestFactory()
@@ -81,10 +106,10 @@ class TestQueryAugmentation:
         )
         plan = make_plan([sub])
         await factory.build(plan)
-        assert sub.text == "问题内容 a b c d e"
+        assert sub.retrieval_query == "问题内容 a b c d e"
 
     async def test_augmented_hints_not_written_back(self):
-        # 增强后的 query_context_hints 仅用于日志与 text，不写回字段
+        # 增强后的 query_context_hints 仅用于 retrieval_query，不写回字段
         factory = DocumentRetrieveRequestFactory()
         sub = make_sub_question(text="问题内容", query_context_hints=["a", "b"])
         plan = make_plan([sub])
@@ -116,7 +141,7 @@ class TestQueryAugmentation:
         )
         plan = make_plan([sub], navigation_decision=nav)
         await factory.build(plan)
-        assert "第一章 概述" in sub.text
+        assert "第一章 概述" in sub.retrieval_query
 
     async def test_navigation_item_hint(self):
         factory = DocumentRetrieveRequestFactory()
@@ -124,8 +149,8 @@ class TestQueryAugmentation:
         nav = DocumentNavigationDecision(item_anchor=ItemAnchor(item_index=3))
         plan = make_plan([sub], navigation_decision=nav)
         await factory.build(plan)
-        assert "第3步" in sub.text
-        assert "第3项" in sub.text
+        assert "第3步" in sub.retrieval_query
+        assert "第3项" in sub.retrieval_query
 
     async def test_navigation_hints_dedup(self):
         factory = DocumentRetrieveRequestFactory()
@@ -171,6 +196,12 @@ class TestShortFollowUp:
     async def test_looks_like_short_follow_up_short(self):
         factory = DocumentRetrieveRequestFactory()
         assert factory._looks_like_short_follow_up("它怎么配置") is True
+
+    async def test_short_but_self_contained_is_not_follow_up(self):
+        """短 ≠ 追问：无代词/续问线索的短问句是完整问题，不该被当成追问。"""
+        factory = DocumentRetrieveRequestFactory()
+        assert factory._looks_like_short_follow_up("员工试用期多久") is False
+        assert factory._looks_like_short_follow_up("报销标准") is False
 
     async def test_looks_like_short_follow_up_hint(self):
         factory = DocumentRetrieveRequestFactory()
