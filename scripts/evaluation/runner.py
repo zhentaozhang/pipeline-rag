@@ -383,8 +383,13 @@ async def evaluate_single(
     recommender: RecommendationService | None = None,
     retrieval_only: bool = False,
     judge_enabled: bool = True,
+    with_executor: bool = False,
 ) -> EvalResult:
-    """对一条测试数据执行完整的 检索→生成→评估 流水线"""
+    """对一条测试数据执行完整的 检索→生成→评估 流水线
+
+    with_executor=True 时复刻生产执行器的生成后处理（引用校验 + 质量审核），
+    这是 JEV 唯一能接管的位置，缺了它 V3 与 V2 在评测里必然等价。
+    """
     result = EvalResult(
         question_id=q.id,
         question=q.question,
@@ -490,6 +495,35 @@ async def evaluate_single(
         except Exception as e:
             logger.warning("推荐追问生成失败，跳过", question_id=q.id, error=str(e), exc_info=True)
 
+    # ── 2b2. 执行器后处理（P0-2）：引用校验 + 质量审核 ────────────────
+    if with_executor and result.generated_answer:
+        from scripts.evaluation.postprocess import (
+            citation_accuracy,
+            references_from_evidence,
+            run_postprocess,
+        )
+
+        evidences = [ev for se in ctx.sub_question_evidence_list for ev in se.evidences]
+        post = await run_postprocess(
+            question=q.question,
+            answer=result.generated_answer,
+            references=references_from_evidence(evidences),
+            fallback=model_fallback,
+            run_quality=True,
+        )
+        result.generated_answer = post.answer
+        result.citation_accuracy = citation_accuracy(post.answer, post.bad_refs)
+        result.citation_ms = post.citation_ms
+        result.quality_ms = post.quality_ms
+        result.quality_passed = post.quality_passed
+        logger.info(
+            "执行器后处理",
+            question_id=q.id,
+            bad_refs=post.bad_refs,
+            citation_accuracy=result.citation_accuracy,
+            quality_passed=post.quality_passed,
+        )
+
     result.total_ms = (time.perf_counter() - total_start) * 1000
 
     # ── 2c. 拒答判定（Task 2）：只对不可答题有意义 ────────────────────
@@ -539,6 +573,7 @@ async def run_evaluation(
     concurrency: int = 1,
     retrieval_only: bool = False,
     judge_enabled: bool = True,
+    with_executor: bool = False,
 ) -> list[EvalResult]:
     """批量运行离线评估"""
     from app.db.session import close_db, init_db
@@ -585,6 +620,7 @@ async def run_evaluation(
                     recommender=recommender,
                     retrieval_only=retrieval_only,
                     judge_enabled=judge_enabled,
+                    with_executor=with_executor,
                 )
 
         tasks = [_run_one(q) for q in dataset]
@@ -626,7 +662,7 @@ def _jev_coverage() -> dict[str, Any]:
         return {"flags": {}, "totals": {"decided": 0, "failed": 0, "disabled": 0, "attempted": 0}}
 
 
-_LATENCY_STAGES = ("total", "retrieval", "generation")
+_LATENCY_STAGES = ("total", "retrieval", "generation", "citation", "quality")
 
 
 def _latency_block(results: list[Any]) -> dict[str, Any]:
@@ -714,6 +750,14 @@ def _print_report(
         if r.recall_at_final_k_parent_ids is not None
     ]
 
+    citation_acc = [r.citation_accuracy for r in completed if r.citation_accuracy is not None]
+    quality_judged = [r for r in completed if r.quality_passed is not None]
+    quality_pass_rate = (
+        sum(1 for r in quality_judged if r.quality_passed) / len(quality_judged)
+        if quality_judged
+        else None
+    )
+
     from scripts.evaluation.refusal import refusal_rates
 
     refusal = refusal_rates(completed)
@@ -742,6 +786,11 @@ def _print_report(
         "recall_at_5_parent_ids": _avg(recall5_pids),
         "recall_at_final_k_parent_ids": _avg(recall_final_pids),
         "grounded_questions": len(recall5_ids),
+        # P0-2：执行器后处理的产出（None = 该题没有引用 / 未跑后处理）
+        "citation_accuracy": _avg(citation_acc) if citation_acc else None,
+        "citation_samples": len(citation_acc),
+        "quality_pass_rate": quality_pass_rate,
+        "quality_samples": len(quality_judged),
         # Task 2：拒答表现（None = 本轮没有不可答题，不参与门禁）
         "correct_refusal_rate": refusal["correct_refusal_rate"],
         "false_answer_rate": refusal["false_answer_rate"],
@@ -820,7 +869,13 @@ def _print_report(
     if avg.get("latency_samples"):
         logger.info("  ├──────────────────────────────────────────────┤")
         logger.info("  │ 延迟 (ms, p50 / p95)                        │")
-        for stage, label in (("total", "端到端"), ("retrieval", "检索"), ("generation", "生成")):
+        for stage, label in (
+            ("total", "端到端"),
+            ("retrieval", "检索"),
+            ("generation", "生成"),
+            ("citation", "引用校验"),
+            ("quality", "质量审核"),
+        ):
             p50 = avg.get(f"latency_{stage}_p50_ms")
             if p50 is None:
                 continue
@@ -832,6 +887,21 @@ def _print_report(
                 p50,
                 p95,
                 n,
+            )
+    if avg.get("quality_samples") or avg.get("citation_samples"):
+        logger.info("  ├──────────────────────────────────────────────┤")
+        logger.info("  │ 执行器后处理 (P0-2)                          │")
+        if avg.get("citation_accuracy") is not None:
+            logger.info(
+                "  │ • 引用准确率:     %s  (n=%d)      │",
+                f"{avg['citation_accuracy']:.3f}",
+                int(avg.get("citation_samples", 0)),
+            )
+        if avg.get("quality_pass_rate") is not None:
+            logger.info(
+                "  │ • 质量审核通过率: %s  (n=%d)      │",
+                f"{avg['quality_pass_rate']:.3f}",
+                int(avg.get("quality_samples", 0)),
             )
     if tot > 0:
         logger.info("  ├──────────────────────────────────────────────┤")
@@ -1001,6 +1071,11 @@ if __name__ == "__main__":
         help="P1 网格搜索快速通道：仅检索与召回归因，跳过生成与 LLM 评测",
     )
     parser.add_argument(
+        "--with-executor",
+        action="store_true",
+        help="复刻生产执行器的生成后处理（引用校验 + 质量审核），让 JEV 参与评测",
+    )
+    parser.add_argument(
         "--multi-hop-split",
         action="store_true",
         help="P2 强制开启生产多跳拆分（复合/多条件问题拆为多个检索子查询）",
@@ -1145,6 +1220,7 @@ if __name__ == "__main__":
             concurrency=args.concurrency,
             retrieval_only=args.retrieval_only,
             judge_enabled=not args.no_judge,
+            with_executor=args.with_executor,
         )
     )
 
@@ -1157,6 +1233,7 @@ if __name__ == "__main__":
                     "provenance": {
                         "judge_model": judge_model_name,
                         "jev_coverage": _jev_coverage(),
+                        "with_executor": bool(args.with_executor),
                         "variant": args.variant or "custom",
                         "keyword_channel_enabled": _settings.rag.keyword_channel_enabled,
                         "rerank_enabled": _settings.rerank.enabled,

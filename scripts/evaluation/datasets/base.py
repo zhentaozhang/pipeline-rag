@@ -88,6 +88,12 @@ class EvalResult(BaseModel):
     generation_ms: float | None = None
     total_ms: float | None = None
 
+    # P0-2：复刻执行器的生成后处理（引用校验 + 质量审核）
+    citation_accuracy: float | None = None  # None = 回答里没有引用
+    citation_ms: float | None = None
+    quality_ms: float | None = None
+    quality_passed: bool | None = None
+
     # Task 2：拒答表现（只对 expected_refusal 的题有意义）
     answerable: bool = True
     expected_refusal: bool = False
