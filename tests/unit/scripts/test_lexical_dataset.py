@@ -36,6 +36,8 @@ def test_ambiguous_questions_use_any_of_gold_mode():
 
 
 def test_combined_dataset_keeps_employee_questions_first():
-    assert len(ALL_QUESTIONS) == 115
+    assert len(ALL_QUESTIONS) == 135
     assert ALL_QUESTIONS[0].id == "emp001"
-    assert ALL_QUESTIONS[-1].id.startswith("lex")
+    assert ALL_QUESTIONS[-1].id.startswith("ref")
+    lexical = [q.id for q in ALL_QUESTIONS if q.id.startswith("lex")]
+    assert lexical and lexical[0] == ALL_QUESTIONS[85].id
