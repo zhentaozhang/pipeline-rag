@@ -86,6 +86,10 @@ class GroundingReport:
     issues: tuple[GroundingIssue, ...] = ()
     # 含数值/条款但没有任何引用编号的句子（可溯源性问题，只报告不阻断）
     uncited_claims: tuple[str, ...] = ()
+    # 回答里的量与它引用的证据对不上（judge 对这类错误几乎无感，确定性校验能抓到）
+    numeric_mismatches: tuple[Any, ...] = ()
+    # 证据是禁止性表述、回答却只说"可以/允许"（极性翻转）
+    polarity_mismatches: tuple[Any, ...] = ()
 
     @property
     def blocking(self) -> bool:
@@ -111,6 +115,17 @@ class GroundingReport:
             "issues": [
                 {"kind": i.kind, "claim": i.claim, "citations": list(i.citations)}
                 for i in self.issues
+            ],
+            "numeric_mismatches": [
+                {"value": getattr(n, "raw", ""), "citations": list(getattr(n, "ref_ids", ()))}
+                for n in self.numeric_mismatches
+            ],
+            "polarity_mismatches": [
+                {
+                    "claim": getattr(n, "sentence", "")[:80],
+                    "citations": list(getattr(n, "ref_ids", ())),
+                }
+                for n in self.polarity_mismatches
             ],
         }
 
@@ -191,12 +206,27 @@ def _clause(num: str) -> int | None:
         return cn_to_int(num)
 
 
+def _clause_numbers(blob: str) -> set[int]:
+    """证据里出现的全部条款号（中文数字与阿拉伯数字都归一成整数）。"""
+    out: set[int] = set()
+    for match in _CLAUSE_RE.finditer(blob or ""):
+        raw = match.group(1)
+        if "." in raw:
+            continue
+        value = _clause(raw)
+        if value is not None:
+            out.add(value)
+    return out
+
+
 def _clause_matches(num: str, blob: str) -> bool:
     if "." in num:
         return _normalize(num) in _normalize(blob) or _normalize(f"第{num}条") in _normalize(blob)
     value = _clause(num)
     if value is None:
         return True  # 解析不了就不判负（保守）
+    if value in _clause_numbers(blob):
+        return True
     return _normalize(f"第{value}条") in _normalize(blob)
 
 
@@ -262,10 +292,20 @@ def audit_grounding(
             label = f"第{num}条"
             issues.append(GroundingIssue("unknown_clause", label, tuple(cited)))
 
+    # 数字落地（零成本）：只报告、不阻断——合理推导（如"两项合计 900 元"）不该被硬拦，
+    # 但它足以让 JEV 的高置信放行失效，强制走一次 LLM 复核。
+    from app.chat.numeric_grounding import numeric_issues as _numeric_issues
+    from app.chat.numeric_grounding import polarity_issues as _polarity_issues
+
+    numeric = tuple(_numeric_issues(answer, refs))
+    polarity = tuple(_polarity_issues(answer, refs))
+
     return GroundingReport(
         dangling_citations=tuple(dangling),
         issues=tuple(issues),
         uncited_claims=tuple(uncited),
+        numeric_mismatches=numeric,
+        polarity_mismatches=polarity,
     )
 
 
@@ -281,7 +321,8 @@ def needs_citation_check(
     """
     if _CITATION_RE.search(answer or ""):
         return True
-    return audit_grounding(answer, references).blocking
+    report = audit_grounding(answer, references)
+    return report.blocking or bool(report.numeric_mismatches)
 
 
 def grounding_note(report: GroundingReport) -> str:

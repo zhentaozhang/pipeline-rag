@@ -58,6 +58,26 @@ def _reference_content(ref: dict[str, Any] | Any, fallback_id: int, max_chars: i
     return str(ref)[:max_chars]
 
 
+CITATION_INSTRUCTIONS = (
+    "回答中标注 [{n}] 的那句话，是否被上面给出的证据 [{n}] "
+    "直接支持？证据只是相关但没有直接说到，也算不支持。"
+)
+
+
+def build_citation_question(ref_n: int) -> dict[str, Any]:
+    """引用支持判据。生产路径与标定集必须共用它，否则标定的不是线上那套。"""
+    return {"type": "noul", "instructions": CITATION_INSTRUCTIONS.format(n=ref_n)}
+
+
+def build_citation_state(question: str, answer: str, evidence_block: str) -> str:
+    """材料进 state、判据进 question（参考实现 feder-cr/jev 的分工）。"""
+    return (
+        f"用户问题：{question}\n\n"
+        f"AI 生成的带有引用编号的完整回答：\n{answer[:_CITATION_ANSWER_CHARS]}\n\n"
+        f"证据：\n{evidence_block}"
+    )
+
+
 _CITATION_SHARD_SIZE = 4
 _CITATION_EVIDENCE_CHARS = 1200
 _CITATION_ANSWER_CHARS = 1500
@@ -149,10 +169,7 @@ async def verify_citations(
             # 参考实现的做法（feder-cr/jev）：state 放材料、question 放判据；
             # 把证据塞进 instructions 会让判据与证据一起被服务端截断，
             # 而且同样一批证据在每条判据里重复一遍。
-            base_state = (
-                f"用户问题：{question}\n\n"
-                f"AI 生成的带有引用编号的完整回答：\n{answer[:_CITATION_ANSWER_CHARS]}"
-            )
+            base_question_answer = (question, answer)
             # 分片：每片 <=4 条引用。单请求塞 10+ 条会把判据挤到 4096 token 之外
             # （服务端左截断先砍判断标准），既慢又判不准。
             shards = [
@@ -167,17 +184,13 @@ async def verify_citations(
                     for ref_n in shard
                 )
                 questions = {
-                    f"cite_{ref_n}": {
-                        "type": "noul",
-                        "instructions": (
-                            f"回答中标注 [{ref_n}] 的那句话，是否被上面给出的证据 [{ref_n}] "
-                            f"直接支持？证据只是相关但没有直接说到，也算不支持。"
-                        ),
-                    }
-                    for ref_n in shard
+                    f"cite_{ref_n}": build_citation_question(ref_n) for ref_n in shard
                 }
                 return await jev.system_one(
-                    state=f"{base_state}\n\n证据：\n{evidence_block}", questions=questions
+                    state=build_citation_state(
+                        base_question_answer[0], base_question_answer[1], evidence_block
+                    ),
+                    questions=questions,
                 )
 
             shard_results = await asyncio.gather(
@@ -211,6 +224,27 @@ async def verify_citations(
                 scores[str(ref_n)] = prob
                 if prob < threshold:
                     suspicious.append(ref_n)
+
+            # 数字落地不通过 -> 无论 JEV 多自信都升级。实测标定：改数字、翻极性、
+            # 删条件三族在 0.60 阈值下有 27.5%~52.5% 被高置信放行。
+            numeric_refs = {
+                int(n)
+                for issue in getattr(grounding, "numeric_mismatches", ())
+                for n in getattr(issue, "ref_ids", ())
+            }
+            polarity_refs = {
+                int(n)
+                for issue in getattr(grounding, "polarity_mismatches", ())
+                for n in getattr(issue, "ref_ids", ())
+            }
+            forced = [
+                n
+                for n in refs
+                if n in numeric_refs | polarity_refs and n not in suspicious
+            ]
+            if forced:
+                logger.info("citation verify numeric mismatch -> escalate", refs=forced)
+                suspicious.extend(forced)
 
             if suspicious or missing:
                 logger.warning(

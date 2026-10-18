@@ -143,3 +143,38 @@ def test_qualitative_sentence_is_not_reported() -> None:
     report = audit_grounding("试用期由劳动合同期限决定。", [HANDBOOK])
 
     assert report.uncited_claims == ()
+
+
+class TestNumericMismatch:
+    """数字落地：判报告知、不硬拦（可能是合理推导），但足以让 JEV 别放行。"""
+
+    def test_tampered_number_is_reported_but_not_blocking(self) -> None:
+        report = audit_grounding("总监级每日住宿上限 807 元[1]。", [HANDBOOK])
+
+        assert report.blocking is False, "数字不一致不直接拦，交 LLM 复核"
+        assert report.numeric_mismatches
+        meta = report.to_meta()
+        assert meta["numeric_mismatches"][0]["value"].startswith("807")
+
+    def test_matching_number_is_clean(self) -> None:
+        report = audit_grounding("试用期不得超过 1 个月[1]。", [HANDBOOK])
+
+        assert report.numeric_mismatches == ()
+
+
+def test_chinese_numeral_clause_matches_chinese_evidence():
+    """证据写"第二条"，回答也写"第二条" —— 不能因为内部统一成阿拉伯数字就判成假条款。"""
+    report = audit_grounding(
+        "第二条 差旅住宿城市标准（已作废）[1]",
+        [{"reference_id": 1, "content": "第二条 2022版差旅住宿城市标准（已作废） 出差人员住宿费实行限额。"}],
+    )
+    assert report.issues == ()
+    assert report.blocking is False
+
+
+def test_chinese_numeral_mismatch_is_still_caught():
+    report = audit_grounding(
+        "第九条 住宿费用限额[1]",
+        [{"reference_id": 1, "content": "第二条 差旅住宿城市标准（已作废）。"}],
+    )
+    assert [i.kind for i in report.issues] == ["unknown_clause"]

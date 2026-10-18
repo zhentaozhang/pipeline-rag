@@ -273,3 +273,42 @@ class TestJevScreensButDoesNotAccuse:
         )
         assert fallback.calls == 0, "高置信支持时不应再花钱调 LLM"
         assert meta["status"] == "jev_judged" and bad == [] and answer == "答案[1][2]"
+
+
+@pytest.mark.asyncio
+async def test_numeric_mismatch_forces_llm_even_when_jev_is_confident(monkeypatch):
+    """JEV 对"只改数字"几乎无感（标定：改数字家族 27.5% 被 0.60 阈值放行），
+    所以数字对不上的引用必须升级给 LLM，不能靠 1.5B 的高置信度通过。"""
+    monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
+    monkeypatch.setattr(
+        "app.infra.jev_client.get_jev_client", lambda: _FakeJev({"cite_1": {"noul": 0.99}})
+    )
+    fallback = _Fallback()
+
+    answer = "总监级每日住宿上限 807 元[1]。"
+    _, bad, meta = await verify_citations(
+        fallback, answer, [{"reference_id": 1, "content": "每日住宿上限为 800 元/晚。"}], "住宿上限"
+    )
+    assert fallback.calls == 1, "数字对不上时 JEV 的高置信度不能免掉 LLM 复核"
+    assert meta["status"] == "judged"
+
+
+@pytest.mark.asyncio
+async def test_polarity_flip_forces_llm_even_when_jev_is_confident(monkeypatch):
+    """证据说"禁止"，回答说"可以" —— 判据模型对极性翻转不敏感（标定 AUC 0.732），
+    必须由确定性检查强制升级 LLM 复核。"""
+    monkeypatch.setattr(cv_module, "get_settings", lambda: _settings())
+    monkeypatch.setattr(
+        "app.infra.jev_client.get_jev_client", lambda: _FakeJev({"cite_1": {"noul": 0.99}})
+    )
+    fallback = _Fallback()
+
+    answer = "员工可以申请将客户数据带离办公场所[1]。"
+    _, bad, meta = await verify_citations(
+        fallback,
+        answer,
+        [{"reference_id": 1, "content": "员工禁止将客户数据带离办公场所，不得使用私人邮箱发送。"}],
+        "客户数据能带出公司吗",
+    )
+    assert fallback.calls == 1, "极性翻转时 JEV 的高置信度不能免掉 LLM 复核"
+    assert meta["status"] == "judged"
