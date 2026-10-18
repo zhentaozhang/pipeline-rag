@@ -134,10 +134,16 @@ async def _load_indexed_chunks() -> list[dict[str, Any]]:
                 DocumentChunk.id,
                 DocumentChunk.parent_block_id,
                 DocumentChunk.chunk_text,
+                DocumentChunk.document_id,
             )
         )
         return [
-            {"chunk_id": row[0], "parent_block_id": row[1], "chunk_text": row[2]}
+            {
+                "chunk_id": row[0],
+                "parent_block_id": row[1],
+                "chunk_text": row[2],
+                "document_id": row[3],
+            }
             for row in rows.all()
             if row[2]
         ]
@@ -204,6 +210,40 @@ def _apply_legacy_metrics(result, question, eval_depth: int) -> None:
     result.mrr = compute_mrr(result.retrieved_contexts, rel)
     result.ndcg_at_5 = compute_ndcg_at_k(result.retrieved_contexts, rel, 5)
     result.ndcg_at_final_k = compute_ndcg_at_k(result.retrieved_contexts, rel, eval_depth)
+
+
+def _load_generated_questions(path: str) -> list:
+    """读取自动生成的题目（Task 4），转成 EvalQuestion。失败返回空列表。"""
+    import json
+
+    from scripts.evaluation.datasets.base import EvalQuestion
+
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.warning("generated questions load failed", path=path, error=str(e))
+        return []
+    items = payload.get("questions") if isinstance(payload, dict) else None
+    if not isinstance(items, list):
+        logger.warning("generated questions file has no questions list", path=path)
+        return []
+    out = []
+    for item in items:
+        try:
+            out.append(
+                EvalQuestion(
+                    id=str(item["id"]),
+                    question=str(item["question"]),
+                    ground_truth_answer=str(item.get("ground_truth_answer") or ""),
+                    relevant_contexts=list(item.get("relevant_contexts") or []),
+                    relevant_chunk_ids=[str(x) for x in item.get("relevant_chunk_ids") or []],
+                    category=str(item.get("category") or "generated"),
+                )
+            )
+        except Exception as e:  # noqa: BLE001 — 单题字段缺失不影响其余
+            logger.warning("generated question skipped", error=str(e)[:120])
+    logger.info("generated questions loaded", path=path, count=len(out))
+    return out
 
 
 def _load_gold_file(path: str) -> dict[str, dict[str, list[str]]]:
@@ -508,6 +548,16 @@ async def run_evaluation(
     await init_db()
     await init_pg()
     await init_es()
+
+    # Task 4：按文档切分（dev 调参 / test 验泛化）
+    if getattr(args, "split", "all") != "all":
+        from scripts.evaluation.splits import filter_by_split
+
+        split_chunks = await _load_indexed_chunks()
+        chunk_docs = {str(c["chunk_id"]): c.get("document_id") for c in split_chunks}
+        total = len(dataset)
+        dataset = filter_by_split(dataset, chunk_docs, args.split)
+        logger.info("split applied", split=args.split, kept=len(dataset), total=total)
 
     # Task 1：gold 片段对齐成 chunk_id（确定性映射，不需要人工或 LLM 标注）
     grounded_gold = await _ground_dataset_gold(dataset, gold_file=args.gold_file)
@@ -895,6 +945,17 @@ if __name__ == "__main__":
         help="仅关键词通道（关闭向量通道，跳过 embedding）",
     )
     parser.add_argument(
+        "--generated-file",
+        default="",
+        help="追加自动生成的题目文件（Task 4 扩容）",
+    )
+    parser.add_argument(
+        "--split",
+        choices=["all", "dev", "test"],
+        default="all",
+        help="按文档切分：dev 调参、test 验泛化（--generated-file 时才有意义）",
+    )
+    parser.add_argument(
         "--free",
         action="store_true",
         help="零成本模式 = --retrieval-only + --no-rewrite + --reranker-off",
@@ -912,6 +973,10 @@ if __name__ == "__main__":
         dataset = cat1 + cat2 + cat3 + cat4 + cat5
     elif args.questions:
         dataset = dataset[: args.questions]
+
+    if args.generated_file:
+        dataset = dataset + _load_generated_questions(args.generated_file)
+    # dev/test 切分需要 chunk→document 映射，放到 run_evaluation 里 init_db 之后做
 
     from app.config import get_settings as _gs
 
