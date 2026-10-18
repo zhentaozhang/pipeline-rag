@@ -65,7 +65,13 @@ class RAGSettings(BaseSettings):
     # 高并发下应关闭；关掉后该子查询只由向量通道兜底（实测关键词通道召回贡献为 0）。
     keyword_pg_fallback_enabled: bool = True
     candidate_top_k: int = 50
-    final_top_k: int = 8
+    # 组席宽度（最终进入 Prompt 的父块数）。8 → 16 的依据来自漏斗归因：
+    # 向量池已覆盖 97.3% 的 gold，损失全部发生在"父块提升 → top-k 截断"这一刀。
+    # reports/det_a.json(k=8) → trunc_k12/trunc_k16.json（85 题 retrieval-only）：
+    #   R@final_k_ids 0.8831 → 0.9173(k=12) → 0.9462(k=16)，McNemar 仅新胜 8/78，p=0.0078
+    #   R@5_ids 0.8543 不变、MRR_ids 0.8138 → 0.8170（尾部加宽不扰动头部排序）
+    # 预算无压力：该语料父块正文均值约 270 字符，20 块也只有 ~5.5k，低于 20000 预算。
+    final_top_k: int = 16
     min_vector_similarity: float = 0.55
     keyword_score_ratio: float = 0.35
     # RRF 融合参数（P1）：k 越小越强调单路排名靠前的候选；权重控制双通道相对影响力。

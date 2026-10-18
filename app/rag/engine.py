@@ -946,7 +946,7 @@ class RagRetrievalEngine:
             filtered = [e for e in scored if (e.rerank_score or 1.0) >= threshold]
             # D3 不变量：阈值不得把证据集砍到目标深度以下，否则上下文被饥饿、召回坍塌。
             # 触发时跳过阈值（保留全部已重排候选），截断交给 final_top_k。
-            target_depth = min(int(getattr(settings.rag, "final_top_k", 8) or 8), len(scored))
+            target_depth = min(int(getattr(settings.rag, "final_top_k", 16) or 16), len(scored))
             if (
                 getattr(settings.rag, "rerank_filter_starvation_guard_enabled", True)
                 and len(filtered) < target_depth

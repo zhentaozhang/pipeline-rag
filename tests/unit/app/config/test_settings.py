@@ -129,6 +129,17 @@ class TestPipelineSettings:
         assert s.rerank_min_score == 0.0
         assert s.multi_hop_split_enabled is False
 
+    def test_final_top_k_matches_the_measured_truncation_sweet_spot(self):
+        """组席宽度必须覆盖证据缺口：k 8→16 多召回 8 题（McNemar p=0.0078）。
+
+        reports/det_a.json（k=8）→ reports/trunc_k12.json / reports/trunc_k16.json：
+          R@final_k_ids 0.8831 → 0.9173（k=12）→ 0.9462（k=16）
+          R@5_ids / MRR_ids 不动 → 加宽只补尾部，不破坏头部排序
+          预算侧无压力：20 块父块也只有 ~5.5k 字符，低于 prompt_budget_total=20000
+        """
+        s = RAGSettings(_env_file=None)
+        assert s.final_top_k == 16
+
     def test_agent_defaults(self):
         s = AgentSettings()
         assert s.max_model_calls_per_run == 8

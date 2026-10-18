@@ -539,3 +539,21 @@ class TestAssemble:
         result = svc.assemble(make_plan(), subs)
         assert result.total_budget < 100000
         assert result.omitted_reference_count >= 0
+
+
+class TestWidenedFinalTopK:
+    """组席宽度从 8 加宽到 16（config 默认）后，预算必须装得下。"""
+
+    def test_sixteen_typical_parents_all_render(self):
+        """实测父块正文均值约 270 字符；16 块约 4.3k，远低于 per_subquestion=8000。"""
+        svc = PromptAssemblyService()
+        evs = [
+            make_ev(chunk_id=f"c{i}", ref_id=i, content="甲" * 270)
+            for i in range(1, 17)
+        ]
+        budget = PromptBudget(20000, 8000)
+        out = svc._append_references(evs, set(), budget)
+
+        assert budget.rendered_reference_count == 16
+        assert budget.omitted_reference_count == 0
+        assert "[16] 文档：" in out
