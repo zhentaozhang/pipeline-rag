@@ -43,7 +43,7 @@ class JEVSettings(BaseSettings):
     #                                    明确支持；[low, threshold) 为灰区 -> 整轮升级到既有 LLM 审计。
     citation_review_low: float = 0.45
 
-    # 超时时间 (秒，收敛为 2.0s 防止热路径服务不可用时阻塞过久)
-    timeout_seconds: float = 2.0
+    # 超时时间 (秒)
+    timeout_seconds: float = 30.0
 
     model_config = SettingsConfigDict(env_prefix="JEV_", env_file=_ENV_FILE, extra="ignore")

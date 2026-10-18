@@ -135,7 +135,8 @@ async def test_answer_relevancy_jev_success_path(jev_on):
             contexts=["RAG 技术结合了检索系统与大语言模型。"],
         )
         assert res.metric_name == "answer_relevancy"
-        assert res.value == 0.75
+        # 期望得分：0.88 * 0.75 + 0.12 * 1.0 = 0.78
+        assert res.value == 0.78
         assert res.metadata.get("evaluated_by") == "jev-system-one"
         assert res.metadata.get("level") == "高度相关"
         assert res.metadata.get("confidence") == 0.88
@@ -243,3 +244,108 @@ async def test_answer_correctness_jev_exception_falls_back_to_llm(jev_on):
         )
         assert res.value == 0.60
         assert "LLM scored" in res.reason
+
+
+@pytest.mark.asyncio
+async def test_answer_relevancy_fallback_without_distribution(jev_on):
+    """当 JEV 未返回 distribution 时，平滑回退至 level_map 离散打分"""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.observability.metrics.answer_relevancy import AnswerRelevancyMetric
+
+    metric = AnswerRelevancyMetric()
+    mock_jev = MagicMock()
+    mock_jev.system_one = AsyncMock(
+        return_value={
+            "relevancy": {
+                "score": "基本相关",
+                "confidence": 0.90,
+                # 无 distribution 字段
+            }
+        }
+    )
+
+    with patch("app.infra.jev_client.get_jev_client", return_value=mock_jev):
+        res = await metric.ascore(
+            question="什么是 RAG？",
+            answer="RAG 是检索增强生成技术。",
+            contexts=["RAG 技术结合了检索系统与大语言模型。"],
+        )
+        assert res.metric_name == "answer_relevancy"
+        assert res.value == 0.50
+        assert res.metadata.get("level") == "基本相关"
+
+
+def test_faithfulness_compose_bounded_context():
+    """验证 _compose_bounded_context 严格遵循 chunk 边界且不中间截断文本"""
+    from app.observability.metrics.faithfulness import _compose_bounded_context
+
+    chunks = [
+        "第一段内容：" + "A" * 500,
+        "第二段内容：" + "B" * 500,
+        "第三段内容：" + "C" * 500,
+    ]
+    # 上限 1100 字符，前两段加上分隔符共约 1020 字符，第三段不应被切半，而应完全排除
+    result = _compose_bounded_context(chunks, max_chars=1100)
+    assert "第一段内容" in result
+    assert "第二段内容" in result
+    assert "第三段内容" not in result
+    assert "---" in result
+
+
+@pytest.mark.asyncio
+async def test_context_precision_1500_char_boundary(jev_on):
+    """验证 ContextPrecisionMetric 向 JEV 传递 chunk 时支持达 1500 字符长文本"""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.observability.metrics.context_precision import ContextPrecisionMetric
+
+    metric = ContextPrecisionMetric()
+    mock_jev = MagicMock()
+    recorded_questions = {}
+
+    async def _mock_sys_one(state, questions):
+        nonlocal recorded_questions
+        recorded_questions = questions
+        return {"chunk_0": {"noul": 0.95}}
+
+    mock_jev.system_one = AsyncMock(side_effect=_mock_sys_one)
+
+    long_chunk = "核心事实证据：" + "Z" * 1200 + "关键末尾事实"
+    with patch("app.infra.jev_client.get_jev_client", return_value=mock_jev):
+        res = await metric.ascore(
+            question="测试问题",
+            answer="测试回答",
+            contexts=[long_chunk],
+        )
+        assert res.metric_name == "context_precision"
+        assert res.value == 1.0
+        # 验证 1200+ 字符未在 280 处被截断
+        assert "关键末尾事实" in recorded_questions["chunk_0"]["instructions"]
+
+
+@pytest.mark.asyncio
+async def test_rag_evaluation_service_proxy():
+    """验证 RAGEvaluationService 适配器透明代理至 EvaluationPipeline 而非返回空字典"""
+    from unittest.mock import AsyncMock, patch
+
+    from app.observability.metrics.base import MetricResult
+    from app.rag.evaluation import RAGEvaluationService
+
+    service = RAGEvaluationService()
+    fake_results = [
+        MetricResult(metric_name="faithfulness", value=0.9),
+        MetricResult(metric_name="answer_relevancy", value=0.85),
+    ]
+
+    with patch.object(
+        service._get_standard_pipeline(), "run", new=AsyncMock(return_value=fake_results)
+    ):
+        res = await service.evaluate(
+            conversation_id="conv_1",
+            exchange_id=1,
+            question="q",
+            answer="a",
+            contexts=["c"],
+        )
+        assert res == {"faithfulness": 0.9, "answer_relevancy": 0.85}

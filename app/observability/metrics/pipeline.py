@@ -9,7 +9,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import structlog
+
 from app.observability.metrics.base import Metric, MetricResult
+
+logger = structlog.get_logger(__name__)
 
 
 class EvaluationPipeline:
@@ -27,13 +31,23 @@ class EvaluationPipeline:
         timeout: int | None = None,
     ) -> list[MetricResult]:
         async def _run_one(metric: Metric) -> MetricResult:
-            result = await metric.ascore(
-                question=question,
-                answer=answer,
-                contexts=contexts,
-                ground_truth=ground_truth,
-                tracer=tracer,
-            )
+            name = metric.name or metric.__class__.__name__.lower()
+            try:
+                result = await metric.ascore(
+                    question=question,
+                    answer=answer,
+                    contexts=contexts,
+                    ground_truth=ground_truth,
+                    tracer=tracer,
+                )
+            except Exception as e:  # noqa: BLE001 — 单指标失败绝不影响其余指标
+                logger.warning("metric failed", metric=name, error=str(e)[:160])
+                return MetricResult(
+                    metric_name=name,
+                    value=0.0,
+                    reason=f"metric_error: {e}",
+                    failed=True,
+                )
             if tracer is not None:
                 tracer.attach_score(result.metric_name, result.value, reason=result.reason)
             return result
@@ -45,9 +59,12 @@ class EvaluationPipeline:
         results = await asyncio.wait_for(coro, timeout=timeout) if timeout else await coro
 
         final: list[MetricResult] = []
-        for r in results:
+        for idx, r in enumerate(results):
             if isinstance(r, BaseException):
-                final.append(MetricResult(metric_name="error", value=0.0, reason=str(r)))
+                metric = self._metrics[idx] if idx < len(self._metrics) else None
+                name = (metric.name if metric else "") or "unknown"
+                logger.warning("metric raised", metric=name, error=str(r)[:160])
+                final.append(MetricResult(metric_name=name, value=0.0, reason=str(r), failed=True))
             else:
                 final.append(r)
         return final

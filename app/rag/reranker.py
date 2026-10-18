@@ -56,10 +56,19 @@ class Reranker:
             "Content-Type": "application/json",
         }
 
+        if getattr(settings.rerank, "inject_title_breadcrumbs", False):
+            docs_to_rerank = [
+                f"【{ev.title}】\n{ev.content}"
+                if ev.title and ev.title != "未知文档片段"
+                else ev.content
+                for ev in evidences
+            ]
+        else:
+            docs_to_rerank = [ev.content for ev in evidences]
         payload = {
             "model": settings.rerank.model,
             "query": query,
-            "documents": [ev.content for ev in evidences],
+            "documents": docs_to_rerank,
             "return_documents": False,
             "top_n": settings.rerank.top_n,
         }

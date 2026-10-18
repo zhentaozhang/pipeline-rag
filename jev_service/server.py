@@ -95,13 +95,13 @@ async def system_one(request: SystemOneRequest):
 
     t0 = time.perf_counter()
     try:
-        # 使用 asyncio.Lock + to_thread，并附加 30s 硬超时兜底，防止挂起请求死锁
+        # 使用 asyncio.Lock + to_thread，并附加 60s 硬超时兜底，防止挂起请求死锁
         async with _inference_lock:
             answers = await asyncio.wait_for(
                 asyncio.to_thread(
                     judger.judge_batch, state=request.state, questions=request.questions
                 ),
-                timeout=30.0,
+                timeout=60.0,
             )
         duration_ms = (time.perf_counter() - t0) * 1000
         return SystemOneResponse(
@@ -110,9 +110,9 @@ async def system_one(request: SystemOneRequest):
             model=request.model or "jev-local",
         )
     except TimeoutError:
-        logger.error("JEV inference timed out after 30 seconds")
+        logger.error("JEV inference timed out after 60 seconds")
         raise HTTPException(
-            status_code=504, detail="JEV decision execution timed out (30s)"
+            status_code=504, detail="JEV decision execution timed out (60s)"
         ) from None
     except Exception as exc:
         logger.exception("Error executing JEV decision: %s", exc)

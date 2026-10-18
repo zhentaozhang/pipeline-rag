@@ -83,11 +83,12 @@ def get_model_and_tokenizer():
     if _tokenizer.pad_token is None:
         _tokenizer.pad_token = _tokenizer.eos_token
 
-    dtype = torch.float32
+    dtype = torch.bfloat16
     if device == "cuda":
         dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
     elif device == "mps":
         dtype = torch.float16
+
 
     _model = AutoModelForCausalLM.from_pretrained(
         model_name,

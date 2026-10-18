@@ -30,3 +30,19 @@ services:
     ports:
       - "9000:9000"   # API
       - "9001:9001"   # Console UI
+
+  jev-service:
+    environment:
+      - JEV_DEVICE=cpu
+    volumes:
+      - ./jev_service:/app
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    healthcheck:
+      disable: true
+
+
+
+

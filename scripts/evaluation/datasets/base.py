@@ -65,8 +65,14 @@ class EvalResult(BaseModel):
     retrieval_ms: float | None = None
     recall_at_5: float | None = None  # 量化能力 #2
     recall_at_10: float | None = None
+    mrr: float | None = None  # 排序质量：首个命中的排名倒数
+    ndcg_at_5: float | None = None  # 排序质量：nDCG@5
+    ndcg_at_10: float | None = None  # 排序质量：nDCG@10
     generation_ms: float | None = None
     total_ms: float | None = None
+
+    # 归因分析 (Retrieval Lab 方法论)
+    stage_attribution: dict[str, Any] = Field(default_factory=dict)
 
     # 状态
     status: str = "pending"

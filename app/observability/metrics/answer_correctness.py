@@ -129,8 +129,16 @@ class AnswerCorrectnessMetric(Metric):
         )
         import re
 
-        match = re.search(r"\d+", content)
-        score = int(match.group()) / 100.0 if match else 0.0
+        score_match = re.search(
+            r"(?:score|得分|分数|rating)[^\d]*(\b100|\b[1-9]?[0-9])\b",
+            content,
+            re.IGNORECASE,
+        )
+        if score_match:
+            score = int(score_match.group(1)) / 100.0
+        else:
+            valid_nums = re.findall(r"\b(100|[1-9]?[0-9])\b", content)
+            score = int(valid_nums[-1]) / 100.0 if valid_nums else 0.0
         score = max(0.0, min(1.0, score))
         return MetricResult(
             metric_name="answer_correctness",

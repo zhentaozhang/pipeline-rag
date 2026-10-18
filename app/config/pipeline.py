@@ -49,22 +49,68 @@ class RAGSettings(BaseSettings):
     """RAG 检索参数"""
 
     enabled: bool = True
-    vector_top_k: int = 5
-    keyword_top_k: int = 5
-    candidate_top_k: int = 6
-    final_top_k: int = 5
+    # 默认值与 .env.example 对齐（宽召回：单通道 50 → 融合 50 → 最终 8）。
+    # 避免"未提供 .env 的部署/CI"回落到过窄的候选池（原 5/5/6/5）。
+    vector_top_k: int = 50
+    keyword_top_k: int = 50
+    candidate_top_k: int = 50
+    final_top_k: int = 8
     min_vector_similarity: float = 0.55
     keyword_score_ratio: float = 0.35
+    # RRF 融合参数（P1）：k 越小越强调单路排名靠前的候选；权重控制双通道相对影响力。
+    # 行业默认 k=60，但对"每问相关文档数少"的企业问答应实测更小的 k（2~20）。
+    rrf_k: int = 60
+    rrf_vector_weight: float = 1.0
+    rrf_keyword_weight: float = 1.0
+    # P2-6 查询类型自适应融合：精确标识型查询偏关键词、概念型偏向量（默认关）。
+    query_adaptive_weight_enabled: bool = False
+    adaptive_keyword_bias: float = 1.6
+    adaptive_vector_bias: float = 1.6
     context_window_safety_margin: float = 0.15
     prompt_budget_total: int = 5200
     prompt_budget_per_subquestion: int = 2200
     parent_evidence_max_chars: int = 2200
+    # 单条引用渲染上限（P1）：此前硬编码 1100，导致父块预算(2200/4000)在实际 Prompt 中失效。
+    reference_snippet_max_chars: int = 2000
+    # 评测裁判可见上下文上限（与生成侧预算对齐，避免"裁判看到的证据 < 模型看到的证据"）。
+    eval_context_max_chars: int = 20000
+    # 召回归因覆盖判定阈值（诊断用，可配）。
+    stage_attribution_cover_ratio: float = 0.35
+    # 向量通道门限：默认绝对阈值；>0 时改用相对阈值 top_score*ratio（A/B 开关，0=保持绝对）。
+    vector_relative_ratio: float = 0.0
+    vector_near_miss_ratio: float = 0.85
+    # R1 条件重排：第一阶段 top-1 相似度 >= 该值时跳过重排（0=关闭）。
+    # 依据：重排常把高置信 rank-1 命中降级（Rakuen / OpenCodeIntel #322 实测）。
+    rerank_skip_min_similarity: float = 0.0
+    # R2 rank-1 保护：重排后若第一阶段首候选被降级、但其重排分与新榜首差距 <= margin，则恢复其榜首。
+    rerank_rank1_guard_enabled: bool = False
+    rerank_rank1_guard_margin: float = 0.15
+    # 通道开关：关闭向量通道可做"纯关键词"离线验证（零外部调用）。
+    vector_channel_enabled: bool = True
     planning_history_max_chars: int = 1600
     answer_history_max_chars: int = 1000
-    channel_timeout_ms: int = 5000
-    sub_question_timeout_ms: int = 12000
+    # 更深候选池(50)+更宽重排(top_n=10)下放宽通道/子问题超时，避免静默降级。
+    channel_timeout_ms: int = 8000
+    sub_question_timeout_ms: int = 20000
     keyword_channel_enabled: bool = True
+    # P1-3 元数据预过滤：把问题里提取到的"章节提示"（如"第8条/附录A"）经**存在性校验**后
+    # 落为 section_path 前缀过滤（双通道同时收窄）。校验失败即跳过，绝不因过滤制造零召回。
+    # 默认关；开启后仅对"确实引用了语料中存在的章节"的查询生效。
+    metadata_prefilter_enabled: bool = False
+    metadata_prefilter_cache_ttl_seconds: float = 300.0
+    # P2-7 LongContextReorder（默认关）：把证据重排为"首尾最相关、中部最不相关"，
+    # 缓解 lost-in-the-middle。仅改渲染顺序、不改内容；仅在整组证据能放进预算时生效，
+    # 以免截断优先丢弃尾部（尾部是次相关项）。
+    long_context_reorder_enabled: bool = False
+    # P3-8 迭代式多跳（默认关，需 LLM）：检索→用已获证据生成"下一跳查询"→再检索，累积去重。
+    # 由"下一跳查询为空/重复"自然收敛；任一环节异常即停止，不打断检索主链路。
+    iterative_multi_hop_enabled: bool = False
+    iterative_multi_hop_max_hops: int = 2
     max_sub_questions: int = 4
+    # P2 多跳拆分：复合/多条件（含 且/并且/同时/满足…等条件连接）单句问题拆为多个检索子查询。
+    # A/B 实测（25 题）：R@10 持平、R@5/命中略降，未验证收益，故默认关（opt-in）。
+    # 用 runner --multi-hop-split 开启做对照；待 chunk/embedding 优化后复测再评估是否转正。
+    multi_hop_split_enabled: bool = False
     no_evidence_reply: str = "当前没有从已接入文档中检索到足够证据，暂时不能给出可靠结论。"
     stream_timeout_seconds: int = 600
     answer_system_prompt: str = ""
@@ -92,11 +138,22 @@ class RAGSettings(BaseSettings):
     evaluation_timeout_seconds: int = 30
     evaluation_sample_rate: float = 0.0
     evidence_min_score: float = 0.1
-    rerank_min_score: float = 0.35  # 基准验证：滤无关块（0.10-0.25）不伤相关块（0.45+）
+    rerank_min_score: float = 0.35  # 绝对下限：滤无关块（0.10-0.25）不伤相关块（0.45+）
+    # P1 相对阈值：保留 rerank_score >= top_score * ratio 的候选（0=仅用绝对阈值）。
+    # 避免"整体低分区间被一刀切"造成的召回坍塌（如 0.17/0.06 全被 0.35 滤掉）。
+    rerank_relative_ratio: float = 0.0
     knowledge_route_confidence_threshold: float = 0.40
     vectorize_batch_size: int = 10
     # P0-2: Contextual Chunking——embedding 文本附加文档名+章节路径（重索引后生效，可回退关闭）
     contextual_chunking_enabled: bool = True
+    # P0-1 真 Contextual Retrieval（Anthropic 方法，默认关，需重索引才生效、可回退）：
+    # 用 LLM 为每个子块生成 50~100 token 的"文档内上下文"，前置进 embedding 文本。
+    # 任一环节失败自动回退到上面的"文档名+章节路径"版本，绝不阻断入库。
+    contextual_llm_enabled: bool = False
+    contextual_llm_model: str = ""  # 空 = 用 settings.llm.model
+    contextual_llm_max_doc_chars: int = 24000  # 作为生成参考的文档正文上限
+    contextual_max_tokens: int = 120  # 生成上下文的输出上限
+    contextual_llm_concurrency: int = 4
     supervisor_enabled: bool = True
     # P0-1c: LLM 分解前规则预筛——仅复合/分析类/长问题触发分解，简单问题零 LLM 成本
     supervisor_rule_prefilter: bool = True
@@ -152,6 +209,14 @@ class ChunkSettings(BaseSettings):
     llm_enabled: bool = False
     llm_max_chars: int = 3500
     recommend_llm_when_low_quality: bool = True
+    # P0-2 粒度校准：结构解析按"每节点一块"产生大量小片段（实测受手册中位 ~99 token）。
+    # 开启后把相邻小节点贪心合并到目标 token 窗口（研究推荐 256~512）。默认关，需重索引才生效。
+    merge_small_sections_enabled: bool = False
+    merge_target_tokens: int = 320
+    merge_max_tokens: int = 512
+    # P1-5 稳定 chunk ID（默认关）：开启后 chunk_id 由 (doc, role, seq, content) 内容派生，
+    # 同一输入在任意次重索引后得到相同 ID，便于块级评估与版本 diff。默认 Snowflake（不变）。
+    stable_chunk_id_enabled: bool = False
 
     model_config = SettingsConfigDict(env_prefix="CHUNK_", env_file=_ENV_FILE, extra="ignore")
 

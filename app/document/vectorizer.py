@@ -3,6 +3,7 @@
 将文档 Chunk 转为 Embedding 向量，写入 PGVector
 """
 
+import asyncio
 from datetime import UTC
 
 import structlog
@@ -58,6 +59,15 @@ class VectorizerService:
         max_tokens = getattr(settings.rag, "max_embedding_tokens", 8191) or 8191
         from app.document.chunker.utils import truncate_text_to_tokens
 
+        # P0-1 真 Contextual Retrieval（默认关）：为每个子块生成文档内上下文；失败自动回退。
+        contextual_map: dict[str, str] = {}
+        if settings.rag.contextual_chunking_enabled and getattr(
+            settings.rag, "contextual_llm_enabled", False
+        ):
+            contextual_map = await self._generate_contextual_map(
+                child_chunks, chunks, document_name
+            )
+
         # 先获取 embeddings，仅针对 child_chunks
         # 注：批次失败时直接抛出，由 Celery 任务层标记失败并重试（max_retries=3），
         # 不写入全零向量——零向量会污染向量库并被检索命中（cosine 相似度对零向量无定义）。
@@ -66,7 +76,9 @@ class VectorizerService:
             batch = child_chunks[i : i + self._batch_size]
             texts = [
                 truncate_text_to_tokens(
-                    self._build_contextual_text(c, document_name)
+                    self._build_contextual_text(
+                        c, document_name, contextual_map.get(c.chunk_id, "")
+                    )
                     if settings.rag.contextual_chunking_enabled
                     else c.content,
                     max_tokens,
@@ -92,14 +104,82 @@ class VectorizerService:
 
         return len(child_chunks)
 
-    def _build_contextual_text(self, chunk: Chunk, document_name: str) -> str:
-        """P0-2: Contextual Chunking（Anthropic 方法）——embedding 文本附加文档名 + 章节路径。
+    @staticmethod
+    def _compose_document_text(chunks: list[Chunk]) -> str:
+        """用父块（无父块则全部块）拼出文档正文，作为生成 chunk 上下文的参考；带上限截断。"""
+        parents = [c for c in chunks if c.chunk_type == "parent" and c.content]
+        source = parents or [c for c in chunks if c.content]
+        text = "\n\n".join(str(c.content) for c in source)
+        max_chars = int(getattr(settings.rag, "contextual_llm_max_doc_chars", 24000) or 24000)
+        return text[:max_chars]
 
-        解决"查询词与 chunk 字面不匹配"的召回失败（如查询用简称/术语，chunk 只含全称）。
+    async def _generate_contextual_map(
+        self,
+        child_chunks: list[Chunk],
+        all_chunks: list[Chunk],
+        document_name: str,
+    ) -> dict[str, str]:
+        """P0-1: 为每个子块生成 50~100 token 的文档内上下文（Anthropic Contextual Retrieval）。
+
+        任何异常（无 client / 超时 / 限流）都返回 {}，调用方自动回退到"文档名+章节路径"版本。
+        """
+        if not child_chunks:
+            return {}
+        try:
+            from app.common.llm_client import get_chat_client
+
+            client = get_chat_client()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("contextual retrieval: chat client unavailable, fallback", error=str(e))
+            return {}
+
+        doc_text = self._compose_document_text(all_chunks)
+        model = getattr(settings.rag, "contextual_llm_model", "") or settings.llm.model
+        max_tokens = int(getattr(settings.rag, "contextual_max_tokens", 120) or 120)
+        concurrency = max(1, int(getattr(settings.rag, "contextual_llm_concurrency", 4) or 4))
+        sem = asyncio.Semaphore(concurrency)
+        results: dict[str, str] = {}
+
+        async def _one(chunk: Chunk) -> None:
+            async with sem:
+                prompt = (
+                    f"<document>\n{doc_text}\n</document>\n\n"
+                    f"这是文档《{document_name}》中的一个片段：\n<chunk>\n{chunk.content}\n</chunk>\n\n"
+                    "请用 1~2 句中文简洁说明该片段在整篇文档中的主题与定位"
+                    "（属于哪一制度/条款、讨论什么），用于改进检索。"
+                    "只输出这段上下文说明，不要复述原文。"
+                )
+                try:
+                    resp = await client.chat.completions.create(
+                        model=model,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.0,
+                        max_tokens=max_tokens,
+                    )
+                    text = (resp.choices[0].message.content or "").strip()
+                    if text:
+                        results[chunk.chunk_id] = text
+                        # 回写到 Chunk 对象，供下游 index 阶段做 Contextual BM25
+                        chunk.contextual_context = text
+                except Exception as e:  # noqa: BLE001 — 单块失败不阻断
+                    logger.warning("contextual generation failed", error=str(e)[:120])
+
+        await asyncio.gather(*[_one(c) for c in child_chunks], return_exceptions=True)
+        logger.info("contextual map generated", total=len(child_chunks), generated=len(results))
+        return results
+
+    @staticmethod
+    def _build_contextual_text(chunk: Chunk, document_name: str, llm_context: str = "") -> str:
+        """P0-1/P0-2: 构造 embedding 输入文本。
+
+        - 有 LLM 生成的 chunk 上下文（P0-1）时，优先置于最前（Anthropic Contextual Embeddings）；
+        - 否则回退到"文档名 + 章节路径"（P0-2）。
         仅影响 embedding 输入，不改存储内容（document_chunk 仍存纯文本供 ParentBlock 反查）。
         已索引数据需重新向量化后生效（reindex）。
         """
         parts: list[str] = []
+        if llm_context:
+            parts.append(llm_context)
         if document_name:
             parts.append(f"文档：《{document_name}》")
         section = chunk.section_path or chunk.section_title or ""

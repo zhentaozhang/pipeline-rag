@@ -12,10 +12,11 @@ RAG 双通道检索引擎主入口
 """
 
 import asyncio
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -34,6 +35,19 @@ from app.rag.parent_block import ParentBlockElevator
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
+
+# P2-6 查询类型自适应融合：含精确标识符（数字/编号/条款/版本/许可证等）的查询偏关键词通道
+_ID_LIKE_PATTERN = re.compile(
+    r"\d|第\s*[0-9一二三四五六七八九十百]+\s*[条点项款]|版本|编号|许可证|"
+    r"\bGPL\b|\bMIT\b|\bCVE\b|\bPMP\b"
+)
+
+
+def _query_type_multipliers(
+    text: str, keyword_bias: float, vector_bias: float
+) -> tuple[float, float]:
+    """返回 (vector_mult, keyword_mult)：精确标识型查询 → 偏关键词；概念型 → 偏向量。"""
+    return (1.0, keyword_bias) if _ID_LIKE_PATTERN.search(text or "") else (vector_bias, 1.0)
 
 
 @dataclass
@@ -191,7 +205,13 @@ class RagRetrievalEngine:
     async def retrieve_with_correction(
         self, plan: ExecutionPlan, tracer: Any = None
     ) -> RagRetrievalContext:
-        """Corrective Retrieval：证据不足时改写查询重查，最多 corrective_retrieval_max_rounds 轮。"""
+        """Corrective Retrieval：证据不足时改写查询重查，最多 corrective_retrieval_max_rounds 轮。
+
+        P3-8：当 ``iterative_multi_hop_enabled`` 开启时，改走迭代式多跳累积（默认关，行为不变）。
+        """
+        if getattr(settings.rag, "iterative_multi_hop_enabled", False):
+            return await self.retrieve_iterative_multi_hop(plan, tracer=tracer)
+
         context = await self.retrieve(plan, tracer=tracer)
         max_rounds = settings.rag.corrective_retrieval_max_rounds
         if not settings.rag.corrective_retrieval_enabled or max_rounds <= 0:
@@ -242,6 +262,118 @@ class RagRetrievalEngine:
                 notes=context.retrieval_notes,
             )
         return context
+
+    # ── P3-8 迭代式多跳检索（默认关）─────────────────────────────────────
+
+    async def retrieve_iterative_multi_hop(
+        self, plan: ExecutionPlan, tracer: Any = None
+    ) -> RagRetrievalContext:
+        """检索 → 用已获证据生成"下一跳查询" → 再检索，累积去重（最多 N 跳）。
+
+        收敛由 `_next_hop_query` 决定：返回空/与上一跳相同即停止。任何异常都被
+        `iterate_hops` 吞掉并就地收敛，绝不影响主链路。
+        """
+        context = await self.retrieve(plan, tracer=tracer)
+        max_hops = max(1, int(getattr(settings.rag, "iterative_multi_hop_max_hops", 2) or 2))
+        base_question = (plan.rewritten_question or plan.original_question or "").strip()
+        if not base_question or max_hops <= 1:
+            return context
+
+        from app.rag.multi_hop import iterate_hops
+
+        async def _retrieve_hop(query: str) -> RagRetrievalContext:
+            hop_plan = plan.model_copy(deep=True)
+            hop_plan.retrieval_question = query
+            hop_plan.retrieval_sub_questions = [query]
+            hop_plan.sub_questions = [
+                SubQuestion(
+                    index=0,
+                    text=query,
+                    original=plan.original_question,
+                    tenant_id=plan.tenant_id,
+                    doc_ids=plan.retrieval_document_ids,
+                )
+            ]
+            return await self.retrieve(hop_plan, tracer=tracer)
+
+        context, hops = await iterate_hops(
+            base_question,
+            context,
+            max_hops=max_hops,
+            next_query_fn=self._next_hop_query,
+            retrieve_fn=_retrieve_hop,
+            merge_fn=self._merge_contexts,
+        )
+        context = cast("RagRetrievalContext", context)
+        if hops > 1:
+            context.retrieval_notes.append(f"迭代多跳检索完成：共 {hops} 跳。")
+            logger.info(
+                "iterative_multi_hop_done",
+                hops=hops,
+                retrieval_question=base_question[:50],
+                evidence_count=sum(len(se.evidences) for se in context.sub_question_evidence_list),
+            )
+        return context
+
+    async def _next_hop_query(self, question: str, context: RagRetrievalContext) -> str:
+        """基于已获证据生成"能补全答案"的下一跳检索查询；证据已足够时返回空串。"""
+        evidence_texts = [
+            (ev.content or "")[:400]
+            for se in context.sub_question_evidence_list
+            for ev in se.evidences
+            if ev.content
+        ]
+        if not evidence_texts:
+            return ""
+        prompt = (
+            f"问题：{question}\n\n"
+            "已检索到的证据片段：\n"
+            + "\n---\n".join(evidence_texts[:6])
+            + "\n\n请判断上述证据是否已足以完整回答问题。"
+            "若已足够，只输出空行；若仍缺少关键信息，输出一句**新的检索查询**"
+            "（只输出查询本身，不要解释、不要复述原文）。"
+        )
+        try:
+            from app.common.llm_client import get_chat_client, llm_breaker
+
+            client = get_chat_client()
+            async with llm_breaker():
+                resp = await client.chat.completions.create(
+                    model=settings.llm.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.0,
+                    max_tokens=64,
+                )
+            return (resp.choices[0].message.content or "").strip()
+        except Exception as e:  # noqa: BLE001 — 生成失败即收敛
+            logger.warning("next_hop_query_failed", error=str(e)[:120])
+            return ""
+
+    def _merge_contexts(
+        self, base: RagRetrievalContext, extra: RagRetrievalContext
+    ) -> RagRetrievalContext:
+        """把新一跳的证据**去重累积**进 base（不改写已有引用编号，最后统一重排）。"""
+        seen = {
+            self._build_unique_key(ev)
+            for se in base.sub_question_evidence_list
+            for ev in se.evidences
+        }
+        for se in extra.sub_question_evidence_list:
+            fresh = [ev for ev in se.evidences if self._build_unique_key(ev) not in seen]
+            for ev in fresh:
+                seen.add(self._build_unique_key(ev))
+            if fresh:
+                base.sub_question_evidence_list.append(
+                    SubQuestionEvidence(
+                        sub_question=se.sub_question,
+                        evidences=fresh,
+                        channel_trace=se.channel_trace,
+                    )
+                )
+        base.used_channels.update(extra.used_channels)
+        base.retrieval_notes.extend(extra.retrieval_notes)
+        self._assign_reference_ids(base.sub_question_evidence_list)
+        return base
 
     async def _evidence_is_sufficient(self, question: str, context: RagRetrievalContext) -> bool:
         """判定检索证据是否足以回答问题（JEV Noul 语义充分性）。
@@ -376,7 +508,23 @@ class RagRetrievalEngine:
         # ── RRF 融合 ───────────────────────────────────────────
         rrf_started_at = datetime.now(UTC)
         t_rrf = time.monotonic()
-        merged = rrf_fusion(vector_accepted, keyword_accepted)[: settings.rag.candidate_top_k]
+        vec_weight = getattr(settings.rag, "rrf_vector_weight", 1.0)
+        kw_weight = getattr(settings.rag, "rrf_keyword_weight", 1.0)
+        if getattr(settings.rag, "query_adaptive_weight_enabled", False):
+            v_mult, k_mult = _query_type_multipliers(
+                sub_q.text,
+                getattr(settings.rag, "adaptive_keyword_bias", 1.6),
+                getattr(settings.rag, "adaptive_vector_bias", 1.6),
+            )
+            vec_weight *= v_mult
+            kw_weight *= k_mult
+        merged = rrf_fusion(
+            vector_accepted,
+            keyword_accepted,
+            k=getattr(settings.rag, "rrf_k", 60),
+            vector_weight=vec_weight,
+            keyword_weight=kw_weight,
+        )[: settings.rag.candidate_top_k]
         rrf_duration_ms = int((time.monotonic() - t_rrf) * 1000)
         if collected_spans_out is not None:
             collected_spans_out.append(
@@ -457,6 +605,15 @@ class RagRetrievalEngine:
             sub_q,
         )
 
+        stage_candidates = {
+            "vector": [d.content for d in vector_accepted if d.content],
+            "keyword": [d.content for d in keyword_accepted if d.content],
+            "fused": [d.content for d in merged if d.content],
+            "reranked": [d.content for d in reranked_filtered if d.content],
+            "parent": [d.content for d in parent_candidates if d.content],
+            "final": [d.content for d in final_docs if d.content],
+        }
+
         return SubQuestionEvidence(
             sub_question=sub_q,
             evidences=final_docs,
@@ -472,6 +629,7 @@ class RagRetrievalEngine:
                 "fused": len(merged),
                 "reranked": len(reranked),
                 "parent": len(parent_candidates),
+                "stage_candidates": stage_candidates,
             },
             fused_candidate_count=len(merged),
             reranked_candidate_count=len(reranked),
@@ -534,11 +692,38 @@ class RagRetrievalEngine:
                 avg_score=round(avg_score, 4),
             )
 
-        channel_tasks = [_channel_retrieve(vector_channel.retrieve, "vector")]
+        channel_tasks = []
+        if getattr(settings.rag, "vector_channel_enabled", True):
+            channel_tasks.append(_channel_retrieve(vector_channel.retrieve, "vector"))
         if settings.rag.keyword_channel_enabled:
             channel_tasks.append(_channel_retrieve(keyword_channel.retrieve, "keyword"))
 
         return await asyncio.gather(*channel_tasks) if channel_tasks else []
+
+    @staticmethod
+    def _apply_rank1_guard(
+        first_stage: list[Evidence],
+        reranked: list[Evidence],
+        margin: float,
+    ) -> list[Evidence]:
+        """R2 rank-1 保护：若第一阶段首候选被重排降级、但分差在 margin 内，则恢复其榜首位置。
+
+        依据：重排器常把高置信 rank-1 命中降级（MRR 下降），在榜首价值高于深列表覆盖时是负收益。
+        仅在 rerank_rank1_guard_enabled 开启时调用，默认不改变行为。
+        """
+        if not first_stage or not reranked:
+            return reranked
+        first_id = getattr(first_stage[0], "chunk_id", None)
+        if not first_id:
+            return reranked
+        idx = next((i for i, e in enumerate(reranked) if e.chunk_id == first_id), -1)
+        if idx <= 0:
+            return reranked
+        top_rr = reranked[0].rerank_score or 0.0
+        first_rr = reranked[idx].rerank_score or 0.0
+        if first_rr >= top_rr - margin:
+            reranked.insert(0, reranked.pop(idx))
+        return reranked
 
     async def _maybe_rerank(
         self,
@@ -550,11 +735,39 @@ class RagRetrievalEngine:
     ) -> list[Evidence]:
         if not settings.rerank.enabled or len(candidates) <= 1:
             return candidates
+
+        # R1 条件重排：首候选已是高置信（如强向量命中）时跳过重排，避免降级 rank-1。
+        skip_min = getattr(settings.rag, "rerank_skip_min_similarity", 0.0) or 0.0
+        if skip_min > 0:
+            top = max(candidates, key=lambda e: self._resolve_score(e) or -1.0)
+            top_score = self._resolve_score(top)
+            if top_score is not None and top_score >= skip_min:
+                notes.append(
+                    f"子问题{sub_question_index}首候选置信度{top_score:.3f}≥{skip_min}，已跳过重排。"
+                )
+                logger.info(
+                    "rerank_skipped_high_confidence",
+                    sub_question_index=sub_question_index,
+                    top_score=top_score,
+                    threshold=skip_min,
+                )
+                return candidates
+
         try:
             from app.rag.reranker import Reranker
 
             reranked = await Reranker().rerank(query, candidates)
             self._mark_used_channel(used_channels, "rerank")
+            if getattr(settings.rag, "rerank_rank1_guard_enabled", False):
+                before_id = reranked[0].chunk_id if reranked else None
+                reranked = self._apply_rank1_guard(
+                    candidates,
+                    reranked,
+                    getattr(settings.rag, "rerank_rank1_guard_margin", 0.15) or 0.0,
+                )
+                if reranked and reranked[0].chunk_id != before_id:
+                    notes.append(f"子问题{sub_question_index}已触发 rank-1 保护。")
+                    logger.info("rerank_rank1_guarded", sub_question_index=sub_question_index)
             return reranked
         except Exception as e:
             logger.warning(
@@ -567,12 +780,26 @@ class RagRetrievalEngine:
             return candidates
 
     def _apply_rerank_filter(self, docs: list[Evidence]) -> list[Evidence]:
-        min_rerank = settings.rag.rerank_min_score or 0.0
-        if min_rerank > 0 and any(e.rerank_score is not None for e in docs):
-            filtered = [e for e in docs if (e.rerank_score or 1.0) >= min_rerank]
+        scored = [e for e in docs if e.rerank_score is not None]
+        if not scored:
+            return docs
+        abs_min = getattr(settings.rag, "rerank_min_score", 0.0) or 0.0
+        ratio = getattr(settings.rag, "rerank_relative_ratio", 0.0) or 0.0
+        # 相对阈值：保留 >= 最高分 × ratio 的候选，避免整体低分区间被绝对阈值一刀切；
+        # 最终以绝对下限与相对阈值中较大者为准。
+        top_score = max((e.rerank_score or 0.0) for e in scored)
+        threshold = max(abs_min, top_score * ratio)
+        if threshold > 0:
+            filtered = [e for e in scored if (e.rerank_score or 1.0) >= threshold]
             # 兜底：阈值语义失效（该查询整体低分区间）时保留最高分 top-1，
             # 避免空证据导致拒答（实证："请假"类查询相关块仅 0.05-0.17）
-            docs = filtered or sorted(docs, key=lambda e: e.rerank_score or 0.0, reverse=True)[:1]
+            docs = (
+                filtered
+                if filtered
+                else sorted(scored, key=lambda e: e.rerank_score or 0.0, reverse=True)[:1]
+            )
+        else:
+            docs = scored
         return docs
 
     def _apply_rerank_filter_and_topk(self, docs: list[Evidence]) -> list[Evidence]:
@@ -645,23 +872,32 @@ class RagRetrievalEngine:
         doc_scores = [(e, self._resolve_score(e)) for e in result.documents]
 
         if result.channel_name == "vector":
+            # 默认绝对阈值；vector_relative_ratio>0 时改用相对阈值 top_score*ratio（对齐关键词通道语义）
+            rel = getattr(settings.rag, "vector_relative_ratio", 0.0) or 0.0
+            top_raw = max((s for _, s in doc_scores if s is not None), default=None)
+            threshold = (
+                top_raw * rel
+                if (rel > 0 and top_raw is not None)
+                else settings.rag.min_vector_similarity
+            )
             filtered: list[Evidence] = []
             for e, score in doc_scores:
-                if score is not None and score >= settings.rag.min_vector_similarity:
+                if score is not None and score >= threshold:
                     e.gate_passed = True
                     filtered.append(e)
                 else:
                     e.gate_passed = False
-            # 软近邻兜底：当全部 vector 证据均低于硬阈值时，若 top-1 落在 85% 软门限内，予以保底保留
+            # 软近邻兜底：全部低于阈值时，若 top-1 落在 near_miss 比例内，予以保底保留
+            near_miss = getattr(settings.rag, "vector_near_miss_ratio", 0.85)
             if not filtered and doc_scores:
                 top_e, top_s = max(doc_scores, key=lambda x: x[1] if x[1] is not None else -1.0)
-                if top_s is not None and top_s >= settings.rag.min_vector_similarity * 0.85:
+                if top_s is not None and top_s >= threshold * near_miss:
                     top_e.gate_passed = True
                     filtered.append(top_e)
                     logger.info(
                         "vector_gate_near_miss_fallback",
                         top_score=top_s,
-                        min_threshold=settings.rag.min_vector_similarity,
+                        min_threshold=threshold,
                     )
             return RetrievalChannelResult(channel_name=result.channel_name, documents=filtered)
 

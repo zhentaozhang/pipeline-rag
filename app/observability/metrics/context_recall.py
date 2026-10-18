@@ -4,9 +4,16 @@ from typing import Any
 
 import structlog
 
-from app.observability.metrics.base import Metric, MetricResult, parse_json_safe
+from app.config import get_settings
+from app.observability.metrics.base import (
+    Metric,
+    MetricResult,
+    compose_bounded_context,
+    parse_json_safe,
+)
 
 logger = structlog.get_logger(__name__)
+settings = get_settings()
 
 _EXTRACT_PROMPT = """Break the ground truth answer down into individual factual statements.
 Return JSON: {"statements": ["statement 1", "statement 2", ...]}"""
@@ -58,17 +65,21 @@ class ContextRecallMetric(Metric):
             or "{}"
         )
         extracted = parse_json_safe(raw, default={"statements": []})
-        statements = extracted.get("statements", [])  # type: ignore[union-attr]
+        statements = extracted.get("statements", []) if isinstance(extracted, dict) else []
 
         if not statements:
+            # 无法从标准答案抽取事实命题（多为解析失败）：不计入均值，避免"空即满分"
             return MetricResult(
                 metric_name="context_recall",
-                value=1.0,
+                value=0.0,
                 reason="no statements to verify",
                 metadata={},
+                failed=True,
             )
 
-        context_str = "\n\n".join(contexts) if contexts else ""
+        context_str = compose_bounded_context(
+            contexts, max_chars=getattr(settings.rag, "eval_context_max_chars", 20000)
+        )
 
         # JEV System 1 并行 Noul 评测优化（替代 LLM 第二阶段 NLI 覆盖判断）
         from app.infra.jev_client import jev_decide
@@ -140,12 +151,20 @@ class ContextRecallMetric(Metric):
             or "{}"
         )
         coverage = parse_json_safe(raw2, default={"verdicts": [], "reasons": []})
-        verdicts = coverage.get("verdicts", [])  # type: ignore[union-attr]
-        reasons = coverage.get("reasons", [])  # type: ignore[union-attr]
+        verdicts = coverage.get("verdicts", []) if isinstance(coverage, dict) else []
+        reasons = coverage.get("reasons", []) if isinstance(coverage, dict) else []
 
         total = len(verdicts)
+        if total == 0:
+            return MetricResult(
+                metric_name="context_recall",
+                value=0.0,
+                reason="empty coverage verdicts",
+                metadata={},
+                failed=True,
+            )
         covered = sum(verdicts)
-        score = covered / total if total > 0 else 1.0
+        score = covered / total
         return MetricResult(
             metric_name="context_recall",
             value=score,

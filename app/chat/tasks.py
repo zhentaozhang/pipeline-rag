@@ -346,8 +346,19 @@ def task_evaluate_dataset_item(self, dataset_id: int) -> dict:
             dataset.context_recall_score = _dec("context_recall")
             dataset.answer_correctness_score = _dec("answer_correctness")
 
+            eval_details = {
+                "scores": score_map,
+                "diagnostics": {
+                    r.metric_name: {
+                        "value": r.value,
+                        "reason": r.reason,
+                        "metadata": r.metadata,
+                    }
+                    for r in metric_results
+                },
+            }
             dataset.status = 2  # 已评估
-            dataset.eval_message = "Eval completed successfully via LLM Judge."
+            dataset.eval_message = json.dumps(eval_details, ensure_ascii=False, default=str)
             dataset.evaluated_at = datetime.now(UTC)
             await session.commit()
 

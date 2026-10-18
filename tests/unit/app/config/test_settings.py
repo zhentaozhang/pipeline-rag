@@ -106,7 +106,7 @@ class TestPipelineSettings:
         assert s.result_backend == "redis://localhost:6379/2"
 
     def test_rag_budget_defaults(self, monkeypatch):
-        s = RAGSettings()
+        s = RAGSettings(_env_file=None)
         assert s.prompt_budget_total == 5200
         assert s.prompt_budget_per_subquestion == 2200
         assert s.max_sub_questions == 4

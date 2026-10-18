@@ -1,0 +1,31 @@
+{
+  "round": "latest",
+  "total": 1,
+  "averages": {
+    "faithfulness": 1.0,
+    "recall_at_5": 1.0,
+    "recall_at_10": 1.0,
+    "answer_relevancy": 0.95,
+    "context_precision": 1.0,
+    "answer_correctness": 0.85,
+    "context_recall": 1.0
+  },
+  "failed": [],
+  "results": [
+    {
+      "question_id": "emp001",
+      "question": "试用期时长是如何根据劳动合同期限确定的？",
+      "ground_truth": "合同期限3个月以上不满1年试用期1个月；1年以上不满3年为2个月；3年以上或无固定期限为6个月。",
+      "generated_answer": "根据证据，试用期时长按劳动合同期限分为三档确定 [1]：\n\n1. **合同期限3个月以上不满1年**：试用期 **1个月** [1]\n2. **合同期限1年以上不满3年**：试用期 **2个月** [1]\n3. **合同期限3年以上或无固定期限**：试用期 **6个月** [1]\n\n此外，证据还包含与试用期相关的其他规定：试用期薪酬为转正薪酬的80%，且不低于当地最低工资标准；试用期第2个月末进行中期回顾，结束前15天进行终期评估；考核评分≥70分且无重大违规违纪记录方可转正，未达标者可延长试用期1个月（仅一次机会）或协商解除劳动关系 [1]。试用期员工主动辞职须提前3天书面通知 [2][3]。\n\n需要说明的是，当前证据未涉及\"合同期限不满3个月\"情形下试用期的规定，因此无法就这一情形给出结论。",
+      "faithfulness_score": 1.0,
+      "answer_relevancy_score": 0.95,
+      "context_precision_score": 1.0,
+      "answer_correctness_score": 0.85,
+      "context_recall_score": 1.0,
+      "recall_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "retrieval_ms": 981.6,
+      "generation_ms": 1438.5
+    }
+  ]
+}

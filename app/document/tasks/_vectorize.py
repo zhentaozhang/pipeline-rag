@@ -162,6 +162,17 @@ def task_vectorize_document(self, chunk_result: dict, doc_id: str) -> dict:
             return vec_count
 
         count = run_async(_do_vectorize())
+        # P0-1: 把 LLM 生成的 chunk 上下文回写到序列化结果，供下游 index 阶段做 Contextual BM25
+        # （默认无上下文时不改动任何字段，保持既有行为）
+        ctx_by_id = {
+            c.chunk_id: c.contextual_context for c in chunks if getattr(c, "contextual_context", "")
+        }
+        if ctx_by_id:
+            for cd in chunk_dicts:
+                cid = cd.get("chunk_id")
+                if cid in ctx_by_id:
+                    cd["contextual_context"] = ctx_by_id[cid]
+            logger.info("contextual_context propagated to index stage", count=len(ctx_by_id))
         _save_log(
             doc_id,
             self.request.id,

@@ -455,11 +455,23 @@ class RagChatExecutor(ConversationExecutor):
             and random.random() < settings.rag.evaluation_sample_rate
         ):
             try:
-                contexts_list: list[str] = []
+                from app.chat.schema import Evidence
+
+                seen_chunk_ids: set[str] = set()
+                all_evidences: list[Evidence] = []
                 for sq in sub_question_list:
                     for ev in sq.evidences:
-                        if ev.content:
-                            contexts_list.append(ev.content)
+                        if not ev.content:
+                            continue
+                        cid = ev.chunk_id or ev.content[:64]
+                        if cid not in seen_chunk_ids:
+                            seen_chunk_ids.add(cid)
+                            all_evidences.append(ev)
+                all_evidences.sort(
+                    key=lambda x: x.rerank_score if x.rerank_score > 0 else x.score,
+                    reverse=True,
+                )
+                contexts_list: list[str] = [ev.content for ev in all_evidences]
                 self.task._pending_eval = {
                     "question": plan.original_question,
                     "answer": final_answer,

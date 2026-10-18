@@ -4,9 +4,16 @@ from typing import Any
 
 import structlog
 
-from app.observability.metrics.base import Metric, MetricResult, parse_json_safe
+from app.config import get_settings
+from app.observability.metrics.base import (
+    Metric,
+    MetricResult,
+    compose_bounded_context,
+    parse_json_safe,
+)
 
 logger = structlog.get_logger(__name__)
+settings = get_settings()
 
 _PROMPT = """You are evaluating the relevance of retrieved context chunks for a question.
 
@@ -76,13 +83,14 @@ class ContextPrecisionMetric(Metric):
         # JEV System 1 并行 Noul 评测优化（单 pass 评估全部检索块相关性）
         from app.infra.jev_client import jev_decide
 
+        _MAX_CHUNK_CHARS = 1500
         questions = {
             f"chunk_{i}": {
                 "type": "noul",
                 "instructions": (
                     f"该证据片段是否包含有助于回答以下问题的事实信息？\n"
                     f"问题：{question}\n"
-                    f"片段内容：{c[:280]}"
+                    f"片段内容：{c[:_MAX_CHUNK_CHARS]}"
                 ),
             }
             for i, c in enumerate(contexts)
@@ -127,7 +135,11 @@ class ContextPrecisionMetric(Metric):
         if jev_result is not None:
             return jev_result
 
-        chunks_text = "\n\n---\n\n".join(f"Chunk {i + 1}: {c}" for i, c in enumerate(contexts))
+        # 按 chunk 边界裁剪，避免超长上下文被 provider 静默截断（与 faithfulness/recall 口径一致）
+        chunks_text = compose_bounded_context(
+            [f"Chunk {i + 1}: {c}" for i, c in enumerate(contexts)],
+            max_chars=getattr(settings.rag, "eval_context_max_chars", 20000),
+        )
         raw = (
             await self._call_llm(
                 tracer=tracer,
@@ -144,11 +156,15 @@ class ContextPrecisionMetric(Metric):
             or "{}"
         )
         data = parse_json_safe(raw, default={"relevance": []})
-        relevance = data.get("relevance", [])  # type: ignore[union-attr]
+        relevance = data.get("relevance", []) if isinstance(data, dict) else []
 
         if not relevance:
             return MetricResult(
-                metric_name="context_precision", value=0.0, reason="parse error", metadata={}
+                metric_name="context_precision",
+                value=0.0,
+                reason="parse error",
+                metadata={},
+                failed=True,
             )
 
         total = len(relevance)

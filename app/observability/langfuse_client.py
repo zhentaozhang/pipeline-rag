@@ -63,17 +63,18 @@ def get_trace_url(trace_id: str) -> str | None:
     client = get_langfuse()
     if client is None:
         return None
-    url = client.get_trace_url(trace_id=trace_id)
-    if not url:
+    raw_url = client.get_trace_url(trace_id=trace_id)
+    if not raw_url:
         return None
+    url_str = str(raw_url)
     public = get_settings().langfuse.public_url.strip()
     if public:
         from urllib.parse import urlsplit, urlunsplit
 
-        parts = urlsplit(url)
+        parts = urlsplit(url_str)
         pub = urlsplit(public)
-        url = urlunsplit((pub.scheme, pub.netloc, parts.path, parts.query, parts.fragment))
-    return url
+        url_str = urlunsplit((pub.scheme, pub.netloc, parts.path, parts.query, parts.fragment))
+    return url_str
 
 
 def record_standalone_generation(

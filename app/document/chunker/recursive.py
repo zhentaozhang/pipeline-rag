@@ -5,8 +5,7 @@ import structlog
 from app.document.chunker.config import ChunkConfig
 from app.document.chunker.models import Chunk
 from app.document.chunker.sentence_splitter import split_text
-from app.document.chunker.utils import count_tokens
-from app.infra.id_generator import next_id_str
+from app.document.chunker.utils import count_tokens, make_chunk_id
 
 logger = structlog.get_logger(__name__)
 
@@ -27,7 +26,7 @@ class RecursiveChunker:
 
             results.append(
                 Chunk(
-                    chunk_id=next_id_str(),
+                    chunk_id=make_chunk_id(doc_id, txt, i, "child"),
                     doc_id=doc_id,
                     content=txt,
                     chunk_index=i,
@@ -48,7 +47,9 @@ class RecursiveChunker:
             if p_chunk.token_count <= config.chunk_size:
                 results.append(
                     Chunk(
-                        chunk_id=next_id_str(),
+                        chunk_id=make_chunk_id(
+                            p_chunk.doc_id, p_chunk.content, len(results), "child"
+                        ),
                         doc_id=p_chunk.doc_id,
                         content=p_chunk.content,
                         chunk_index=len(results),
@@ -79,7 +80,7 @@ class RecursiveChunker:
 
                     results.append(
                         Chunk(
-                            chunk_id=next_id_str(),
+                            chunk_id=make_chunk_id(p_chunk.doc_id, txt, len(results), "child"),
                             doc_id=p_chunk.doc_id,
                             content=txt,
                             chunk_index=len(results),

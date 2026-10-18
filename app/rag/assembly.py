@@ -284,6 +284,23 @@ class PromptAssemblyService:
             blocks.append(f"## 子问题{idx}：{se.sub_question.text}\n{ref_text}")
         return "\n\n".join(blocks)
 
+    def _ordered_evidences(self, evidences: list[Evidence], budget: PromptBudget) -> list[Evidence]:
+        """P2-7 LongContextReorder：预算充足时把最相关证据放到首尾。
+
+        若整组证据放不进当前可用预算（会发生截断/省略），则保持原相关度顺序——
+        确保截断仍优先丢弃**最不相关**的尾部，而不是被重排挤到末尾的次相关项。
+        """
+        if not getattr(settings.rag, "long_context_reorder_enabled", False) or len(evidences) < 3:
+            return evidences
+        from app.rag.reorder import reorder_long_context
+
+        ordered = reorder_long_context(evidences)
+        available = min(budget.remaining_total, budget.remaining_sub_question)
+        estimated = sum(len(self._render_reference_block(ev)) for ev in ordered)
+        if estimated > available:
+            return evidences
+        return ordered
+
     def _append_references(
         self,
         evidences: list[Evidence],
@@ -296,7 +313,7 @@ class PromptAssemblyService:
         builder = []
         omitted = False
 
-        for ev in evidences:
+        for ev in self._ordered_evidences(evidences, budget):
             unique_key = self._unique_key(ev)
             if unique_key in rendered_keys:
                 reuse_line = f"- 复用证据 [{ev.reference_id or ''}]"
@@ -361,7 +378,9 @@ class PromptAssemblyService:
         ref_id = ev.reference_id or ""
         doc_name = ev.title or "文档来源"
         section_path = ev.section_title or "未识别"
-        snippet = self._trim_snippet(ev.content, 1100)
+        snippet = self._trim_snippet(
+            ev.content, getattr(settings.rag, "reference_snippet_max_chars", 2000)
+        )
         return f"[{ref_id}] 文档：{doc_name}；章节：{section_path}\n内容：{snippet}\n"
 
     def _extract_soft_window(self, content: str, anchor: str | None, max_chars: int) -> str:

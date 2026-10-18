@@ -484,7 +484,18 @@ async def build_chunks(db: AsyncSession, doc_id: str, text: str, task_id: str = 
     # 1. 执行父块策略 (Parent Strategy)
     if parent_strategies:
         if ChunkStrategyType.STRUCTURE in parent_strategies:
-            parent_chunks = await StructureChunker().chunk(text, doc_id, ChunkConfig())
+            from app.config import get_settings
+
+            _chunk_cfg = get_settings().chunk
+            parent_chunks = await StructureChunker().chunk(
+                text,
+                doc_id,
+                ChunkConfig(
+                    merge_small_sections=_chunk_cfg.merge_small_sections_enabled,
+                    merge_target_tokens=_chunk_cfg.merge_target_tokens,
+                    merge_max_tokens=_chunk_cfg.merge_max_tokens,
+                ),
+            )
         elif ChunkStrategyType.RECURSIVE in parent_strategies:
             parent_chunks = await RecursiveChunker().chunk(
                 text, doc_id, ChunkConfig(chunk_size=1500, min_chunk_size=100)

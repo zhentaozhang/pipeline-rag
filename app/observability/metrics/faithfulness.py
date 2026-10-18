@@ -5,11 +5,18 @@ from typing import Any
 import structlog
 from pydantic import BaseModel
 
-from app.observability.metrics.base import Metric, MetricResult, parse_json_safe
+from app.config import get_settings
+from app.observability.metrics.base import (
+    Metric,
+    MetricResult,
+    compose_bounded_context,
+    parse_json_safe,
+)
 
 logger = structlog.get_logger(__name__)
+settings = get_settings()
 
-_MAX_CONTEXT_CHARS = 8000
+_compose_bounded_context = compose_bounded_context
 
 
 class StatementExtraction(BaseModel):
@@ -82,20 +89,31 @@ class FaithfulnessMetric(Metric):
         )
         data = parse_json_safe(raw, default={"statements": []})
         try:
-            extracted = StatementExtraction(**data)  # type: ignore[arg-type]
+            if not isinstance(data, dict):
+                raise ValueError("extraction output is not a JSON object")
+            extracted = StatementExtraction(**data)
         except (TypeError, ValueError):
             return MetricResult(
-                metric_name="faithfulness", value=0.0, reason="parse error", metadata={}
+                metric_name="faithfulness",
+                value=0.0,
+                reason="parse error",
+                metadata={},
+                failed=True,
             )
 
         if not extracted.statements:
+            # 无命题可验（多为抽取失败或空回答）：不计入均值，避免"空即满分"抬高指标
             return MetricResult(
-                metric_name="faithfulness", value=1.0, reason="no statements to verify", metadata={}
+                metric_name="faithfulness",
+                value=0.0,
+                reason="no statements to verify",
+                metadata={},
+                failed=True,
             )
 
-        context_str = "\n\n".join(contexts)
-        if len(context_str) > _MAX_CONTEXT_CHARS:
-            context_str = context_str[:_MAX_CONTEXT_CHARS] + "\n\n[...truncated]"
+        context_str = _compose_bounded_context(
+            contexts, max_chars=getattr(settings.rag, "eval_context_max_chars", 20000)
+        )
 
         # JEV System 1 Noul 评测优化（单 pass 并行判定，无需 LLM 自回归与 JSON 反序列化）
         from app.infra.jev_client import jev_decide
@@ -114,6 +132,7 @@ class FaithfulnessMetric(Metric):
             verdicts = []
             reasons = []
             scores = []
+            weights = []
             for i in range(len(extracted.statements)):
                 key = f"stmt_{i}"
                 res = answers.get(key)
@@ -121,12 +140,22 @@ class FaithfulnessMetric(Metric):
                     raise ValueError(f"JEV response missing valid evaluation for {key}")
                 prob = float(res.get("noul", 0.0))
                 scores.append(prob)
+                if prob >= 0.55:
+                    w = 1.0
+                elif prob <= 0.45:
+                    w = 0.0
+                else:
+                    w = (prob - 0.45) / 0.10
+                weights.append(w)
                 is_sup = 1 if prob >= 0.50 else 0
                 verdicts.append(is_sup)
-                reasons.append(f"命题{i + 1}: {'支持' if is_sup else '无支持'}(置信度={prob:.2f})")
+                reasons.append(
+                    f"命题{i + 1}: {'支持' if is_sup else '无支持'}(置信度={prob:.2f}, 权重={w:.2f})"
+                )
             total = len(verdicts)
             supported = sum(verdicts)
-            score = supported / total if total > 0 else 1.0
+            weighted_support = round(sum(weights), 4)
+            score = round(weighted_support / total, 4) if total > 0 else 1.0
             return MetricResult(
                 metric_name="faithfulness",
                 value=score,
@@ -134,7 +163,9 @@ class FaithfulnessMetric(Metric):
                 metadata={
                     "total_statements": total,
                     "supported": supported,
+                    "weighted_support": weighted_support,
                     "scores": scores,
+                    "weights": weights,
                     "evaluated_by": "jev-system-one",
                 },
             )
@@ -169,15 +200,29 @@ class FaithfulnessMetric(Metric):
         )
         nli_data = parse_json_safe(raw2, default={"verdicts": [], "reasons": []})
         try:
-            nli = NLIResult(**nli_data)  # type: ignore[arg-type]
+            if not isinstance(nli_data, dict):
+                raise ValueError("NLI output is not a JSON object")
+            nli = NLIResult(**nli_data)
         except (TypeError, ValueError):
             return MetricResult(
-                metric_name="faithfulness", value=0.0, reason="NLI parse error", metadata={}
+                metric_name="faithfulness",
+                value=0.0,
+                reason="NLI parse error",
+                metadata={},
+                failed=True,
             )
 
         total = len(nli.verdicts)
+        if total == 0:
+            return MetricResult(
+                metric_name="faithfulness",
+                value=0.0,
+                reason="empty NLI verdicts",
+                metadata={},
+                failed=True,
+            )
         supported = sum(nli.verdicts)
-        score = supported / total if total > 0 else 1.0
+        score = supported / total
         return MetricResult(
             metric_name="faithfulness",
             value=score,

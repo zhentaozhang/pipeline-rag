@@ -51,8 +51,25 @@ def parse_json_safe(
             continue
         return default
 
-    # 无任何候选片段：显式返回 None（此前依赖隐式落空返回，语义相同）
+    # 无任何候选片段：显式返回 None
     return None
+
+
+def compose_bounded_context(contexts: list[str], max_chars: int = 12000) -> str:
+    """按 chunk 完整边界组装上下文，避免文本切断导致的句子残缺与假性幻觉"""
+    selected: list[str] = []
+    current_len = 0
+    for c in contexts:
+        if not c:
+            continue
+        c_str = str(c).strip()
+        if not c_str:
+            continue
+        if selected and (current_len + len(c_str) > max_chars):
+            break
+        selected.append(c_str)
+        current_len += len(c_str)
+    return "\n\n---\n\n".join(selected) if selected else ""
 
 
 class MetricResult(BaseModel):
@@ -60,6 +77,9 @@ class MetricResult(BaseModel):
     value: float
     reason: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # 评测失败标记：裁判异常/超时/解析失败时置 True。此时 value 不具度量意义，
+    # 聚合侧必须将其排除，避免"失败被静默计入 0 分"污染均值。
+    failed: bool = False
 
     def __str__(self) -> str:
         return f"{self.metric_name}={self.value:.4f}"

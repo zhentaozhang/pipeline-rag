@@ -58,17 +58,32 @@ class AnswerRelevancyMetric(Metric):
                 "完全切题": 1.0,
             }
             level = score_data.get("score", "基本相关")
-            score = level_map.get(level, 0.50)
             conf = float(score_data.get("confidence", 1.0))
             distribution = (
                 score_data.get("distribution")
                 if isinstance(score_data.get("distribution"), dict)
                 else {}
             )
+            if distribution:
+                total_prob = 0.0
+                weighted_sum = 0.0
+                for lvl, w in level_map.items():
+                    try:
+                        p = float(distribution.get(lvl, 0.0))
+                    except (ValueError, TypeError):
+                        p = 0.0
+                    weighted_sum += p * w
+                    total_prob += p
+                if total_prob > 0.0:
+                    score = round(max(0.0, min(1.0, weighted_sum / total_prob)), 4)
+                else:
+                    score = level_map.get(level, 0.50)
+            else:
+                score = level_map.get(level, 0.50)
             return MetricResult(
                 metric_name="answer_relevancy",
                 value=score,
-                reason=f"JEV Score: {level} (置信度={conf:.2f})",
+                reason=f"JEV Score: {level} (期望得分={score:.4f}, 置信度={conf:.2f})",
                 metadata={
                     "level": level,
                     "confidence": conf,
@@ -107,8 +122,16 @@ class AnswerRelevancyMetric(Metric):
         )
         import re
 
-        match = re.search(r"\d+", content)
-        score = int(match.group()) / 100.0 if match else 0.0
+        score_match = re.search(
+            r"(?:score|得分|分数|relevance|rating)[^\d]*(\b100|\b[1-9]?[0-9])\b",
+            content,
+            re.IGNORECASE,
+        )
+        if score_match:
+            score = int(score_match.group(1)) / 100.0
+        else:
+            valid_nums = re.findall(r"\b(100|[1-9]?[0-9])\b", content)
+            score = int(valid_nums[-1]) / 100.0 if valid_nums else 0.0
         score = max(0.0, min(1.0, score))
         return MetricResult(
             metric_name="answer_relevancy",

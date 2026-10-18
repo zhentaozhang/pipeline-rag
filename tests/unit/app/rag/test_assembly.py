@@ -158,7 +158,10 @@ class TestRenderReferenceBlock:
         block = PromptAssemblyService()._render_web_reference(ev)
         assert "a" * 900 + "..." in block
 
-    def test_document_snippet_truncated_to_1100(self):
+    def test_document_snippet_truncated_to_config_limit(self, monkeypatch):
+        from app.config import get_settings
+
+        monkeypatch.setattr(get_settings().rag, "reference_snippet_max_chars", 1100)
         ev = make_ev(chunk_id="c1", ref_id=1, content="a" * 1500)
         block = PromptAssemblyService()._render_document_reference(ev)
         assert "a" * 1100 + "..." in block

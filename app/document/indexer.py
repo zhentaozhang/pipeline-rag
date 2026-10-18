@@ -18,6 +18,15 @@ class DocumentIndexer:
     将文档切片写入 Elasticsearch (全文索引) 和 Neo4j (知识图谱)。
     """
 
+    @staticmethod
+    def _compose_index_text(chunk: Chunk) -> str:
+        """P0-1 Contextual BM25：有 LLM 生成上下文时前置到索引文本（Anthropic 做法）。
+
+        仅影响 ES 检索匹配；无上下文（默认关闭）时等价于原 `chunk.content`，零行为变化。
+        """
+        ctx = getattr(chunk, "contextual_context", "") or ""
+        return f"{ctx}\n{chunk.content}" if ctx else chunk.content
+
     async def index_to_es(
         self,
         chunks: list[Chunk],
@@ -80,7 +89,7 @@ class DocumentIndexer:
                     "knowledgeScopeName": scope_name,
                     "businessCategory": business_category,
                     "documentTags": (document_tags or "").split(",") if document_tags else [],
-                    "chunkText": chunk.content,
+                    "chunkText": self._compose_index_text(chunk),
                 }
             )
 

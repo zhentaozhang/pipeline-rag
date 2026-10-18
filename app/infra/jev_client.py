@@ -28,14 +28,14 @@ T = TypeVar("T")
 _JEV_QUESTION_TYPES = frozenset({"noul", "choice", "score"})
 
 # 为 JEV 决策微服务注册独立熔断器（与 LLM / ES 独立隔离）
-# 连续失败 3 次即刻熔断开路，避免超时风暴阻塞 RAG 问答链路
+# 连续失败 5 次即刻熔断开路，单次硬超时由 10s 放宽至 60s（防御多并发下显存排队等待）
 _jev_breaker = CircuitBreakerRegistry.get_or_register(
     "jev",
     CircuitBreakerConfig(
         name="jev",
-        failure_threshold=3,
+        failure_threshold=5,
         recovery_timeout=30.0,
-        timeout=10.0,
+        timeout=60.0,
     ),
 )
 
@@ -50,7 +50,7 @@ class JEVClient:
         if not raw_url.startswith(("http://", "https://")):
             raw_url = f"http://{raw_url}"
         self._base_url = raw_url
-        self._timeout = max(1.0, float(getattr(jev_cfg, "timeout_seconds", 10.0) or 10.0))
+        self._timeout = max(1.0, float(getattr(jev_cfg, "timeout_seconds", 60.0) or 60.0))
         self._client: httpx.AsyncClient | None = None
         self._loop: Any = None
 

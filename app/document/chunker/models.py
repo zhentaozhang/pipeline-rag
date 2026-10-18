@@ -28,3 +28,5 @@ class Chunk:
     item_index: int = 0
     document_id: int = 0
     plan_id: int | None = None
+    # P0-1 真 Contextual Retrieval：LLM 生成的 chunk 文档内上下文（仅检索用，不改变正文存储）
+    contextual_context: str = ""

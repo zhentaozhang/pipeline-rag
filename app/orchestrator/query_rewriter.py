@@ -46,6 +46,33 @@ def _looks_like_explicit_multi_question(question: str) -> bool:
     return "分别" in normalized
 
 
+# 条件型/多约束复合问题触发词（P2 多跳拆分，保守触发）
+_COMPOUND_QUESTION_HINTS = (
+    "并且",
+    "以及",
+    "同时",
+    "另外",
+    "如果",
+    "满足",
+    "前提下",
+    "且",
+)
+
+
+def _looks_like_compound_question(question: str) -> bool:
+    """判断是否为"需组合多个条款/条件才能回答"的复合问题（用于多跳拆分护栏）。
+
+    与 `_looks_like_explicit_multi_question` 互补：后者只认显式分隔符/多问号，
+    本函数额外覆盖"单句但含条件连接词"的业务多跳题（如"转正满一年且考核S级…"）。
+    """
+    normalized = (question or "").strip()
+    if not normalized:
+        return False
+    if _looks_like_explicit_multi_question(normalized):
+        return True
+    return any(hint in normalized for hint in _COMPOUND_QUESTION_HINTS)
+
+
 _FOLLOW_UP_REFERENCE_PATTERN = re.compile(
     r"(刚才|上面|前面|前文|上文|上一[条轮个项次]|上述|前者|后者|承接|同上|如上|"
     r"第\s*[0-9一二三四五六七八九十百]+\s*(条|点|项)|"
@@ -179,7 +206,7 @@ class ChatQueryRewriteService:
     同时包含 AnswerHistoryContext 组装逻辑。
     """
 
-    SYSTEM_PROMPT = """你是一个面向 RAG 文档检索的查询改写专家。
+    _PROMPT_HEADER = """你是一个面向 RAG 文档检索的查询改写专家。
 
 任务：将【用户问题】改写为更适合向量检索和关键词检索的形式。
 输出要求：只返回 JSON，不要输出额外解释。
@@ -213,10 +240,21 @@ JSON 格式：
 3. 关键词用于辅助向量检索，应选择文档中可能出现的高频技术词汇
 4. 如果问题中文为主，关键词可以用中文
 
-拆分规则（sub_questions）：
+"""
+
+    _SPLIT_RULES_LEGACY = """拆分规则（sub_questions）：
 1. 默认 should_split=false，sub_questions 只保留 1 条
 2. 只有原文显式存在多个独立问题时才拆分（多个问号、分号、换行、编号、明确"分别"）
 3. 抽象对比、笼统追问一律不拆分"""
+
+    _SPLIT_RULES_MULTI_HOP = """拆分规则（sub_questions）：
+1. 默认 should_split=false，sub_questions 只保留 1 条
+2. 当问题为条件型/多约束（需组合多个条款、含"且/并且/同时/另外/以及/如果/满足/前提下"等连接或并列条件）才能完整回答时，拆为 2~3 个聚焦单一事实的子查询，并置 should_split=true
+3. 只有原文显式存在多个独立问题时也拆分（多个问号、分号、换行、编号、明确"分别"）
+4. 抽象对比、笼统追问、单一事实问题一律不拆分"""
+
+    SYSTEM_PROMPT = _PROMPT_HEADER + _SPLIT_RULES_LEGACY
+    SYSTEM_PROMPT_MULTI_HOP = _PROMPT_HEADER + _SPLIT_RULES_MULTI_HOP
 
     def __init__(self) -> None:
         from app.common.llm_client import get_chat_client
@@ -269,10 +307,15 @@ JSON 格式：
         try:
             from app.common.llm_client import llm_breaker
 
+            system_prompt = (
+                self.SYSTEM_PROMPT_MULTI_HOP
+                if settings.rag.multi_hop_split_enabled
+                else self.SYSTEM_PROMPT
+            )
             create_kwargs: dict = {
                 "model": settings.llm.model,
                 "messages": [
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": settings.rag.rewrite_temperature,
@@ -453,9 +496,16 @@ JSON 格式：
             intent = "knowledge"
 
         explicit_multi = _looks_like_explicit_multi_question(original_question)
-        should_split = bool(should_split_val) if should_split_val is not None else explicit_multi
+        # P2 多跳拆分：仅当开关开启时，才把"条件型单句问题"也视为可拆分
+        compound = settings.rag.multi_hop_split_enabled and _looks_like_compound_question(
+            original_question
+        )
+        llm_multi = len({s for s in sub_questions if s}) >= 2
+        should_split = (
+            bool(should_split_val) if should_split_val is not None else (explicit_multi or compound)
+        )
 
-        if not should_split and not explicit_multi:
+        if not should_split and not explicit_multi and not (compound and llm_multi):
             sub_questions = [rewrite]
         elif not sub_questions and not should_split:
             fallback_split = _rule_based_split(original_question, settings.rag.max_sub_questions)

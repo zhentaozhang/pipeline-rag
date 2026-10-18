@@ -1,0 +1,88 @@
+{
+  "provenance": {
+    "judge_model": "deepseek-v4-flash",
+    "variant": "v2",
+    "keyword_channel_enabled": true,
+    "rerank_enabled": true,
+    "online_jev_enabled": false,
+    "vector_top_k": 50,
+    "keyword_top_k": 50,
+    "candidate_top_k": 50,
+    "final_top_k": 8,
+    "rrf_k": 60,
+    "rrf_vector_weight": 1.0,
+    "rrf_keyword_weight": 1.0,
+    "rerank_top_n": 10,
+    "rerank_min_score": 0.35,
+    "rerank_relative_ratio": 0.35,
+    "total_questions": 1
+  },
+  "round": "smoke_v2",
+  "total": 1,
+  "averages": {
+    "faithfulness": 1.0,
+    "recall_at_5": 1.0,
+    "recall_at_10": 1.0,
+    "answer_relevancy": 0.95,
+    "context_precision": 1.0,
+    "answer_correctness": 0.85,
+    "context_recall": 1.0
+  },
+  "stage_attribution_summary": {
+    "total_snippets": 2,
+    "hit": 2,
+    "cutoff_dropped": 0,
+    "rerank_demoted": 0,
+    "fusion_dropped": 0,
+    "unrecalled": 0,
+    "hit_rate": 1.0,
+    "cutoff_drop_rate": 0.0,
+    "rerank_demote_rate": 0.0,
+    "fusion_drop_rate": 0.0,
+    "unrecalled_rate": 0.0
+  },
+  "failed": [],
+  "results": [
+    {
+      "question_id": "emp001",
+      "question": "试用期时长是如何根据劳动合同期限确定的？",
+      "ground_truth": "合同期限3个月以上不满1年试用期1个月；1年以上不满3年为2个月；3年以上或无固定期限为6个月。",
+      "generated_answer": "根据证据材料，试用期时长按劳动合同期限分为三档确定 [1]：\n\n1. **合同期限3个月以上不满1年**：试用期 **1个月** [1]\n2. **合同期限1年以上不满3年**：试用期 **2个月** [1]\n3. **合同期限3年以上或无固定期限**：试用期 **6个月** [1]\n\n此外，与试用期相关的配套规定还包括 [1]：\n\n- **试用期薪酬**：为转正薪酬的80%，且不低于当地最低工资标准 [1]。\n- **试用期考核**：第2个月末进行中期回顾，结束前15天进行终期评估；考核维度包括任务完成度、团队协作、文化契合度 [1]。\n- **转正条件**：考核评分≥70分且无重大违规违纪记录；未达标者延长试用期1个月（仅一次机会）或协商解除劳动关系 [1]。\n- **辞职通知期限**：试用期员工须提前3个自然日提交书面辞职申请 [3][4]。\n\n需要说明的是，当前检索到的证据仅覆盖\"3个月以上\"起算的合同期限档位，对于**合同期限不满3个月**的情形（是否可约定试用期）未作规定，该部分信息缺失。",
+      "retrieved_contexts": [
+        "[1] 【章节路径：第5条 试用期规定】\n### 第5条 试用期规定\n**5.1** 试用期按劳动合同期限确定：\n- 合同期限3个月以上不满1年：试用期1个月\n- 合同期限1年以上不满3年：试用期2个月\n- 合同期限3年以上或无固定期限：试用期6个月\n**5.2** 试用期薪酬为转正薪酬的80%，不低于当地最低工资标准。\n**5.3** 试用期考核：第2个月末进行中期回顾，结束前15天进行终期评估。考核维度包括：任务完成度、团队协作、文化契合度。\n**5.4** 转正条件：考核评分≥70分，无重大违规违纪记录。未达标者延长试用期1个月（仅一次机会）或协商解除劳动关系。",
+        "[2] 【章节路径：第6条 劳动合同管理】\n### 第6条 劳动合同管理\n**6.1** 合同到期前45天启动续签评估，HRBP协同部门负责人确定续签意向。\n**6.2** 连续两次固定期限合同到期后，第三次续签须签订无固定期限合同。\n**6.3** 员工主动辞职须提前30天书面通知（试用期提前3天），以书面签收日期为起算日。\n**6.4** 离职交接清单须经以下5个节点签字确认：直属上级→HRBP→财务部→IT部→行政部。",
+        "[3] 【章节路径：第一条 法律依据与通知期限】\n### 第一条 法律依据与通知期限\n根据《中华人民共和国劳动合同法》及华远科技集团劳动合同约定，员工提出解除劳动合同应严格遵循法定期限：\n1. **试用期员工**：须提前 **3 个自然日** 在集团人力资源系统（HR Cloud）提交书面辞职申请，并抄送直接部门主管。\n2. **正式期转正员工**：须提前 **30 个自然日** 在系统提交正式书面辞职申请。若未经公司书面同意擅自提前离岗导致岗位工作脱节或给公司造成经济损失的，员工应承担相应赔偿责任。\n3. **协商一致解除**：由公司与员工本着公平自愿原则协商达成一致，并签订《协商解除劳动合同协议书》。\n---",
+        "[4] 【章节路径：第一条 法律依据与通知期限】\n1. **试用期员工**：须提前 **3 个自然日** 在集团人力资源系统（HR Cloud）提交书面辞职申请，并抄送直接部门主管。"
+      ],
+      "stage_attribution": {
+        "stats": {
+          "total": 2,
+          "hit": 2,
+          "cutoff_dropped": 0,
+          "rerank_demoted": 0,
+          "fusion_dropped": 0,
+          "unrecalled": 0
+        },
+        "breakdown": [
+          {
+            "snippet": "合同期限3个月以上不满1年：试用期1个月",
+            "stage": "hit"
+          },
+          {
+            "snippet": "合同期限3年以上或无固定期限：试用期6个月",
+            "stage": "hit"
+          }
+        ]
+      },
+      "faithfulness_score": 1.0,
+      "answer_relevancy_score": 0.95,
+      "context_precision_score": 1.0,
+      "answer_correctness_score": 0.85,
+      "context_recall_score": 1.0,
+      "recall_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "retrieval_ms": 1065.3,
+      "generation_ms": 1570.1
+    }
+  ]
+}

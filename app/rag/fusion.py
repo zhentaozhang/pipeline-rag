@@ -12,14 +12,18 @@ def rrf_fusion(
     vector_hits: list[Evidence],
     keyword_hits: list[Evidence],
     k: int = 60,
+    vector_weight: float = 1.0,
+    keyword_weight: float = 1.0,
 ) -> list[Evidence]:
     """
     RRF 融合两个检索通道的结果。
 
     Args:
-        vector_hits:   向量通道结果（已按 score DESC 排序）
-        keyword_hits:  关键词通道结果（已按 score DESC 排序）
-        k:             RRF 参数，默认 60
+        vector_hits:    向量通道结果（已按 score DESC 排序）
+        keyword_hits:   关键词通道结果（已按 score DESC 排序）
+        k:              RRF 参数，默认 60（越小越强调单路头部排名）
+        vector_weight:  向量通道权重（默认 1.0，等权）
+        keyword_weight: 关键词通道权重（默认 1.0，等权）
 
     Returns:
         融合后按 rrf_score DESC 排序的 Evidence 列表（去重）
@@ -30,13 +34,13 @@ def rrf_fusion(
 
     # 向量通道贡献
     for rank, ev in enumerate(vector_hits, start=0):
-        scores[ev.chunk_id] = scores.get(ev.chunk_id, 0.0) + 1.0 / (k + rank + 1)
+        scores[ev.chunk_id] = scores.get(ev.chunk_id, 0.0) + vector_weight / (k + rank + 1)
         evidence_map[ev.chunk_id] = ev
         channels_map.setdefault(ev.chunk_id, set()).add("vector")
 
     # 关键词通道贡献
     for rank, ev in enumerate(keyword_hits, start=0):
-        scores[ev.chunk_id] = scores.get(ev.chunk_id, 0.0) + 1.0 / (k + rank + 1)
+        scores[ev.chunk_id] = scores.get(ev.chunk_id, 0.0) + keyword_weight / (k + rank + 1)
         if ev.chunk_id not in evidence_map:
             evidence_map[ev.chunk_id] = ev
         channels_map.setdefault(ev.chunk_id, set()).add("keyword")

@@ -10,8 +10,10 @@ import re
 import structlog
 
 from app.chat.schema import ExecutionPlan
+from app.config import get_settings
 
 logger = structlog.get_logger(__name__)
+settings = get_settings()
 
 # ── 正则 ──────────────────────────────────────────────────────────────────
 _YEAR_PATTERN = re.compile(r"\b(20\d{2})\b")
@@ -93,6 +95,21 @@ class DocumentRetrieveRequestFactory:
                 sub_q.document_tag_hints = filters["document_tag_hints"]
             if filters.get("year_hints"):
                 sub_q.year_hints = filters["year_hints"]
+            # P1-3：章节提示此前被抽出后丢弃。这里先落回 SubQuestion 供留痕/评测，
+            # 再在开关开启且**校验存在**时下推为 section_path 前缀过滤（双通道生效）。
+            if filters.get("section_path_hints"):
+                sub_q.section_path_hints = filters["section_path_hints"]
+                if getattr(settings.rag, "metadata_prefilter_enabled", False):
+                    from app.rag.metadata_filter import resolve_first_section_prefix
+
+                    resolved = await resolve_first_section_prefix(filters["section_path_hints"])
+                    if resolved:
+                        sub_q.section_path = resolved
+                        logger.info(
+                            "metadata_prefilter_applied",
+                            sub_question=normalized_question[:50],
+                            section_filter=resolved,
+                        )
 
             # ── 3. 导航段文档ID注入 ────────────────────────────────────────
             if plan.selected_document_id and not sub_q.doc_ids:

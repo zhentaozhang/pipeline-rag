@@ -4,8 +4,7 @@ import structlog
 
 from app.document.chunker.config import ChunkConfig
 from app.document.chunker.models import Chunk
-from app.document.chunker.utils import count_tokens
-from app.infra.id_generator import next_id_str
+from app.document.chunker.utils import count_tokens, make_chunk_id
 
 logger = structlog.get_logger(__name__)
 
@@ -123,7 +122,7 @@ class LLMChunker:
                     continue
                 seg_results.append(
                     Chunk(
-                        chunk_id=next_id_str(),
+                        chunk_id=make_chunk_id(doc_id, txt, start_index + i, "child"),
                         doc_id=doc_id,
                         content=txt,
                         chunk_index=start_index + i,

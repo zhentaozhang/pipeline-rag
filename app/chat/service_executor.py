@@ -17,6 +17,34 @@ from app.observability.trace_models import ChatDebugTrace
 
 logger = structlog.get_logger(__name__)
 
+_background_eval_tasks: set[asyncio.Task] = set()
+
+
+async def _run_eval_background(
+    pipeline: Any,
+    pending: dict[str, Any],
+    tracer: Any,
+    timeout_seconds: float,
+) -> None:
+    """在后台独立安全执行 RAG 评估与 Tracer 落盘，杜绝因客户端连接断开抛出 CancelledError"""
+    try:
+        results = await pipeline.run(
+            question=pending["question"],
+            answer=pending["answer"],
+            contexts=pending["contexts"],
+            tracer=tracer,
+            timeout=timeout_seconds,
+        )
+        for r in results:
+            logger.info("rag_eval_result", metric=r.metric_name, value=r.value)
+    except Exception:
+        logger.exception("rag_evaluation_failed")
+    finally:
+        try:
+            await asyncio.shield(tracer.flush())
+        except Exception:
+            logger.exception("tracer_flush_in_background_failed")
+
 
 async def execute_stream(
     db=None,
@@ -502,25 +530,24 @@ async def execute_stream(
         SSEEventType.DONE, conversation_id=conversation_id, exchange_id=temp_exchange_id
     )
 
-    # ── 延迟评估：DONE 发出后执行，再 flush（确保 eval scores 落盘）─
+    # ── 延迟评估：DONE 发出后在后台任务中安全执行，避免客户端断开导致 CancelledError ─
     pending = getattr(task, "_pending_eval", None)
     if pending:
         from app.observability.metrics.pipeline import EvaluationPipeline
 
-        try:
-            _pipeline = EvaluationPipeline.standard()
-            _results = await _pipeline.run(
-                question=pending["question"],
-                answer=pending["answer"],
-                contexts=pending["contexts"],
-                tracer=task.tracer,
-                timeout=settings.rag.evaluation_timeout_seconds,
+        _pipeline = EvaluationPipeline.standard()
+        bg_task = asyncio.create_task(
+            _run_eval_background(
+                _pipeline,
+                pending,
+                task.tracer,
+                settings.rag.evaluation_timeout_seconds,
             )
-            for _r in _results:
-                logger.info("rag_eval_result", metric=_r.metric_name, value=_r.value)
-        except Exception:
-            logger.exception("rag_evaluation_failed")
+        )
+        _background_eval_tasks.add(bg_task)
+        bg_task.add_done_callback(_background_eval_tasks.discard)
+    else:
+        await tracer.flush()
 
-    await tracer.flush()
     EXCHANGE_TOTAL.inc()
     ACTIVE_EXCHANGES.dec()
