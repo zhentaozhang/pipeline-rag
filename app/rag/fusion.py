@@ -1,7 +1,8 @@
 """
 RRF 融合（Reciprocal Rank Fusion）
 
-算法：score = 1/(K + rank_vector) + 1/(K + rank_keyword)，K=60
+算法：score = 1/(K + rank_vector) + 1/(K + rank_keyword)
+注意：本模块的 K 默认 60 仅为函数默认值，线上由 ``settings.rag.rrf_k`` 传入（默认 30）。
 两个通道分数量纲不同，无法直接比大小，RRF 按排名倒数法融合。
 """
 

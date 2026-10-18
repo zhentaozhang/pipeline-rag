@@ -370,7 +370,9 @@ class PromptAssemblyService:
         return self._render_document_reference(ev)
 
     def _render_web_reference(self, ev: Evidence) -> str:
-        snippet = self._trim_snippet(ev.content, 900)
+        snippet = self._trim_snippet(
+            ev.content, getattr(settings.rag, "reference_snippet_max_chars", 2000)
+        )
         return f"{self._web_header(ev)}{snippet}\n"
 
     @staticmethod

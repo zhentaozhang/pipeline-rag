@@ -15,6 +15,7 @@ def make_rerank_settings(**overrides):
         api_key="sk-test",
         model="bge-reranker-v2-m3",
         top_n=3,
+        keep_top_n=0,
         connect_timeout_ms=1000,
         read_timeout_ms=5000,
     )
@@ -117,7 +118,9 @@ class TestRerankCall:
         assert result[0].rerank_duration_ms >= 0
 
     @pytest.mark.asyncio
-    async def test_top_n_truncation(self, reranker, monkeypatch):
+    async def test_keep_top_n_truncation(self, reranker, monkeypatch, rerank_settings):
+        """本地截断只看 keep_top_n（本地保留条数），与 API 侧 top_n 解耦。"""
+        monkeypatch.setattr(rerank_settings, "keep_top_n", 3)
         fake = FakeClient(
             FakeResponse(
                 {"results": [{"index": i, "relevance_score": 1.0 - i / 10} for i in range(5)]}
@@ -127,6 +130,19 @@ class TestRerankCall:
 
         result = await reranker.rerank("q", [ev(f"c{i}") for i in range(5)])
         assert len(result) == 3
+
+    @pytest.mark.asyncio
+    async def test_legacy_top_n_does_not_truncate_locally(self, reranker, monkeypatch):
+        """旧配置只写了 top_n 时不得再当截断开关用 —— 那会造成无日志的静默封顶。"""
+        fake = FakeClient(
+            FakeResponse(
+                {"results": [{"index": i, "relevance_score": 1.0 - i / 10} for i in range(5)]}
+            )
+        )
+        monkeypatch.setattr(reranker_module, "_get_rerank_client", lambda: fake)
+
+        result = await reranker.rerank("q", [ev(f"c{i}") for i in range(5)])
+        assert len(result) == 5
 
     @pytest.mark.asyncio
     async def test_original_evidence_not_mutated(self, reranker, monkeypatch):

@@ -93,9 +93,12 @@ class Reranker:
                 results,
                 key=lambda r: -(float(r.get("relevance_score", 0))),
             )
-            top_n = int(getattr(settings.rerank, "top_n", 0) or 0)
-            if top_n > 0:
-                results_sorted = results_sorted[:top_n]
+            # 本地保留条数只看 keep_top_n（0 = 不截断）。
+            # 旧配置项 top_n 只用于 API 侧"送打分条数"，不再兼任本地截断开关，
+            # 否则 50 个候选重排完只留 10 个孩子进父块提升，且无任何日志。
+            keep_top_n = int(getattr(settings.rerank, "keep_top_n", 0) or 0)
+            if keep_top_n > 0:
+                results_sorted = results_sorted[:keep_top_n]
 
             reranked = []
             for item in results_sorted:

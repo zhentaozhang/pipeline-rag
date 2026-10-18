@@ -162,10 +162,24 @@ class TestRenderReferenceBlock:
         block = PromptAssemblyService()._render_document_reference(ev)
         assert "[1] 文档：文档A；章节：2.3\n内容：" in block
 
-    def test_web_snippet_truncated_to_900(self):
-        ev = make_ev(chunk_id="", ref_id=1, source_type="web", url="http://u", content="a" * 1200)
+    def test_web_snippet_uses_configured_limit(self, monkeypatch):
+        from app.config import get_settings
+
+        monkeypatch.setattr(get_settings().rag, "reference_snippet_max_chars", 500)
+        ev = make_ev(
+            chunk_id="", ref_id=1, source_type="web", url="http://u", content="a" * 400 + "b" * 800
+        )
         block = PromptAssemblyService()._render_web_reference(ev)
-        assert "a" * 900 + "..." in block
+        assert "a" * 400 + "b" * 100 + "..." in block
+        assert "b" * 101 not in block
+
+    def test_web_snippet_not_capped_below_config(self):
+        """网页证据不得被硬编码的 900 截断，必须与文档证据共用同一配置。"""
+        ev = make_ev(
+            chunk_id="", ref_id=1, source_type="web", url="http://u", content="a" * 400 + "b" * 800
+        )
+        block = PromptAssemblyService()._render_web_reference(ev)
+        assert "b" * 800 in block
 
     def test_document_snippet_truncated_to_config_limit(self, monkeypatch):
         from app.config import get_settings

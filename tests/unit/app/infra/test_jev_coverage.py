@@ -103,3 +103,25 @@ async def test_parse_error_is_counted_as_failed(monkeypatch):
 def test_reset_clears_counters():
     reset_jev_coverage()
     assert jev_coverage()["totals"]["attempted"] == 0
+
+
+@pytest.mark.asyncio
+async def test_latency_samples_are_capped(monkeypatch):
+    """常驻进程里延迟样本必须有上限，否则内存无界增长。"""
+    from app.infra import jev_client as jev_module
+
+    monkeypatch.setattr(
+        "app.infra.jev_client.get_settings", lambda: _settings(evidence_sufficiency_enabled=True)
+    )
+    fake = _FakeClient()
+    monkeypatch.setattr("app.infra.jev_client.get_jev_client", lambda: fake)
+
+    for _ in range(jev_module._MAX_COVERAGE_LATENCIES + 50):
+        await jev_decide("evidence_sufficiency_enabled", "s", {"q": {}}, _parse)
+
+    assert len(jev_module._COVERAGE_LATENCIES["evidence_sufficiency_enabled"]) <= (
+        jev_module._MAX_COVERAGE_LATENCIES
+    )
+    assert jev_coverage()["flags"]["evidence_sufficiency_enabled"]["decided"] == (
+        jev_module._MAX_COVERAGE_LATENCIES + 50
+    )

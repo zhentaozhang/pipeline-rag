@@ -1,0 +1,2739 @@
+{
+  "meta": {
+    "count": 210,
+    "per_chunk": 1,
+    "verified": true
+  },
+  "questions": [
+    {
+      "id": "gen2111417685869854727_0_9f4836",
+      "question": "公司为啥要修订这个差旅制度？",
+      "ground_truth_answer": "为进一步规范集团差旅管理，合理控制差旅费用，提高差旅效率，保障出差人员合理的工作与生活需要",
+      "relevant_chunk_ids": [
+        "2111417685869854727"
+      ],
+      "relevant_contexts": [
+        "为进一步规范集团差旅管理，合理控制差旅费用，提高差旅效率，保障出差人员合理的工作与生活需要"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685869854728_0_fe28bf",
+      "question": "这个制度都管哪些人？试用期和实习生算吗？",
+      "ground_truth_answer": "适用于华远科技集团及其全资/控股子公司全体员工（含试用期员工、实习生）。",
+      "relevant_chunk_ids": [
+        "2111417685869854728"
+      ],
+      "relevant_contexts": [
+        "适用于华远科技集团及其全资/控股子公司全体员工（含试用期员工、实习生）。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685869854729_0_945b5e",
+      "question": "A类出差城市包括哪些？",
+      "ground_truth_answer": "北京、上海、深圳、广州",
+      "relevant_chunk_ids": [
+        "2111417685869854729"
+      ],
+      "relevant_contexts": [
+        "北京、上海、深圳、广州"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685869854730_0_51b84e",
+      "question": "出差申请得在哪儿提交、什么时候提交？",
+      "ground_truth_answer": "所有出差行为须事前在OA系统中提交出差申请，经审批同意后方可出行。",
+      "relevant_chunk_ids": [
+        "2111417685869854730"
+      ],
+      "relevant_contexts": [
+        "所有出差行为须事前在OA系统中提交出差申请，经审批同意后方可出行。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685869854731_0_70d8a6",
+      "question": "总监级出差坐飞机，能坐商务舱吗？单程票价最高多少？",
+      "ground_truth_answer": "可乘坐商务舱/头等舱，单程票价不超过3000元",
+      "relevant_chunk_ids": [
+        "2111417685869854731"
+      ],
+      "relevant_contexts": [
+        "可乘坐商务舱/头等舱，单程票价不超过3000元"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685869854732_0_f23af8",
+      "question": "出差坐高铁，总监、经理和普通员工分别能坐什么座位？",
+      "ground_truth_answer": "总监级及以上（M4+）：商务座；经理级（M3）：一等座；员工级（P1-P7/M1-M2）：二等座。",
+      "relevant_chunk_ids": [
+        "2111417685869854732"
+      ],
+      "relevant_contexts": [
+        "总监级及以上（M4+）：商务座；经理级（M3）：一等座；员工级（P1-P7/M1-M2）：二等座。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685869854733_0_3e3cb3",
+      "question": "我自己开车出差，报销标准是多少？",
+      "ground_truth_answer": "1.2元/公里（含油费、过路费、车辆损耗）。",
+      "relevant_chunk_ids": [
+        "2111417685869854733"
+      ],
+      "relevant_contexts": [
+        "1.2元/公里（含油费、过路费、车辆损耗）。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685869854734_0_6ed8dd",
+      "question": "市内交通费每天包干多少钱？需要发票吗？",
+      "ground_truth_answer": "每人每天80元包干使用，无需发票。",
+      "relevant_chunk_ids": [
+        "2111417685869854734"
+      ],
+      "relevant_contexts": [
+        "每人每天80元包干使用，无需发票。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685869854735_0_b9ce14",
+      "question": "同性别两个人一起出差住宿怎么安排？",
+      "ground_truth_answer": "须合住一间（总监级及以上除外），按较高职级一方的标准执行。",
+      "relevant_chunk_ids": [
+        "2111417685869854735"
+      ],
+      "relevant_contexts": [
+        "须合住一间（总监级及以上除外），按较高职级一方的标准执行。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685869854736_0_190391",
+      "question": "去A类城市出差，餐饮补贴每天多少钱？",
+      "ground_truth_answer": "150元/天",
+      "relevant_chunk_ids": [
+        "2111417685869854736"
+      ],
+      "relevant_contexts": [
+        "150元/天"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685869854737_0_6dc6e1",
+      "question": "境外出差买当地SIM卡或者开国际漫游，报销上限是多少？",
+      "ground_truth_answer": "上限200元/次。",
+      "relevant_chunk_ids": [
+        "2111417685869854737"
+      ],
+      "relevant_contexts": [
+        "上限200元/次。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685869854738_0_56c78d",
+      "question": "出差回来报销最晚什么时候提交？",
+      "ground_truth_answer": "差旅结束后的15个工作日内提交，逾期不予受理。",
+      "relevant_chunk_ids": [
+        "2111417685869854738"
+      ],
+      "relevant_contexts": [
+        "差旅结束后的15个工作日内提交，逾期不予受理。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685869854739_0_fb0e6a",
+      "question": "超标报销的审批权限是怎么分的？",
+      "ground_truth_answer": "超标≤20%：部门负责人审批；超标20%-50%：事业部负责人审批；超标>50%：分管副总裁审批",
+      "relevant_chunk_ids": [
+        "2111417685869854739"
+      ],
+      "relevant_contexts": [
+        "超标≤20%：部门负责人审批；超标20%-50%：事业部负责人审批；超标>50%：分管副总裁审批"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049024_0_88b436",
+      "question": "报销单提交后超过48小时还没人审批会怎么处理？",
+      "ground_truth_answer": "超过48小时未审批的自动升级至上级的上级。",
+      "relevant_chunk_ids": [
+        "2111417685874049024"
+      ],
+      "relevant_contexts": [
+        "超过48小时未审批的自动升级至上级的上级。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049026_0_8f8927",
+      "question": "报销前整理票据具体要做哪些事？",
+      "ground_truth_answer": "收集全部发票、订单截图、行程单，按时间顺序排列；发票须检查抬头、税号、日期、金额是否完整；发票缺失的须填写票据缺失说明表。",
+      "relevant_chunk_ids": [
+        "2111417685874049026"
+      ],
+      "relevant_contexts": [
+        "收集全部发票、订单截图、行程单，按时间顺序排列；发票须检查抬头、税号、日期、金额是否完整；发票缺失的须填写票据缺失说明表。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049027_0_2f1acc",
+      "question": "报销单第3步要填哪些基本信息？",
+      "ground_truth_answer": "选择出差申请单号（自动关联出差审批），填写费用归属事业部、项目编号、成本中心，填写报销总金额（人民币，保留两位小数）。",
+      "relevant_chunk_ids": [
+        "2111417685874049027"
+      ],
+      "relevant_contexts": [
+        "选择出差申请单号（自动关联出差审批），填写费用归属事业部、项目编号、成本中心，填写报销总金额（人民币，保留两位小数）。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049028_0_6e428f",
+      "question": "报销的时候交通费和住宿费要怎么录入？",
+      "ground_truth_answer": "交通费按行程逐笔录入（日期、出发地、目的地、金额、票据编号）。住宿费按夜间逐笔录入（酒店名称、城市、入住/退房日期、金额）。",
+      "relevant_chunk_ids": [
+        "2111417685874049028"
+      ],
+      "relevant_contexts": [
+        "交通费按行程逐笔录入（日期、出发地、目的地、金额、票据编号）。住宿费按夜间逐笔录入（酒店名称、城市、入住/退房日期、金额）。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049029_0_2da070",
+      "question": "报销上传发票影像时，文件格式和大小有什么要求？",
+      "ground_truth_answer": "文件格式JPG/PNG/PDF，单张不超过5MB。",
+      "relevant_chunk_ids": [
+        "2111417685874049029"
+      ],
+      "relevant_contexts": [
+        "文件格式JPG/PNG/PDF，单张不超过5MB。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049030_0_dbe607",
+      "question": "报销提交后，审批人超过48小时还没审批会怎么处理？",
+      "ground_truth_answer": "自动升级至上级的上级。",
+      "relevant_chunk_ids": [
+        "2111417685874049030"
+      ],
+      "relevant_contexts": [
+        "自动升级至上级的上级。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049032_0_4e4900",
+      "question": "报销流程第8步财务合规性初审都审哪些内容？",
+      "ground_truth_answer": "审核发票合规性（真伪、抬头、税号），审核费用标准是否超标、预算是否充足。",
+      "relevant_chunk_ids": [
+        "2111417685874049032"
+      ],
+      "relevant_contexts": [
+        "审核发票合规性（真伪、抬头、税号），审核费用标准是否超标、预算是否充足。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049034_0_64d0e4",
+      "question": "报销走到财务复审这一步，财务经理抽审的比例最低是多少？",
+      "ground_truth_answer": "不低于20%",
+      "relevant_chunk_ids": [
+        "2111417685874049034"
+      ],
+      "relevant_contexts": [
+        "不低于20%"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049035_0_96a51a",
+      "question": "报销流程第11步生成付款凭证时，系统自动生成的会计凭证借方和贷方分别是什么？",
+      "ground_truth_answer": "借方：管理费用-差旅费；贷方：其他应付款-应付员工报销款。",
+      "relevant_chunk_ids": [
+        "2111417685874049035"
+      ],
+      "relevant_contexts": [
+        "借方：管理费用-差旅费；贷方：其他应付款-应付员工报销款。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049036_0_6e0b5e",
+      "question": "报销的钱一般什么时候能打到我卡上？",
+      "ground_truth_answer": "每月10日和25日为固定付款日，遇节假日顺延至下一个工作日，付款方式为银行转账至员工工资卡。",
+      "relevant_chunk_ids": [
+        "2111417685874049036"
+      ],
+      "relevant_contexts": [
+        "每月10日和25日为固定付款日，遇节假日顺延至下一个工作日，付款方式为银行转账至员工工资卡。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049037_0_3eeb9e",
+      "question": "我离职结算的报销能加急吗？加急后几天付款？",
+      "ground_truth_answer": "离职结算等特殊情况可申请加急，须部门负责人审批。加急报销在提交后3个工作日内完成付款，不受固定付款日限制。",
+      "relevant_chunk_ids": [
+        "2111417685874049037"
+      ],
+      "relevant_contexts": [
+        "离职结算等特殊情况可申请加急，须部门负责人审批。加急报销在提交后3个工作日内完成付款，不受固定付款日限制。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049038_0_e2301f",
+      "question": "出差报销时，哪些做法会被认定为违规？",
+      "ground_truth_answer": "虚报、冒领差旅费用；伪造、变造发票；未经批准擅自出差或变更行程；重复报销同一笔费用；将个人消费以差旅费名义报销",
+      "relevant_chunk_ids": [
+        "2111417685874049038"
+      ],
+      "relevant_contexts": [
+        "虚报、冒领差旅费用；伪造、变造发票；未经批准擅自出差或变更行程；重复报销同一笔费用；将个人消费以差旅费名义报销"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049039_0_08cf9d",
+      "question": "虚报金额不超过500元会被怎么处理？",
+      "ground_truth_answer": "书面警告+追回款项。",
+      "relevant_chunk_ids": [
+        "2111417685874049039"
+      ],
+      "relevant_contexts": [
+        "书面警告+追回款项。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417685874049040_0_f11cc5",
+      "question": "这个制度从什么时候开始施行？",
+      "ground_truth_answer": "本制度自2026年3月1日起施行。",
+      "relevant_chunk_ids": [
+        "2111417685874049040"
+      ],
+      "relevant_contexts": [
+        "本制度自2026年3月1日起施行。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417613681688577
+    },
+    {
+      "id": "gen2111417690164822018_0_63a50a",
+      "question": "招待客户时能送现金、购物卡或者奢侈品吗？",
+      "ground_truth_answer": "禁止赠送现金、购物卡、有价证券、奢侈品（单价超过5000元）。",
+      "relevant_chunk_ids": [
+        "2111417690164822018"
+      ],
+      "relevant_contexts": [
+        "禁止赠送现金、购物卡、有价证券、奢侈品（单价超过5000元）。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614591852545
+    },
+    {
+      "id": "gen2111417690164822019_0_1df218",
+      "question": "普通商务招待在一线城市，人均餐饮标准不能超过多少？",
+      "ground_truth_answer": "一线城市：人均不超过300元",
+      "relevant_chunk_ids": [
+        "2111417690164822019"
+      ],
+      "relevant_contexts": [
+        "一线城市：人均不超过300元"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614591852545
+    },
+    {
+      "id": "gen2111417690164822020_0_155c63",
+      "question": "重要招待的陪同人数最多能到来访人数的多少？",
+      "ground_truth_answer": "不超过来访人数的1.5倍。",
+      "relevant_chunk_ids": [
+        "2111417690164822020"
+      ],
+      "relevant_contexts": [
+        "不超过来访人数的1.5倍。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614591852545
+    },
+    {
+      "id": "gen2111417690164822021_0_5832e7",
+      "question": "请客户吃饭一次花了3000块，需要谁审批？",
+      "ground_truth_answer": "单次总额2000-5000元：事业部负责人审批。",
+      "relevant_chunk_ids": [
+        "2111417690164822021"
+      ],
+      "relevant_contexts": [
+        "单次总额2000-5000元：事业部负责人审批。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614591852545
+    },
+    {
+      "id": "gen2111417690164822022_0_629ef6",
+      "question": "买纪念品、伴手礼这类常规礼品，单价最多不能超过多少？",
+      "ground_truth_answer": "单价不超过200元。",
+      "relevant_chunk_ids": [
+        "2111417690164822022"
+      ],
+      "relevant_contexts": [
+        "单价不超过200元。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614591852545
+    },
+    {
+      "id": "gen2111417690164822023_0_b006c1",
+      "question": "公司里不同礼品分别由谁审批？",
+      "ground_truth_answer": "常规礼品部门负责人审批；商务礼品事业部负责人审批；重要礼品分管副总裁审批。",
+      "relevant_chunk_ids": [
+        "2111417690164822023"
+      ],
+      "relevant_contexts": [
+        "常规礼品部门负责人审批；商务礼品事业部负责人审批；重要礼品分管副总裁审批。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614591852545
+    },
+    {
+      "id": "gen2111417690164822024_0_642045",
+      "question": "公司内部开会，茶歇每人每天最多能花多少钱？",
+      "ground_truth_answer": "每人每天不超过50元。",
+      "relevant_chunk_ids": [
+        "2111417690164822024"
+      ],
+      "relevant_contexts": [
+        "每人每天不超过50元。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614591852545
+    },
+    {
+      "id": "gen2111417690164822025_0_1ec58a",
+      "question": "部门团建每人每次能花多少钱，一年最多能搞几次？",
+      "ground_truth_answer": "每人每次不超过200元，年度不超过2次。",
+      "relevant_chunk_ids": [
+        "2111417690164822025"
+      ],
+      "relevant_contexts": [
+        "每人每次不超过200元，年度不超过2次。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614591852545
+    },
+    {
+      "id": "gen2111417690164822026_0_17c714",
+      "question": "招待报销要附的招待清单上得写清楚哪些信息？",
+      "ground_truth_answer": "招待对象单位、人数、招待事由、陪同人员。",
+      "relevant_chunk_ids": [
+        "2111417690164822026"
+      ],
+      "relevant_contexts": [
+        "招待对象单位、人数、招待事由、陪同人员。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614591852545
+    },
+    {
+      "id": "gen2111417690164822027_0_becc19",
+      "question": "招待费这块，哪些做法算违规啊？",
+      "ground_truth_answer": "未经审批进行招待；超标准招待且未按规定补批；虚报招待人数或金额；将个人消费以招待费名义报销。",
+      "relevant_chunk_ids": [
+        "2111417690164822027"
+      ],
+      "relevant_contexts": [
+        "未经审批进行招待；超标准招待且未按规定补批；虚报招待人数或金额；将个人消费以招待费名义报销。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614591852545
+    },
+    {
+      "id": "gen2111417690164822028_0_adf669",
+      "question": "违规金额在1000到5000元之间，会被怎么处理？",
+      "ground_truth_answer": "记过+降级一级+退回款项。",
+      "relevant_chunk_ids": [
+        "2111417690164822028"
+      ],
+      "relevant_contexts": [
+        "记过+降级一级+退回款项。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614591852545
+    },
+    {
+      "id": "gen2111417690865270785_0_ff46a9",
+      "question": "这本手册适用于哪些员工？",
+      "ground_truth_answer": "华远科技集团股份有限公司及其全资/控股子公司全体正式员工。劳务派遣人员参照执行，以派遣服务协议约定为准。",
+      "relevant_chunk_ids": [
+        "2111417690865270785"
+      ],
+      "relevant_contexts": [
+        "华远科技集团股份有限公司及其全资/控股子公司全体正式员工。劳务派遣人员参照执行，以派遣服务协议约定为准。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270786_0_27375e",
+      "question": "公司核心价值观里“诚信合规”具体是怎么要求的？",
+      "ground_truth_answer": "坚守商业道德底线，对腐败、造假、利益输送零容忍。",
+      "relevant_chunk_ids": [
+        "2111417690865270786"
+      ],
+      "relevant_contexts": [
+        "坚守商业道德底线，对腐败、造假、利益输送零容忍。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270787_0_10eab9",
+      "question": "制度里说的“员工”具体指哪些人？",
+      "ground_truth_answer": "与集团建立劳动关系并签订劳动合同的在册人员。",
+      "relevant_chunk_ids": [
+        "2111417690865270787"
+      ],
+      "relevant_contexts": [
+        "与集团建立劳动关系并签订劳动合同的在册人员。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270788_0_1c4563",
+      "question": "收到offer后多久要确认接不接受？",
+      "ground_truth_answer": "收到后3个工作日内确认是否接受。",
+      "relevant_chunk_ids": [
+        "2111417690865270788"
+      ],
+      "relevant_contexts": [
+        "收到后3个工作日内确认是否接受。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270789_0_c746b3",
+      "question": "合同期限1年以上不满3年的话，试用期是多久？",
+      "ground_truth_answer": "试用期2个月",
+      "relevant_chunk_ids": [
+        "2111417690865270789"
+      ],
+      "relevant_contexts": [
+        "试用期2个月"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270790_0_8f5976",
+      "question": "员工主动辞职要提前多久书面通知？试用期是多久？",
+      "ground_truth_answer": "提前30天书面通知（试用期提前3天），以书面签收日期为起算日。",
+      "relevant_chunk_ids": [
+        "2111417690865270790"
+      ],
+      "relevant_contexts": [
+        "提前30天书面通知（试用期提前3天），以书面签收日期为起算日。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270791_0_3e93c6",
+      "question": "哪些员工能适用弹性工时制？核心工作时间是几点到几点？",
+      "ground_truth_answer": "仅限研发序列P6及以上员工，核心工作时间为10:00-16:00。",
+      "relevant_chunk_ids": [
+        "2111417690865270791"
+      ],
+      "relevant_contexts": [
+        "仅限研发序列P6及以上员工，核心工作时间为10:00-16:00。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270792_0_5e424d",
+      "question": "请事假得提前多久申请？有紧急情况怎么办？",
+      "ground_truth_answer": "提前1个工作日提交OA申请，紧急情况可当日9:00前电话报备",
+      "relevant_chunk_ids": [
+        "2111417690865270792"
+      ],
+      "relevant_contexts": [
+        "提前1个工作日提交OA申请，紧急情况可当日9:00前电话报备"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270793_0_27ed82",
+      "question": "请病假需要准备哪些材料？",
+      "ground_truth_answer": "须提供二级及以上医院诊断证明+病历+药费清单",
+      "relevant_chunk_ids": [
+        "2111417690865270793"
+      ],
+      "relevant_contexts": [
+        "须提供二级及以上医院诊断证明+病历+药费清单"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270795_0_3a54db",
+      "question": "年假天数是怎么按工龄算的？",
+      "ground_truth_answer": "工龄1-10年：5天；10-20年：10天；20年以上：15天",
+      "relevant_chunk_ids": [
+        "2111417690865270795"
+      ],
+      "relevant_contexts": [
+        "工龄1-10年：5天；10-20年：10天；20年以上：15天"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270796_0_99b82b",
+      "question": "婚假能休几天？晚婚的话是不是能多休几天？",
+      "ground_truth_answer": "标准婚假3天，晚婚（男≥25周岁/女≥23周岁）增加7天",
+      "relevant_chunk_ids": [
+        "2111417690865270796"
+      ],
+      "relevant_contexts": [
+        "标准婚假3天，晚婚（男≥25周岁/女≥23周岁）增加7天"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270797_0_0a67a0",
+      "question": "产假基础是多少天？难产或者多胞胎会多给吗？",
+      "ground_truth_answer": "基础产假98天，难产增加15天，多胞胎每多一胎增加15天",
+      "relevant_chunk_ids": [
+        "2111417690865270797"
+      ],
+      "relevant_contexts": [
+        "基础产假98天，难产增加15天，多胞胎每多一胎增加15天"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270799_0_f03013",
+      "question": "家里老人去世丧假有几天？直系亲属和祖父母、兄弟姐妹去世分别怎么算？",
+      "ground_truth_answer": "直系亲属（父母、配偶、子女）去世：3天；祖父母、兄弟姐妹去世：1天；往返路程时间另计，最多2天。",
+      "relevant_chunk_ids": [
+        "2111417690865270799"
+      ],
+      "relevant_contexts": [
+        "直系亲属（父母、配偶、子女）去世：3天；祖父母、兄弟姐妹去世：1天；往返路程时间另计，最多2天。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270800_0_42c89d",
+      "question": "法定节假日加班能调休吗？加班费怎么算？",
+      "ground_truth_answer": "不可调休，按300%计算加班费。",
+      "relevant_chunk_ids": [
+        "2111417690865270800"
+      ],
+      "relevant_contexts": [
+        "不可调休，按300%计算加班费。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270801_0_38fd21",
+      "question": "年终奖是怎么算的，什么时候发？",
+      "ground_truth_answer": "13-15薪，次年1月发放。计算方式：月基本工资×绩效系数×在岗月数/12。",
+      "relevant_chunk_ids": [
+        "2111417690865270801"
+      ],
+      "relevant_contexts": [
+        "13-15薪，次年1月发放。计算方式：月基本工资×绩效系数×在岗月数/12。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270802_0_eacd7b",
+      "question": "餐补一天多少钱，怎么发？",
+      "ground_truth_answer": "20元/工作日，随当月工资发放，按实际出勤天数计算。",
+      "relevant_chunk_ids": [
+        "2111417690865270802"
+      ],
+      "relevant_contexts": [
+        "20元/工作日，随当月工资发放，按实际出勤天数计算。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270803_0_5399b3",
+      "question": "上班的时候能穿拖鞋、背心吗？",
+      "ground_truth_answer": "工作期间着装得体，禁穿拖鞋、背心等过于随意的着装。",
+      "relevant_chunk_ids": [
+        "2111417690865270803"
+      ],
+      "relevant_contexts": [
+        "工作期间着装得体，禁穿拖鞋、背心等过于随意的着装。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270804_0_c6aafb",
+      "question": "我老婆在一家和集团有业务往来的公司上班，这样允许吗？",
+      "ground_truth_answer": "员工及其直系亲属不得在与集团有业务往来的公司中持有股份或担任职务（已上市公开交易股票不超过总股本1%的除外）。",
+      "relevant_chunk_ids": [
+        "2111417690865270804"
+      ],
+      "relevant_contexts": [
+        "员工及其直系亲属不得在与集团有业务往来的公司中持有股份或担任职务（已上市公开交易股票不超过总股本1%的除外）。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270805_0_9c134e",
+      "question": "供应商送的礼品价值超过200元，我要在多久内报备给哪个部门？",
+      "ground_truth_answer": "收到供应商或客户赠送的礼品（价值超过200元）须在48小时内向合规部报备。",
+      "relevant_chunk_ids": [
+        "2111417690865270805"
+      ],
+      "relevant_contexts": [
+        "收到供应商或客户赠送的礼品（价值超过200元）须在48小时内向合规部报备。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270806_0_e81f00",
+      "question": "季度内表现突出的话，即时奖励能拿多少？",
+      "ground_truth_answer": "500-5000元现金或等值礼品，由部门负责人审批。",
+      "relevant_chunk_ids": [
+        "2111417690865270806"
+      ],
+      "relevant_contexts": [
+        "500-5000元现金或等值礼品，由部门负责人审批。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270807_0_dbfd1f",
+      "question": "记过处分的有效期是多久？期间会有什么影响？",
+      "ground_truth_answer": "有效期12个月，取消年度晋升资格及年终奖",
+      "relevant_chunk_ids": [
+        "2111417690865270807"
+      ],
+      "relevant_contexts": [
+        "有效期12个月，取消年度晋升资格及年终奖"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270809_0_765e8c",
+      "question": "公司要给员工记过或者降级，得由谁审批啊？",
+      "ground_truth_answer": "记过/降级由事业部负责人审批。",
+      "relevant_chunk_ids": [
+        "2111417690865270809"
+      ],
+      "relevant_contexts": [
+        "记过/降级由事业部负责人审批。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270811_0_d37819",
+      "question": "正式员工和试用期员工离职分别要提前几天申请？",
+      "ground_truth_answer": "正式员工提前30天，试用期提前3天。",
+      "relevant_chunk_ids": [
+        "2111417690865270811"
+      ],
+      "relevant_contexts": [
+        "正式员工提前30天，试用期提前3天。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417690865270815_0_05ba2f",
+      "question": "新版手册从什么时候开始执行？之前那版V3.1还算数吗？",
+      "ground_truth_answer": "本手册自2026年2月1日起施行，原V3.1版同时废止。",
+      "relevant_chunk_ids": [
+        "2111417690865270815"
+      ],
+      "relevant_contexts": [
+        "本手册自2026年2月1日起施行，原V3.1版同时废止。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417612435980288
+    },
+    {
+      "id": "gen2111417692308111367_0_88de30",
+      "question": "试用期员工入职还不满3个月的，当年需要参加年度评级吗？",
+      "ground_truth_answer": "不参与当年年度评级，仅参与试用期转正考核。",
+      "relevant_chunk_ids": [
+        "2111417692308111367"
+      ],
+      "relevant_contexts": [
+        "不参与当年年度评级，仅参与试用期转正考核。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614822539265
+    },
+    {
+      "id": "gen2111417692308111368_0_ccf07f",
+      "question": "年度考核一般什么时候启动、什么时候完成？",
+      "ground_truth_answer": "每年12月启动，次年1月完成。",
+      "relevant_chunk_ids": [
+        "2111417692308111368"
+      ],
+      "relevant_contexts": [
+        "每年12月启动，次年1月完成。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614822539265
+    },
+    {
+      "id": "gen2111417692308111369_0_91c4b5",
+      "question": "季度考核主要考核什么？跟奖金挂钩吗？",
+      "ground_truth_answer": "侧重目标关键结果（OKR/KPI）进度跟踪与过程辅导，作为季度奖金发放依据。",
+      "relevant_chunk_ids": [
+        "2111417692308111369"
+      ],
+      "relevant_contexts": [
+        "侧重目标关键结果（OKR/KPI）进度跟踪与过程辅导，作为季度奖金发放依据。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614822539265
+    },
+    {
+      "id": "gen2111417692308111370_0_9b8ad0",
+      "question": "绩效评到C级代表什么？",
+      "ground_truth_answer": "部分关键目标未达成，工作产出存在质量缺陷，经辅导后改善不明显。",
+      "relevant_chunk_ids": [
+        "2111417692308111370"
+      ],
+      "relevant_contexts": [
+        "部分关键目标未达成，工作产出存在质量缺陷，经辅导后改善不明显。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614822539265
+    },
+    {
+      "id": "gen2111417692308111374_0_449322",
+      "question": "C级员工会被怎么处理？辅导期是多久？",
+      "ground_truth_answer": "启动绩效改进计划（PIP），辅导期为30天",
+      "relevant_chunk_ids": [
+        "2111417692308111374"
+      ],
+      "relevant_contexts": [
+        "启动绩效改进计划（PIP），辅导期为30天"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614822539265
+    },
+    {
+      "id": "gen2111417692308111375_0_c717ee",
+      "question": "年终奖实发金额是怎么算出来的？",
+      "ground_truth_answer": "年终奖实发金额=目标年终奖基数×公司年度经营系数×部门组织绩效系数×个人绩效折算系数",
+      "relevant_chunk_ids": [
+        "2111417692308111375"
+      ],
+      "relevant_contexts": [
+        "年终奖实发金额=目标年终奖基数×公司年度经营系数×部门组织绩效系数×个人绩效折算系数"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614822539265
+    },
+    {
+      "id": "gen2111417692308111376_0_7b42ed",
+      "question": "个人绩效评为C级的话，年终奖系数是多少，会有什么影响？",
+      "ground_truth_answer": "个人系数为0.5（取消当年晋升资格，暂停年度调薪）",
+      "relevant_chunk_ids": [
+        "2111417692308111376"
+      ],
+      "relevant_contexts": [
+        "个人系数为0.5（取消当年晋升资格，暂停年度调薪）"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614822539265
+    },
+    {
+      "id": "gen2111417692308111377_0_07f7b5",
+      "question": "年终奖一般什么时候发？发放前辞职还能拿到吗？",
+      "ground_truth_answer": "次年春节前一次性随1月薪资发放；发放日前已离职或提出书面辞职的员工不享受当年年终奖。",
+      "relevant_chunk_ids": [
+        "2111417692308111377"
+      ],
+      "relevant_contexts": [
+        "次年春节前一次性随1月薪资发放；发放日前已离职或提出书面辞职的员工不享受当年年终奖。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614822539265
+    },
+    {
+      "id": "gen2111417692312305664_0_ffe911",
+      "question": "期权四年成熟期具体每年成熟多少？",
+      "ground_truth_answer": "第1年届满：成熟并归属授予总量的25%；第2年届满：成熟并归属授予总量的25%；第3年届满：成熟并归属授予总量的25%；第4年届满：成熟并归属授予总量的25%。",
+      "relevant_chunk_ids": [
+        "2111417692312305664"
+      ],
+      "relevant_contexts": [
+        "第1年届满：成熟并归属授予总量的25%；第2年届满：成熟并归属授予总量的25%；第3年届满：成熟并归属授予总量的25%；第4年届满：成熟并归属授予总量的25%。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614822539265
+    },
+    {
+      "id": "gen2111417692312305665_0_41f2d5",
+      "question": "我正常离职的话，已经成熟的期权最晚什么时候要行权？",
+      "ground_truth_answer": "离职之日起90天内行权。",
+      "relevant_chunk_ids": [
+        "2111417692312305665"
+      ],
+      "relevant_contexts": [
+        "离职之日起90天内行权。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417614822539265
+    },
+    {
+      "id": "gen2111417694161993728_0_89bb9f",
+      "question": "我是外包常驻人员，这个固定资产管理和办公电脑领用报废的规程也管我们吗？",
+      "ground_truth_answer": "适用。适用范围为华远科技集团全体正式员工、外包常驻人员及实习生。",
+      "relevant_chunk_ids": [
+        "2111417694161993728"
+      ],
+      "relevant_contexts": [
+        "适用。适用范围为华远科技集团全体正式员工、外包常驻人员及实习生。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993729_0_e2184e",
+      "question": "咱们公司固定资产和办公设备管理是按什么原则来的？",
+      "ground_truth_answer": "统一建账、专人保管、责任到人、合理利用",
+      "relevant_chunk_ids": [
+        "2111417694161993729"
+      ],
+      "relevant_contexts": [
+        "统一建账、专人保管、责任到人、合理利用"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993730_0_5897b6",
+      "question": "公司里什么样的东西算固定资产？",
+      "ground_truth_answer": "单位价值在人民币2000元（含）以上、且使用年限超过1年的各类物资与设备。",
+      "relevant_chunk_ids": [
+        "2111417694161993730"
+      ],
+      "relevant_contexts": [
+        "单位价值在人民币2000元（含）以上、且使用年限超过1年的各类物资与设备。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993733_0_64de46",
+      "question": "行政办公资产都包括哪些东西？",
+      "ground_truth_answer": "包括人体工学办公椅、升降工位、会议室投影与音视频会议终端、立式打印机、碎纸机、大容量保险柜等。",
+      "relevant_chunk_ids": [
+        "2111417694161993733"
+      ],
+      "relevant_contexts": [
+        "包括人体工学办公椅、升降工位、会议室投影与音视频会议终端、立式打印机、碎纸机、大容量保险柜等。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993734_0_16767f",
+      "question": "公司里什么样的物品算低值易耗品？",
+      "ground_truth_answer": "单价在 2000 元以下或使用寿命小于 1 年的物品（如键鼠套件、移动硬盘、网络线缆等），按低值耗材管理，不纳入固定资产卡片。",
+      "relevant_chunk_ids": [
+        "2111417694161993734"
+      ],
+      "relevant_contexts": [
+        "单价在 2000 元以下或使用寿命小于 1 年的物品（如键鼠套件、移动硬盘、网络线缆等），按低值耗材管理，不纳入固定资产卡片。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993735_0_72788b",
+      "question": "技术研发岗配的显示器是什么规格？",
+      "ground_truth_answer": "27 英寸 4K 超高清 IPS 显示器一台及配套 Type-C 多功能扩展坞。",
+      "relevant_chunk_ids": [
+        "2111417694161993735"
+      ],
+      "relevant_contexts": [
+        "27 英寸 4K 超高清 IPS 显示器一台及配套 Type-C 多功能扩展坞。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993737_0_bc80fe",
+      "question": "我们岗位标配的电脑和显示器是什么？",
+      "ground_truth_answer": "Apple MacBook Pro 16 英寸（配置同研发高配）或 27 英寸 iMac 配套 4K/5K 专业级广色域（DCI-P3 98%以上）专业显示器。",
+      "relevant_chunk_ids": [
+        "2111417694161993737"
+      ],
+      "relevant_contexts": [
+        "Apple MacBook Pro 16 英寸（配置同研发高配）或 27 英寸 iMac 配套 4K/5K 专业级广色域（DCI-P3 98%以上）专业显示器。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993738_0_7a7ace",
+      "question": "岗位标准配置的笔记本电脑有哪些型号可选？",
+      "ground_truth_answer": "ThinkPad T14/X1 Carbon 系列，或 Apple MacBook Air 13/15 英寸。",
+      "relevant_chunk_ids": [
+        "2111417694161993738"
+      ],
+      "relevant_contexts": [
+        "ThinkPad T14/X1 Carbon 系列，或 Apple MacBook Air 13/15 英寸。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993739_0_11ac00",
+      "question": "外包常驻人员领用笔记本电脑，押金标准是多少？",
+      "ground_truth_answer": "每台笔记本电脑标准押金人民币 8000 元",
+      "relevant_chunk_ids": [
+        "2111417694161993739"
+      ],
+      "relevant_contexts": [
+        "每台笔记本电脑标准押金人民币 8000 元"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993740_0_92c522",
+      "question": "新员工入职领电脑，是入职当天当面发吗？",
+      "ground_truth_answer": "于入职首日向员工当面发放。",
+      "relevant_chunk_ids": [
+        "2111417694161993740"
+      ],
+      "relevant_contexts": [
+        "于入职首日向员工当面发放。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993741_0_7ecb22",
+      "question": "外包公司领笔记本电脑的话，每台要交多少押金？",
+      "ground_truth_answer": "每台笔记本电脑标准押金人民币 8000 元",
+      "relevant_chunk_ids": [
+        "2111417694161993741"
+      ],
+      "relevant_contexts": [
+        "每台笔记本电脑标准押金人民币 8000 元"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993742_0_e25964",
+      "question": "公司固定资产的净残值率是多少？",
+      "ground_truth_answer": "购置原值的5%",
+      "relevant_chunk_ids": [
+        "2111417694161993742"
+      ],
+      "relevant_contexts": [
+        "购置原值的5%"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993743_0_3c102f",
+      "question": "员工想回购自己用过的办公电脑，连续使用要满多久？",
+      "ground_truth_answer": "36 个月（以系统领用过户时间戳为准）",
+      "relevant_chunk_ids": [
+        "2111417694161993743"
+      ],
+      "relevant_contexts": [
+        "36 个月（以系统领用过户时间戳为准）"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993745_0_143e28",
+      "question": "设备期满报废后我想个人回购，回购价格是怎么算的？",
+      "ground_truth_answer": "按设备购置原值的10%与折旧净残值（原值5%）加上第三方专业残值评估价的平均值，两者中的较低者确定。",
+      "relevant_chunk_ids": [
+        "2111417694161993745"
+      ],
+      "relevant_contexts": [
+        "按设备购置原值的10%与折旧净残值（原值5%）加上第三方专业残值评估价的平均值，两者中的较低者确定。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993746_0_3adf45",
+      "question": "我那台原值15000的MacBook Pro满36个月了，如果净残值是750、市场残值评估1600，最后我回购要付多少钱？",
+      "ground_truth_answer": "人民币1175元。",
+      "relevant_chunk_ids": [
+        "2111417694161993746"
+      ],
+      "relevant_contexts": [
+        "人民币1175元。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993747_0_7a7ef9",
+      "question": "我想回购自己用的那台电脑，回购前 IT 部会怎么处理里面的数据？",
+      "ground_truth_answer": "必须实施物理级或多轮覆写数据消磁清除（DoD 5220.22-M 标准），彻底移除公司商业机密、内部证书及企业管理软件。",
+      "relevant_chunk_ids": [
+        "2111417694161993747"
+      ],
+      "relevant_contexts": [
+        "必须实施物理级或多轮覆写数据消磁清除（DoD 5220.22-M 标准），彻底移除公司商业机密、内部证书及企业管理软件。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993748_0_d0606c",
+      "question": "领用的设备用了还不到一年就弄丢了，要按原价的多少赔？",
+      "ground_truth_answer": "按设备购置发票原值的80%予以赔偿",
+      "relevant_chunk_ids": [
+        "2111417694161993748"
+      ],
+      "relevant_contexts": [
+        "按设备购置发票原值的80%予以赔偿"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993753_0_70f761",
+      "question": "保修期内不是人为弄坏的，维修谁负责、钱谁出？",
+      "ground_truth_answer": "由 IT 运维部统一联系原厂售后进行官方保修，费用由公司全额承担。",
+      "relevant_chunk_ids": [
+        "2111417694161993753"
+      ],
+      "relevant_contexts": [
+        "由 IT 运维部统一联系原厂售后进行官方保修，费用由公司全额承担。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993755_0_5f7df3",
+      "question": "公司每年什么时候搞固定资产年度大盘点？",
+      "ground_truth_answer": "每年11月中旬至12月初",
+      "relevant_chunk_ids": [
+        "2111417694161993755"
+      ],
+      "relevant_contexts": [
+        "每年11月中旬至12月初"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417694161993758_0_16ed58",
+      "question": "我要跨城市调动，办公电脑能不能自己直接带过去？",
+      "ground_truth_answer": "不得私自携带未报备的固定资产跨区转移，必须在 OA 系统提报《固定资产调拨交接单》。",
+      "relevant_chunk_ids": [
+        "2111417694161993758"
+      ],
+      "relevant_contexts": [
+        "不得私自携带未报备的固定资产跨区转移，必须在 OA 系统提报《固定资产调拨交接单》。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615057420289
+    },
+    {
+      "id": "gen2111417695911018497_0_a8151b",
+      "question": "咱们研发团队必须守住的工程价值观是哪几个？",
+      "ground_truth_answer": "敬畏生产、变更受控、防御在先、快速止损",
+      "relevant_chunk_ids": [
+        "2111417695911018497"
+      ],
+      "relevant_contexts": [
+        "敬畏生产、变更受控、防御在先、快速止损"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018498_0_128a81",
+      "question": "咱们核心系统的单元测试覆盖率要求是多少？",
+      "ground_truth_answer": "行覆盖率不得低于80%，分支覆盖率不得低于70%。",
+      "relevant_chunk_ids": [
+        "2111417695911018498"
+      ],
+      "relevant_contexts": [
+        "行覆盖率不得低于80%，分支覆盖率不得低于70%。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018499_0_ed4cf0",
+      "question": "哪些场景必须写 RFC 技术方案设计书，还要找技术委员会资深架构师评审？",
+      "ground_truth_answer": "涉及核心数据模型变更、跨域架构调整或单接口预估 QPS 超过 5000 的场景，必须撰写 RFC 技术方案设计书，并召集技术委员会资深架构师完成评审。",
+      "relevant_chunk_ids": [
+        "2111417695911018499"
+      ],
+      "relevant_contexts": [
+        "涉及核心数据模型变更、跨域架构调整或单接口预估 QPS 超过 5000 的场景，必须撰写 RFC 技术方案设计书，并召集技术委员会资深架构师完成评审。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018500_0_82c4d3",
+      "question": "我想把自己的代码合到主干，走 PR 有什么要求？",
+      "ground_truth_answer": "严禁单人私自 Merge 入主干；PR/MR 必须由至少一名同项目组 P6/L6 以上资深研发进行严谨的双人 Code Review，并在 GitLab/GitHub 系统中通过 Approved 授权。",
+      "relevant_chunk_ids": [
+        "2111417695911018500"
+      ],
+      "relevant_contexts": [
+        "严禁单人私自 Merge 入主干；PR/MR 必须由至少一名同项目组 P6/L6 以上资深研发进行严谨的双人 Code Review，并在 GitLab/GitHub 系统中通过 Approved 授权。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018501_0_0e616e",
+      "question": "核心系统业务逻辑代码的单元测试覆盖率要求是多少？",
+      "ground_truth_answer": "行覆盖率基线不得低于80%，分支覆盖率不得低于70%。",
+      "relevant_chunk_ids": [
+        "2111417695911018501"
+      ],
+      "relevant_contexts": [
+        "行覆盖率基线不得低于80%，分支覆盖率不得低于70%。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018502_0_3460ac",
+      "question": "重大版本发布前，预发环境压测要达到什么标准？",
+      "ground_truth_answer": "在预估峰值流量1.5倍负载下，P99延迟不超过200毫秒，错误率低于0.01%",
+      "relevant_chunk_ids": [
+        "2111417695911018502"
+      ],
+      "relevant_contexts": [
+        "在预估峰值流量1.5倍负载下，P99延迟不超过200毫秒，错误率低于0.01%"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018503_0_ff3c29",
+      "question": "生产环境发布变更分几级，P2 级具体包括哪些内容？",
+      "ground_truth_answer": "分四级。P2 级：非核心业务微服务、内部运营管理后台系统、常规功能迭代与非关键逻辑升级。",
+      "relevant_chunk_ids": [
+        "2111417695911018503"
+      ],
+      "relevant_contexts": [
+        "分四级。P2 级：非核心业务微服务、内部运营管理后台系统、常规功能迭代与非关键逻辑升级。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018504_0_3a3d77",
+      "question": "每周哪几天、什么时间段可以正常发布上线？",
+      "ground_truth_answer": "每周二、周三、周四的上午10:00-11:30与下午14:00-16:30。",
+      "relevant_chunk_ids": [
+        "2111417695911018504"
+      ],
+      "relevant_contexts": [
+        "每周二、周三、周四的上午10:00-11:30与下午14:00-16:30。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018505_0_5590f9",
+      "question": "咱们什么时候能发版？具体开放的时间窗口是怎样的？",
+      "ground_truth_answer": "每周二、周三、周四的上午 10:00 - 11:30 与下午 14:00 - 16:30。",
+      "relevant_chunk_ids": [
+        "2111417695911018505"
+      ],
+      "relevant_contexts": [
+        "每周二、周三、周四的上午 10:00 - 11:30 与下午 14:00 - 16:30。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018506_0_7e7160",
+      "question": "周五下午三点以后还能发版上线吗？",
+      "ground_truth_answer": "不能，每周五15:00之后至下周一上午09:30之前，全面禁止任何常规业务迭代发布上线。",
+      "relevant_chunk_ids": [
+        "2111417695911018506"
+      ],
+      "relevant_contexts": [
+        "不能，每周五15:00之后至下周一上午09:30之前，全面禁止任何常规业务迭代发布上线。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018507_0_cfd5f1",
+      "question": "国庆、春节这种法定长假之前，一般提前几天封网呀？",
+      "ground_truth_answer": "在国家法定长假（国庆、春节）前 3 个工作日，全集团进入一级封网状态。",
+      "relevant_chunk_ids": [
+        "2111417695911018507"
+      ],
+      "relevant_contexts": [
+        "在国家法定长假（国庆、春节）前 3 个工作日，全集团进入一级封网状态。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018508_0_0fd842",
+      "question": "发布时做金丝雀灰度，观察期最少要多久？",
+      "ground_truth_answer": "金丝雀流量切分观察期不得少于 15 分钟。",
+      "relevant_chunk_ids": [
+        "2111417695911018508"
+      ],
+      "relevant_contexts": [
+        "金丝雀流量切分观察期不得少于 15 分钟。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018510_0_1b1c42",
+      "question": "能不能直接 SSH/SCP 连生产服务器传可执行文件、改依赖包或者手动打热补丁？",
+      "ground_truth_answer": "严禁绕过 CI/CD 自动化流水线直接向生产服务器通过 SSH/SCP 传输可执行文件、修改依赖包或手动打热补丁。",
+      "relevant_chunk_ids": [
+        "2111417695911018510"
+      ],
+      "relevant_contexts": [
+        "严禁绕过 CI/CD 自动化流水线直接向生产服务器通过 SSH/SCP 传输可执行文件、修改依赖包或手动打热补丁。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018511_0_b8b430",
+      "question": "我能直接连生产主从库做批量写入或者 Drop 表吗？",
+      "ground_truth_answer": "严禁未经 DBA 审核与工单审批，擅自直连生产主从数据库执行 DDL、DML 批量写入、Truncate 或 Drop 表操作。",
+      "relevant_chunk_ids": [
+        "2111417695911018511"
+      ],
+      "relevant_contexts": [
+        "严禁未经 DBA 审核与工单审批，擅自直连生产主从数据库执行 DDL、DML 批量写入、Truncate 或 Drop 表操作。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018513_0_7bb97f",
+      "question": "金丝雀流量切分观察期最少要观察多久？",
+      "ground_truth_answer": "不得少于 15 分钟。",
+      "relevant_chunk_ids": [
+        "2111417695911018513"
+      ],
+      "relevant_contexts": [
+        "不得少于 15 分钟。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018514_0_828092",
+      "question": "执行生产变更之前，必须先把什么准备好？",
+      "ground_truth_answer": "经过实测验证的一键回滚方案（Rollback Script / Canary Rollback）。",
+      "relevant_chunk_ids": [
+        "2111417695911018514"
+      ],
+      "relevant_contexts": [
+        "经过实测验证的一键回滚方案（Rollback Script / Canary Rollback）。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018515_0_d2260e",
+      "question": "生产环境日志里能明文打印用户的身份证号、手机号、银行卡号这些吗？",
+      "ground_truth_answer": "严禁在生产日志中明文打印用户身份证号、银行卡号、手机号、密码哈希等敏感个人隐私数据。",
+      "relevant_chunk_ids": [
+        "2111417695911018515"
+      ],
+      "relevant_contexts": [
+        "严禁在生产日志中明文打印用户身份证号、银行卡号、手机号、密码哈希等敏感个人隐私数据。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018516_0_ae69a8",
+      "question": "生产主机上能自己开非常规对外监听端口吗？内网通信服务能直接暴露到公网吗？",
+      "ground_truth_answer": "严禁私自在生产主机上开启非常规对外监听端口，严禁将生产集群内部内网通信服务（如 Redis、Kafka、Elasticsearch）直接暴露至公网。",
+      "relevant_chunk_ids": [
+        "2111417695911018516"
+      ],
+      "relevant_contexts": [
+        "严禁私自在生产主机上开启非常规对外监听端口，严禁将生产集群内部内网通信服务（如 Redis、Kafka、Elasticsearch）直接暴露至公网。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018517_0_95f7d3",
+      "question": "往生产系统里引入外部第三方SDK或开源组件，什么情况算踩红线？",
+      "ground_truth_answer": "严禁在未经沙箱隔离与安全团队授权的情况下，向生产系统引入未经合规扫描与漏洞审计的外部第三方SDK或开源组件。",
+      "relevant_chunk_ids": [
+        "2111417695911018517"
+      ],
+      "relevant_contexts": [
+        "严禁在未经沙箱隔离与安全团队授权的情况下，向生产系统引入未经合规扫描与漏洞审计的外部第三方SDK或开源组件。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018519_0_65443c",
+      "question": "代码提交里含中低危漏洞但没造成业务影响，会怎么处理？",
+      "ground_truth_answer": "由部门技术总监进行正式诫勉谈话，并在技术全员例会上通报批评，扣减当季度绩效 0.5 分。",
+      "relevant_chunk_ids": [
+        "2111417695911018519"
+      ],
+      "relevant_contexts": [
+        "由部门技术总监进行正式诫勉谈话，并在技术全员例会上通报批评，扣减当季度绩效 0.5 分。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018520_0_30ed59",
+      "question": "违反发布窗口纪律但没造成业务影响，会怎么处理？",
+      "ground_truth_answer": "由部门技术总监进行正式诫勉谈话，并在技术全员例会上通报批评，扣减当季度绩效 0.5 分。",
+      "relevant_chunk_ids": [
+        "2111417695911018520"
+      ],
+      "relevant_contexts": [
+        "由部门技术总监进行正式诫勉谈话，并在技术全员例会上通报批评，扣减当季度绩效 0.5 分。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417695911018521_0_d0c790",
+      "question": "如果被集团认定严重违反公司规章制度，公司会怎么处理？",
+      "ground_truth_answer": "依法无偿单方解除劳动合同，不予支付任何经济补偿金；涉及违法犯罪行为的，移交司法机关追究刑事责任。",
+      "relevant_chunk_ids": [
+        "2111417695911018521"
+      ],
+      "relevant_contexts": [
+        "依法无偿单方解除劳动合同，不予支付任何经济补偿金；涉及违法犯罪行为的，移交司法机关追究刑事责任。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615388770305
+    },
+    {
+      "id": "gen2111417696863125513_0_be65a9",
+      "question": "咱们公司做供应链采购管理，按什么原则来？",
+      "ground_truth_answer": "管办分离、公平竞争、物美价廉、全程追溯",
+      "relevant_chunk_ids": [
+        "2111417696863125513"
+      ],
+      "relevant_contexts": [
+        "管办分离、公平竞争、物美价廉、全程追溯"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125515_0_c2032f",
+      "question": "小额采购的申请单在哪儿提？需要谁审批？",
+      "ground_truth_answer": "在 ERP 采购协同系统中提报《小额采购申请单》，经部门总监与采购经理双重审批后，由采购部专员择优下单或走企业集中电商渠道采购。",
+      "relevant_chunk_ids": [
+        "2111417696863125515"
+      ],
+      "relevant_contexts": [
+        "在 ERP 采购协同系统中提报《小额采购申请单》，经部门总监与采购经理双重审批后，由采购部专员择优下单或走企业集中电商渠道采购。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125516_0_d835bc",
+      "question": "采购要走三方比价的话，具体得找几家供应商，比价报告又要谁签？",
+      "ground_truth_answer": "至少3家具有独立法人资格且无利益关联的供应商参与比选报价，编制《比价选型分析报告》，由分管VP及战略采购中心总经理共同签批。",
+      "relevant_chunk_ids": [
+        "2111417696863125516"
+      ],
+      "relevant_contexts": [
+        "至少3家具有独立法人资格且无利益关联的供应商参与比选报价，编制《比价选型分析报告》，由分管VP及战略采购中心总经理共同签批。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125517_0_5be126",
+      "question": "采购招标走完流程后，中标结果还得报给谁审批？",
+      "ground_truth_answer": "最终中标结果必须报集团执行委员会（ExCo）终审批准。",
+      "relevant_chunk_ids": [
+        "2111417696863125517"
+      ],
+      "relevant_contexts": [
+        "最终中标结果必须报集团执行委员会（ExCo）终审批准。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125518_0_4524bd",
+      "question": "想进咱们合格供应商库，公司成立时间和实缴资本有什么硬性要求？",
+      "ground_truth_answer": "依法注册成立满2年以上，企业实缴注册资本不得低于人民币100万元（高新技术软件初创企业由技术委员会出具特批专项豁免除外）。",
+      "relevant_chunk_ids": [
+        "2111417696863125518"
+      ],
+      "relevant_contexts": [
+        "依法注册成立满2年以上，企业实缴注册资本不得低于人民币100万元（高新技术软件初创企业由技术委员会出具特批专项豁免除外）。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125519_0_69ea9b",
+      "question": "我们要合作一家供应商，它得成立满几年、实缴注册资本最低要多少钱？",
+      "ground_truth_answer": "依法注册成立满2年以上，企业实缴注册资本不得低于人民币100万元（高新技术软件初创企业由技术委员会出具特批专项豁免除外）。",
+      "relevant_chunk_ids": [
+        "2111417696863125519"
+      ],
+      "relevant_contexts": [
+        "依法注册成立满2年以上，企业实缴注册资本不得低于人民币100万元（高新技术软件初创企业由技术委员会出具特批专项豁免除外）。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125520_0_1da602",
+      "question": "供应商准入时，征信方面对近三年的记录有什么要求？",
+      "ground_truth_answer": "近三年内无重大商业欺诈或行政处罚记录",
+      "relevant_chunk_ids": [
+        "2111417696863125520"
+      ],
+      "relevant_contexts": [
+        "近三年内无重大商业欺诈或行政处罚记录"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125522_0_066e97",
+      "question": "供应商要是给华远科技员工或亲属送购物卡、报销个人消费，会怎么处理？",
+      "ground_truth_answer": "立即列入集团《供应商永久黑名单》，并予以清退终止合作。",
+      "relevant_chunk_ids": [
+        "2111417696863125522"
+      ],
+      "relevant_contexts": [
+        "立即列入集团《供应商永久黑名单》，并予以清退终止合作。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125523_0_738e98",
+      "question": "服务及工程定制类项目，首付款比例最高能付到合同总额的多少？",
+      "ground_truth_answer": "合同正式签署并收到全额预付款发票后，首次预付款比例最高不得超过合同总金额的30%。",
+      "relevant_chunk_ids": [
+        "2111417696863125523"
+      ],
+      "relevant_contexts": [
+        "合同正式签署并收到全额预付款发票后，首次预付款比例最高不得超过合同总金额的30%。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125526_0_ce3f36",
+      "question": "终验尾款什么时候付？付到合同总额的多少？",
+      "ground_truth_answer": "系统正式上线并平稳试运行满30个自然日，出具全流程《最终验收合格报告》（UAT Sign-off）后，支付至合同总额的90%-95%。",
+      "relevant_chunk_ids": [
+        "2111417696863125526"
+      ],
+      "relevant_contexts": [
+        "系统正式上线并平稳试运行满30个自然日，出具全流程《最终验收合格报告》（UAT Sign-off）后，支付至合同总额的90%-95%。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125527_0_c1ee7d",
+      "question": "质保金一般按合同总额的百分之多少留？质保期是多长时间？",
+      "ground_truth_answer": "合同总额的5%-10%设立为质保金，质保期通常为1年（12个月）。",
+      "relevant_chunk_ids": [
+        "2111417696863125527"
+      ],
+      "relevant_contexts": [
+        "合同总额的5%-10%设立为质保金，质保期通常为1年（12个月）。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125529_0_5f0cde",
+      "question": "多大金额以上的招投标项目，审计监察部会实施全程监察？",
+      "ground_truth_answer": "50万元以上的招投标项目",
+      "relevant_chunk_ids": [
+        "2111417696863125529"
+      ],
+      "relevant_contexts": [
+        "50万元以上的招投标项目"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125530_0_8c2446",
+      "question": "审计监察部对多大金额的招投标项目要全程监察？",
+      "ground_truth_answer": "50万元以上的招投标项目",
+      "relevant_chunk_ids": [
+        "2111417696863125530"
+      ],
+      "relevant_contexts": [
+        "50万元以上的招投标项目"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125531_0_e1a55c",
+      "question": "发现采购活动里有吃拿卡要、暗箱操作，或者把大项目拆成小项目躲避公开招标的情况，我该怎么举报？",
+      "ground_truth_answer": "应立即通过集团廉洁举报渠道举报。",
+      "relevant_chunk_ids": [
+        "2111417696863125531"
+      ],
+      "relevant_contexts": [
+        "应立即通过集团廉洁举报渠道举报。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417696863125532_0_c04691",
+      "question": "实名举报查证属实后，奖励怎么算？",
+      "ground_truth_answer": "按挽回经济损失金额的5%至10%给予专项保密奖励，最高奖励金额可达人民币10万元。",
+      "relevant_chunk_ids": [
+        "2111417696863125532"
+      ],
+      "relevant_contexts": [
+        "按挽回经济损失金额的5%至10%给予专项保密奖励，最高奖励金额可达人民币10万元。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615577513985
+    },
+    {
+      "id": "gen2111417698897362945_0_df8d4e",
+      "question": "我在华远科技上班时执行公司任务做出的发明，知识产权算谁的？",
+      "ground_truth_answer": "申请知识产权的权利一律属于华远科技集团，产生的发明专利权、实用新型专利权、软件著作权及商业秘密全部归公司独家所有。",
+      "relevant_chunk_ids": [
+        "2111417698897362945"
+      ],
+      "relevant_contexts": [
+        "申请知识产权的权利一律属于华远科技集团，产生的发明专利权、实用新型专利权、软件著作权及商业秘密全部归公司独家所有。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615942418433
+    },
+    {
+      "id": "gen2111417698897362947_0_7d6a08",
+      "question": "我搞出来的职务技术成果，申请知识产权的权利到底归谁啊？",
+      "ground_truth_answer": "一律属于华远科技集团，产生的发明专利权、实用新型专利权、软件著作权及商业秘密全部归公司独家所有。",
+      "relevant_chunk_ids": [
+        "2111417698897362947"
+      ],
+      "relevant_contexts": [
+        "一律属于华远科技集团，产生的发明专利权、实用新型专利权、软件著作权及商业秘密全部归公司独家所有。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615942418433
+    },
+    {
+      "id": "gen2111417698897362948_0_1b7ffa",
+      "question": "写技术交底书的时候需要写清楚哪些内容？",
+      "ground_truth_answer": "技术背景、现有技术缺陷、核心创新点、技术实施路线及预期实验对比效果。",
+      "relevant_chunk_ids": [
+        "2111417698897362948"
+      ],
+      "relevant_contexts": [
+        "技术背景、现有技术缺陷、核心创新点、技术实施路线及预期实验对比效果。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615942418433
+    },
+    {
+      "id": "gen2111417698897362949_0_b335b9",
+      "question": "技术交底书要写哪些内容，写完在哪儿提交？",
+      "ground_truth_answer": "按知识产权部标准模板撰写，详细阐述技术背景、现有技术缺陷、核心创新点、技术实施路线及预期实验对比效果，并在OA知识产权平台提交。",
+      "relevant_chunk_ids": [
+        "2111417698897362949"
+      ],
+      "relevant_contexts": [
+        "按知识产权部标准模板撰写，详细阐述技术背景、现有技术缺陷、核心创新点、技术实施路线及预期实验对比效果，并在OA知识产权平台提交。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615942418433
+    },
+    {
+      "id": "gen2111417698897362950_0_8d7e3f",
+      "question": "技术委员会初审主要看哪些方面？",
+      "ground_truth_answer": "重点审核技术方案是否具备专利新颖性、创造性及商业防御价值。",
+      "relevant_chunk_ids": [
+        "2111417698897362950"
+      ],
+      "relevant_contexts": [
+        "重点审核技术方案是否具备专利新颖性、创造性及商业防御价值。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615942418433
+    },
+    {
+      "id": "gen2111417698897362951_0_0b5c26",
+      "question": "初审通过后，专利查新是由谁委托哪类机构来做的？",
+      "ground_truth_answer": "由知识产权部委托签约的国家甲级知识产权代理事务所",
+      "relevant_chunk_ids": [
+        "2111417698897362951"
+      ],
+      "relevant_contexts": [
+        "由知识产权部委托签约的国家甲级知识产权代理事务所"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615942418433
+    },
+    {
+      "id": "gen2111417698897362953_0_5be14c",
+      "question": "国内发明专利拿到受理通知书，后来正式授权了，发明人团队一共能奖励多少钱？",
+      "ground_truth_answer": "受理通知书下发奖励3,000元/件，授权证书奖励10,000元/件，单件累计奖励13,000元。",
+      "relevant_chunk_ids": [
+        "2111417698897362953"
+      ],
+      "relevant_contexts": [
+        "受理通知书下发奖励3,000元/件，授权证书奖励10,000元/件，单件累计奖励13,000元。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615942418433
+    },
+    {
+      "id": "gen2111417698897362956_0_de1da3",
+      "question": "如果一项发明是几个员工一起完成的，第一发明人的奖金至少能拿多少？",
+      "ground_truth_answer": "第一发明人（主要贡献人）所得奖金份额原则上不得低于该项总奖金的50%。",
+      "relevant_chunk_ids": [
+        "2111417698897362956"
+      ],
+      "relevant_contexts": [
+        "第一发明人（主要贡献人）所得奖金份额原则上不得低于该项总奖金的50%。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615942418433
+    },
+    {
+      "id": "gen2111417698897362958_0_a2f48a",
+      "question": "职务发明专利转化后，给主要研发发明人团队的成果转化提成是多少，能连续发多久？",
+      "ground_truth_answer": "按该项技术转化年净收益的5%提取，向主要研发发明人团队发放，连续奖励发放期限最长可达3年。",
+      "relevant_chunk_ids": [
+        "2111417698897362958"
+      ],
+      "relevant_contexts": [
+        "按该项技术转化年净收益的5%提取，向主要研发发明人团队发放，连续奖励发放期限最长可达3年。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615942418433
+    },
+    {
+      "id": "gen2111417698897362959_0_6499de",
+      "question": "职务发明专利产生的技术转让、专利对外许可使用纯收入，扣掉税费和中介成本后，公司拿这部分钱做什么？",
+      "ground_truth_answer": "设立“创新转化收益池”。",
+      "relevant_chunk_ids": [
+        "2111417698897362959"
+      ],
+      "relevant_contexts": [
+        "设立“创新转化收益池”。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615942418433
+    },
+    {
+      "id": "gen2111417698897362960_0_71c403",
+      "question": "技术成果转化提成按年净收益的多少提取？能连续发几年？",
+      "ground_truth_answer": "按技术转化年净收益的5%提取，连续奖励发放期限最长可达3年。",
+      "relevant_chunk_ids": [
+        "2111417698897362960"
+      ],
+      "relevant_contexts": [
+        "按技术转化年净收益的5%提取，连续奖励发放期限最长可达3年。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417615942418433
+    },
+    {
+      "id": "gen2111417700247928832_0_080f47",
+      "question": "咱们这个突发公共事件应急处置和员工关怀基金的章程，都管哪些人呀？",
+      "ground_truth_answer": "华远科技集团全体正式员工、在职外包常驻人员及直系亲属。",
+      "relevant_chunk_ids": [
+        "2111417700247928832"
+      ],
+      "relevant_contexts": [
+        "华远科技集团全体正式员工、在职外包常驻人员及直系亲属。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928833_0_58a60d",
+      "question": "公司要是碰上台风预警、疫情这种突发事件，应急指挥的组长是谁来当？",
+      "ground_truth_answer": "集团设立突发事件应急指挥工作组，由集团行政副总裁担任总指挥。",
+      "relevant_chunk_ids": [
+        "2111417700247928833"
+      ],
+      "relevant_contexts": [
+        "集团设立突发事件应急指挥工作组，由集团行政副总裁担任总指挥。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928834_0_abc0f8",
+      "question": "发红色暴雨预警时，我还需要在OA提交请假或外勤补卡审批吗？",
+      "ground_truth_answer": "无需在OA提交请假或外勤补卡审批，当日考勤全额按正常出勤计算。",
+      "relevant_chunk_ids": [
+        "2111417700247928834"
+      ],
+      "relevant_contexts": [
+        "无需在OA提交请假或外勤补卡审批，当日考勤全额按正常出勤计算。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928836_0_e969da",
+      "question": "碰上极端天气，我能错峰上下班或者申请在家办公吗？",
+      "ground_truth_answer": "员工可根据路况及公共交通实际情况，自主选择错峰打卡上下班（允许在标准工时前后浮动 2 小时），或提报申请转为远程居家办公。",
+      "relevant_chunk_ids": [
+        "2111417700247928836"
+      ],
+      "relevant_contexts": [
+        "员工可根据路况及公共交通实际情况，自主选择错峰打卡上下班（允许在标准工时前后浮动 2 小时），或提报申请转为远程居家办公。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928837_0_458fe6",
+      "question": "“华远守护”员工关怀专项基金的基础池每年有多少钱？",
+      "ground_truth_answer": "集团公司每年初专项固定划拨人民币2,000,000元（200万元）作为基金基础池",
+      "relevant_chunk_ids": [
+        "2111417700247928837"
+      ],
+      "relevant_contexts": [
+        "集团公司每年初专项固定划拨人民币2,000,000元（200万元）作为基金基础池"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928839_0_94cc0e",
+      "question": "我想申请关怀基金资助，得在公司连续工作满多久才行？",
+      "ground_truth_answer": "连续工作满3个月（试用期通过）",
+      "relevant_chunk_ids": [
+        "2111417700247928839"
+      ],
+      "relevant_contexts": [
+        "连续工作满3个月（试用期通过）"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928840_0_2f9848",
+      "question": "员工因工伤意外致残、被评定为1-4级伤残的话，关怀基金一次性给多少钱？",
+      "ground_truth_answer": "一次性向其指定受益人发放人民币200,000元（20万元）专项抚恤慰问金",
+      "relevant_chunk_ids": [
+        "2111417700247928840"
+      ],
+      "relevant_contexts": [
+        "一次性向其指定受益人发放人民币200,000元（20万元）专项抚恤慰问金"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928841_0_1591bb",
+      "question": "员工确诊了重大疾病，个人自费要超过多少钱才能申请救助？",
+      "ground_truth_answer": "在社保统筹报销及商业补充医疗保险赔付后，个人年度自费部分超过人民币30,000元的。",
+      "relevant_chunk_ids": [
+        "2111417700247928841"
+      ],
+      "relevant_contexts": [
+        "在社保统筹报销及商业补充医疗保险赔付后，个人年度自费部分超过人民币30,000元的。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928843_0_67d602",
+      "question": "员工家里遇到什么情况可以申请公司的救助？",
+      "ground_truth_answer": "员工配偶、未成年子女或父母罹患重大特大疾病导致家庭经济陷入极端困顿，或因地震、洪水、重大火灾等不可抗力自然灾害导致家庭唯一住房灭失的。",
+      "relevant_chunk_ids": [
+        "2111417700247928843"
+      ],
+      "relevant_contexts": [
+        "员工配偶、未成年子女或父母罹患重大特大疾病导致家庭经济陷入极端困顿，或因地震、洪水、重大火灾等不可抗力自然灾害导致家庭唯一住房灭失的。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928845_0_8057ab",
+      "question": "除了法定义务工伤保险赔偿和商业雇主责任险赔款外，关怀基金还会一次性给指定受益人发多少专项抚恤慰问金？",
+      "ground_truth_answer": "人民币200,000元（20万元）",
+      "relevant_chunk_ids": [
+        "2111417700247928845"
+      ],
+      "relevant_contexts": [
+        "人民币200,000元（20万元）"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928846_0_ef5d1f",
+      "question": "关怀基金的理事会都由哪些人组成？",
+      "ground_truth_answer": "由2名工会代表、2名基层员工代表、1名HRVP组成，共5人。",
+      "relevant_chunk_ids": [
+        "2111417700247928846"
+      ],
+      "relevant_contexts": [
+        "由2名工会代表、2名基层员工代表、1名HRVP组成，共5人。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928847_0_7ed578",
+      "question": "申请关怀基金要交给哪个部门，还得带哪些材料？",
+      "ground_truth_answer": "向HRSSC提交《关怀基金申请表》，并附三甲医院正式疾病诊断证明、医疗费用结算发票、公安/应急管理部门出具的事故认定书等原件凭证。",
+      "relevant_chunk_ids": [
+        "2111417700247928847"
+      ],
+      "relevant_contexts": [
+        "向HRSSC提交《关怀基金申请表》，并附三甲医院正式疾病诊断证明、医疗费用结算发票、公安/应急管理部门出具的事故认定书等原件凭证。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928848_0_b7b0f6",
+      "question": "关怀基金的理事会都是由哪些人组成的？",
+      "ground_truth_answer": "关怀基金设立 5 人理事会（由 2 名工会代表、2 名基层员工代表、1 名 HRVP 组成）",
+      "relevant_chunk_ids": [
+        "2111417700247928848"
+      ],
+      "relevant_contexts": [
+        "关怀基金设立 5 人理事会（由 2 名工会代表、2 名基层员工代表、1 名 HRVP 组成）"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417700247928849_0_5e8573",
+      "question": "基金多久在内网公示一次收支账目和资助人数？",
+      "ground_truth_answer": "每季度在内网公示收支账目总额与资助人数（严格脱敏受助人个人健康隐私）",
+      "relevant_chunk_ids": [
+        "2111417700247928849"
+      ],
+      "relevant_contexts": [
+        "每季度在内网公示收支账目总额与资助人数（严格脱敏受助人个人健康隐私）"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616332488705
+    },
+    {
+      "id": "gen2111417702097616896_0_f832a3",
+      "question": "现在出差审批和报销到底按哪个制度来执行？",
+      "ground_truth_answer": "HY-FIN-2024-002《华远科技集团差旅与报销管理制度（2024版）》",
+      "relevant_chunk_ids": [
+        "2111417702097616896"
+      ],
+      "relevant_contexts": [
+        "HY-FIN-2024-002《华远科技集团差旅与报销管理制度（2024版）》"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616571564033
+    },
+    {
+      "id": "gen2111417702097616897_0_657107",
+      "question": "2022版自驾出差单程补贴里程上限是多少？",
+      "ground_truth_answer": "300公里",
+      "relevant_chunk_ids": [
+        "2111417702097616897"
+      ],
+      "relevant_contexts": [
+        "300公里"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616571564033
+    },
+    {
+      "id": "gen2111417702097616899_0_09abce",
+      "question": "2024年开车出差的燃油和车辆损耗补贴按多少钱一公里算？",
+      "ground_truth_answer": "1.2 元 / 公里",
+      "relevant_chunk_ids": [
+        "2111417702097616899"
+      ],
+      "relevant_contexts": [
+        "1.2 元 / 公里"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616571564033
+    },
+    {
+      "id": "gen2111417702097616900_0_923a88",
+      "question": "2022版差旅住宿标准里，一类城市普通员工一晚住宿上限是多少？",
+      "ground_truth_answer": "人民币350元/间夜。",
+      "relevant_chunk_ids": [
+        "2111417702097616900"
+      ],
+      "relevant_contexts": [
+        "人民币350元/间夜。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616571564033
+    },
+    {
+      "id": "gen2111417702097616901_0_d453af",
+      "question": "部门经理M3级别现在出差住宿标准是多少钱一晚？",
+      "ground_truth_answer": "2024年现行有效标准中 M3 级别已提升至 600 元 / 间夜",
+      "relevant_chunk_ids": [
+        "2111417702097616901"
+      ],
+      "relevant_contexts": [
+        "2024年现行有效标准中 M3 级别已提升至 600 元 / 间夜"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616571564033
+    },
+    {
+      "id": "gen2111417702097616902_0_c21521",
+      "question": "2022版的出差餐补按什么标准发？",
+      "ground_truth_answer": "按出差自然天数计发，不区分城市类别，历史包干标准为80元/人/天；2024年现行有效标准为100元/人/天。",
+      "relevant_chunk_ids": [
+        "2111417702097616902"
+      ],
+      "relevant_contexts": [
+        "按出差自然天数计发，不区分城市类别，历史包干标准为80元/人/天；2024年现行有效标准为100元/人/天。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616571564033
+    },
+    {
+      "id": "gen2111417702097616903_0_3f0d72",
+      "question": "2022版的出差餐补是按什么标准发的？",
+      "ground_truth_answer": "80元/人/天，按出差自然天数计发，不区分城市类别",
+      "relevant_chunk_ids": [
+        "2111417702097616903"
+      ],
+      "relevant_contexts": [
+        "80元/人/天，按出差自然天数计发，不区分城市类别"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616571564033
+    },
+    {
+      "id": "gen2111417702097616904_0_dd7ac3",
+      "question": "2022版制度里，出差期间市内公共交通补贴是每天多少钱？",
+      "ground_truth_answer": "50 元 / 天（该版本已作废，2024年现行有效标准为 80 元 / 天）",
+      "relevant_chunk_ids": [
+        "2111417702097616904"
+      ],
+      "relevant_contexts": [
+        "50 元 / 天（该版本已作废，2024年现行有效标准为 80 元 / 天）"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616571564033
+    },
+    {
+      "id": "gen2111417702097616905_0_319068",
+      "question": "出差回来以后，报销最晚要在多少天内提交完？超了会怎样？",
+      "ground_truth_answer": "出差结束后30个自然日内必须完成系统提交与报销清结，超期系统将强制冻结。",
+      "relevant_chunk_ids": [
+        "2111417702097616905"
+      ],
+      "relevant_contexts": [
+        "出差结束后30个自然日内必须完成系统提交与报销清结，超期系统将强制冻结。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616571564033
+    },
+    {
+      "id": "gen2111417702097616906_0_bcf7b7",
+      "question": "现在出差回来报销，最晚多久之内得在系统里提交完？",
+      "ground_truth_answer": "出差结束后30个自然日内必须完成系统提交与报销清结，超期系统将强制冻结。",
+      "relevant_chunk_ids": [
+        "2111417702097616906"
+      ],
+      "relevant_contexts": [
+        "出差结束后30个自然日内必须完成系统提交与报销清结，超期系统将强制冻结。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616571564033
+    },
+    {
+      "id": "gen2111417706291920897_0_0633ea",
+      "question": "员工固定停车，地上露天车位和地下地库车位月租分别多少钱？",
+      "ground_truth_answer": "地上露天停车泊位：300元/月；地下智能地库车位：500元/月（包含物业车位管理服务费）。",
+      "relevant_chunk_ids": [
+        "2111417706291920897"
+      ],
+      "relevant_contexts": [
+        "地上露天停车泊位：300元/月；地下智能地库车位：500元/月（包含物业车位管理服务费）。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706291920898_0_e922c2",
+      "question": "公司充电桩充电怎么收费？",
+      "ground_truth_answer": "直流快充桩电费加服务费综合计费为1.5元/度；交流慢充桩综合计费为1.0元/度。",
+      "relevant_chunk_ids": [
+        "2111417706291920898"
+      ],
+      "relevant_contexts": [
+        "直流快充桩电费加服务费综合计费为1.5元/度；交流慢充桩综合计费为1.0元/度。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706291920900_0_f28999",
+      "question": "停车超过2小时以后怎么计费？",
+      "ground_truth_answer": "按临时停车收费标准计费：人民币8元/小时，单日封顶上限为人民币64元。",
+      "relevant_chunk_ids": [
+        "2111417706291920900"
+      ],
+      "relevant_contexts": [
+        "按临时停车收费标准计费：人民币8元/小时，单日封顶上限为人民币64元。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706291920901_0_91fcc9",
+      "question": "加班到晚上几点以后能领夜宵抵用券？券值多少钱？",
+      "ground_truth_answer": "工作日晚上正常工作打卡延至20:30（含）以后，系统自动推送一张价值25元的电子“加班夜宵抵用券”。",
+      "relevant_chunk_ids": [
+        "2111417706291920901"
+      ],
+      "relevant_contexts": [
+        "工作日晚上正常工作打卡延至20:30（含）以后，系统自动推送一张价值25元的电子“加班夜宵抵用券”。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706291920902_0_db362b",
+      "question": "工作日晚上加班到几点才能领到夜宵抵用券？",
+      "ground_truth_answer": "工作打卡延至20:30（含）以后，系统在当日20:30自动推送一张价值25元的电子“加班夜宵抵用券”。",
+      "relevant_chunk_ids": [
+        "2111417706291920902"
+      ],
+      "relevant_contexts": [
+        "工作打卡延至20:30（含）以后，系统在当日20:30自动推送一张价值25元的电子“加班夜宵抵用券”。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706296115200_0_b6ca6e",
+      "question": "晚上发的那个夜宵券能在哪儿用，几点前有效？",
+      "ground_truth_answer": "仅限当晚 20:30-22:30 在园区深夜食堂、轻食咖啡吧或合作品牌便利店直接抵扣消费，不找零、不兑现，次日凌晨自动失效。",
+      "relevant_chunk_ids": [
+        "2111417706296115200"
+      ],
+      "relevant_contexts": [
+        "仅限当晚 20:30-22:30 在园区深夜食堂、轻食咖啡吧或合作品牌便利店直接抵扣消费，不找零、不兑现，次日凌晨自动失效。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706296115201_0_b890b6",
+      "question": "外卖骑手能进办公楼电梯和员工办公区吗？",
+      "ground_truth_answer": "所有美团、饿了么外卖骑手严禁进入办公楼电梯与员工办公区。",
+      "relevant_chunk_ids": [
+        "2111417706296115201"
+      ],
+      "relevant_contexts": [
+        "所有美团、饿了么外卖骑手严禁进入办公楼电梯与员工办公区。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706296115202_0_94460c",
+      "question": "外卖到了放哪儿，取餐收费吗？",
+      "ground_truth_answer": "存放在A座、B座一层北门入口处的“智能紫外线消毒保温外卖柜”，系统发送取餐短信验证码，凭验证码免费开柜取餐。",
+      "relevant_chunk_ids": [
+        "2111417706296115202"
+      ],
+      "relevant_contexts": [
+        "存放在A座、B座一层北门入口处的“智能紫外线消毒保温外卖柜”，系统发送取餐短信验证码，凭验证码免费开柜取餐。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706296115203_0_c0a0db",
+      "question": "我网购的东西能寄到公司前台吗？那应该寄到哪儿？",
+      "ground_truth_answer": "个人网购生活类包裹一律严禁寄往公司前台，收件地址统一填写为“华远科技园西区菜鸟驿站”，或使用园区丰巢智能快件箱自助收件。",
+      "relevant_chunk_ids": [
+        "2111417706296115203"
+      ],
+      "relevant_contexts": [
+        "个人网购生活类包裹一律严禁寄往公司前台，收件地址统一填写为“华远科技园西区菜鸟驿站”，或使用园区丰巢智能快件箱自助收件。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706296115204_0_555411",
+      "question": "园区员工健身房每天几点开放？",
+      "ground_truth_answer": "每日 07:00 - 22:00，全员凭工卡免费刷脸进入。",
+      "relevant_chunk_ids": [
+        "2111417706296115204"
+      ],
+      "relevant_contexts": [
+        "每日 07:00 - 22:00，全员凭工卡免费刷脸进入。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706296115205_0_2fc243",
+      "question": "园区A座的母婴室在几层？哺乳期女员工怎么进去？",
+      "ground_truth_answer": "在5层和8层，哺乳期女员工凭申请工卡专权刷卡通行。",
+      "relevant_chunk_ids": [
+        "2111417706296115205"
+      ],
+      "relevant_contexts": [
+        "在5层和8层，哺乳期女员工凭申请工卡专权刷卡通行。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706296115206_0_2c8683",
+      "question": "园区指定的露天吸烟区在哪儿？",
+      "ground_truth_answer": "A座南侧下沉广场景观喷泉东侧20米处、C座露天花园北角，共两处。",
+      "relevant_chunk_ids": [
+        "2111417706296115206"
+      ],
+      "relevant_contexts": [
+        "A座南侧下沉广场景观喷泉东侧20米处、C座露天花园北角，共两处。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706296115207_0_9b3baf",
+      "question": "在园区室内能抽电子烟吗？",
+      "ground_truth_answer": "不能，园区全部室内空间实施100%全面禁烟，严禁电子烟及传统纸烟卷。",
+      "relevant_chunk_ids": [
+        "2111417706296115207"
+      ],
+      "relevant_contexts": [
+        "不能，园区全部室内空间实施100%全面禁烟，严禁电子烟及传统纸烟卷。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706296115208_0_9a249a",
+      "question": "在室内禁烟区吸烟被监控抓拍或烟感报警触发，会怎么处理？",
+      "ground_truth_answer": "物业安保处协同行政部直接处以每次人民币200元的安全违约金，并在集团内部行政通报。",
+      "relevant_chunk_ids": [
+        "2111417706296115208"
+      ],
+      "relevant_contexts": [
+        "物业安保处协同行政部直接处以每次人民币200元的安全违约金，并在集团内部行政通报。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417706296115209_0_547e39",
+      "question": "园区里哪儿能抽烟？",
+      "ground_truth_answer": "仅在A座南侧下沉广场景观喷泉东侧20米处和C座露天花园北角设有两处指定露天吸烟区。",
+      "relevant_chunk_ids": [
+        "2111417706296115209"
+      ],
+      "relevant_contexts": [
+        "仅在A座南侧下沉广场景观喷泉东侧20米处和C座露天花园北角设有两处指定露天吸烟区。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616668033025
+    },
+    {
+      "id": "gen2111417767214186499_0_2f784b",
+      "question": "公司为什么要制定这个开源组件管理规程？",
+      "ground_truth_answer": "为规范华远科技各业务系统对第三方开源组件、库及框架的生命周期治理，明确准入、扫描、审批及回馈流程，特制定本规程。",
+      "relevant_chunk_ids": [
+        "2111417767214186499"
+      ],
+      "relevant_contexts": [
+        "为规范华远科技各业务系统对第三方开源组件、库及框架的生命周期治理，明确准入、扫描、审批及回馈流程，特制定本规程。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616475095041
+    },
+    {
+      "id": "gen2111417767214186500_0_78c6e0",
+      "question": "集团开源治理委员会下面设了哪些组？",
+      "ground_truth_answer": "安全技术组与法务合规组",
+      "relevant_chunk_ids": [
+        "2111417767214186500"
+      ],
+      "relevant_contexts": [
+        "安全技术组与法务合规组"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616475095041
+    },
+    {
+      "id": "gen2111417767218380802_0_7b2d73",
+      "question": "许可证白名单里包括哪些许可类型？",
+      "ground_truth_answer": "MIT、Apache 2.0、BSD 2-Clause / 3-Clause、ISC、Unlicense",
+      "relevant_chunk_ids": [
+        "2111417767218380802"
+      ],
+      "relevant_contexts": [
+        "MIT、Apache 2.0、BSD 2-Clause / 3-Clause、ISC、Unlicense"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616475095041
+    },
+    {
+      "id": "gen2111417767218380803_0_242bd4",
+      "question": "我们把白名单许可证的软件用到自研商业软件、SaaS 服务或私有化交付制品里，还需要特别法务审批吗？发布制品时版权声明要注意什么？",
+      "ground_truth_answer": "无需特别法务审批，但须在发布制品的 Notice 或版权声明中完整保留原始版权作者声明。",
+      "relevant_chunk_ids": [
+        "2111417767218380803"
+      ],
+      "relevant_contexts": [
+        "无需特别法务审批，但须在发布制品的 Notice 或版权声明中完整保留原始版权作者声明。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616475095041
+    },
+    {
+      "id": "gen2111417767218380805_0_53b37b",
+      "question": "这个库原则上允许我们用哪些方式接入使用？",
+      "ground_truth_answer": "原则上仅允许通过“动态链接库（Dynamic Link）”或独立进程调用方式使用。",
+      "relevant_chunk_ids": [
+        "2111417767218380805"
+      ],
+      "relevant_contexts": [
+        "原则上仅允许通过“动态链接库（Dynamic Link）”或独立进程调用方式使用。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616475095041
+    },
+    {
+      "id": "gen2111417767218380807_0_2993e5",
+      "question": "咱们的闭源商业产品里能不能引入 GPL/AGPL 这类组件？",
+      "ground_truth_answer": "一律绝对禁止静态/动态引入 GPL/AGPL 类强传染性组件。",
+      "relevant_chunk_ids": [
+        "2111417767218380807"
+      ],
+      "relevant_contexts": [
+        "一律绝对禁止静态/动态引入 GPL/AGPL 类强传染性组件。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616475095041
+    },
+    {
+      "id": "gen2111417767218380808_0_30f199",
+      "question": "CI/CD 扫描时，如果引入的开源包存在 CVSS 评分大于等于 7.0 的高危漏洞，而且已有稳定修复版本，流水线会怎么处理？",
+      "ground_truth_answer": "流水线执行强制阻断（Build Failure），禁止打包合流。",
+      "relevant_chunk_ids": [
+        "2111417767218380808"
+      ],
+      "relevant_contexts": [
+        "流水线执行强制阻断（Build Failure），禁止打包合流。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616475095041
+    },
+    {
+      "id": "gen2111417767218380809_0_74e4c4",
+      "question": "引入的开源包有 NVD 收录、CVSS 评分大于等于 7.0 的高危漏洞，而且已经有稳定修复版本了，流水线会怎么处理？",
+      "ground_truth_answer": "流水线执行强制阻断（Build Failure），禁止打包合流。",
+      "relevant_chunk_ids": [
+        "2111417767218380809"
+      ],
+      "relevant_contexts": [
+        "流水线执行强制阻断（Build Failure），禁止打包合流。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616475095041
+    },
+    {
+      "id": "gen2111417767218380810_0_308d88",
+      "question": "如果因为历史架构原因短期没法升级到没有已知高危漏洞的稳定版本，该怎么办？最长能豁免多久？",
+      "ground_truth_answer": "必须由安全架构师评估并签署《安全风险临时豁免申请》，最长豁免期限不得超过14个自然日。",
+      "relevant_chunk_ids": [
+        "2111417767218380810"
+      ],
+      "relevant_contexts": [
+        "必须由安全架构师评估并签署《安全风险临时豁免申请》，最长豁免期限不得超过14个自然日。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616475095041
+    },
+    {
+      "id": "gen2111417767218380811_0_bca62d",
+      "question": "我们拉取依赖时，能直接从公网上的个人私有源拉吗？",
+      "ground_truth_answer": "严禁从公网未经验证的个人私有源直接拉取依赖。",
+      "relevant_chunk_ids": [
+        "2111417767218380811"
+      ],
+      "relevant_contexts": [
+        "严禁从公网未经验证的个人私有源直接拉取依赖。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616475095041
+    },
+    {
+      "id": "gen2111417767218380812_0_7457d6",
+      "question": "我们团队想把自己的一个自研框架开源到 GitHub 上，得走哪些审批流程啊？",
+      "ground_truth_answer": "提交《开源项目对外发布申请》并明确许可证；部门技术总监初审；信息安全部全量源码反渗透扫描、去敏审查；报开源治理委员会主席、法务总监及集团 CTO 签署三重书面联合批复后，方可以官方组织名义创建仓库。",
+      "relevant_chunk_ids": [
+        "2111417767218380812"
+      ],
+      "relevant_contexts": [
+        "提交《开源项目对外发布申请》并明确许可证；部门技术总监初审；信息安全部全量源码反渗透扫描、去敏审查；报开源治理委员会主席、法务总监及集团 CTO 签署三重书面联合批复后，方可以官方组织名义创建仓库。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616475095041
+    },
+    {
+      "id": "gen2111417767218380815_0_115672",
+      "question": "想以公司官方组织名义开个开源仓库，得走什么审批？",
+      "ground_truth_answer": "报开源治理委员会主席、法务总监及集团 CTO 签署三重书面联合批复后方可。",
+      "relevant_chunk_ids": [
+        "2111417767218380815"
+      ],
+      "relevant_contexts": [
+        "报开源治理委员会主席、法务总监及集团 CTO 签署三重书面联合批复后方可。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111417616475095041
+    },
+    {
+      "id": "gen2111418510977531908_0_e7d726",
+      "question": "这个离职交接和涉密审计的指引，适用哪些员工？",
+      "ground_truth_answer": "华远科技集团全体提出辞任、协商解除或合同终止的员工。",
+      "relevant_chunk_ids": [
+        "2111418510977531908"
+      ],
+      "relevant_contexts": [
+        "华远科技集团全体提出辞任、协商解除或合同终止的员工。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531909_0_855a9f",
+      "question": "试用期员工想辞职，要提前几天，在哪儿提交申请？",
+      "ground_truth_answer": "提前3个自然日在集团人力资源系统（HR Cloud）提交书面辞职申请，并抄送直接部门主管。",
+      "relevant_chunk_ids": [
+        "2111418510977531909"
+      ],
+      "relevant_contexts": [
+        "提前3个自然日在集团人力资源系统（HR Cloud）提交书面辞职申请，并抄送直接部门主管。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531910_0_f3d7e1",
+      "question": "试用期想辞职的话，得提前几天申请？在哪儿提交？",
+      "ground_truth_answer": "提前3个自然日，在集团人力资源系统（HR Cloud）提交书面辞职申请，并抄送直接部门主管。",
+      "relevant_chunk_ids": [
+        "2111418510977531910"
+      ],
+      "relevant_contexts": [
+        "提前3个自然日，在集团人力资源系统（HR Cloud）提交书面辞职申请，并抄送直接部门主管。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531911_0_a4fe97",
+      "question": "正式期转正员工辞职，要提前多久在系统提交正式书面辞职申请？",
+      "ground_truth_answer": "须提前30个自然日在系统提交正式书面辞职申请。",
+      "relevant_chunk_ids": [
+        "2111418510977531911"
+      ],
+      "relevant_contexts": [
+        "须提前30个自然日在系统提交正式书面辞职申请。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531913_0_7838a9",
+      "question": "离职时生产系统管理员账号、Git 仓库 Owner 权限、云平台访问权限要提前几天移交给接替人？",
+      "ground_truth_answer": "提前5个工作日完成向指定接接人（Buddy）的权限移交。",
+      "relevant_chunk_ids": [
+        "2111418510977531913"
+      ],
+      "relevant_contexts": [
+        "提前5个工作日完成向指定接接人（Buddy）的权限移交。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531914_0_150e42",
+      "question": "我的系统管理员账号、Git 仓库 Owner 权限这些，要提前多久移交给 Buddy？",
+      "ground_truth_answer": "必须提前 5 个工作日完成向指定接接人（Buddy）的权限移交。",
+      "relevant_chunk_ids": [
+        "2111418510977531914"
+      ],
+      "relevant_contexts": [
+        "必须提前 5 个工作日完成向指定接接人（Buddy）的权限移交。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531915_0_3b4620",
+      "question": "咱们在研项目的哪些文档必须上传并归档到内部企业知识库？",
+      "ground_truth_answer": "架构设计文档、API 接口定义、运维 Runbook、测试用例文档，必须完整上传并归档至内部企业知识库。",
+      "relevant_chunk_ids": [
+        "2111418510977531915"
+      ],
+      "relevant_contexts": [
+        "架构设计文档、API 接口定义、运维 Runbook、测试用例文档，必须完整上传并归档至内部企业知识库。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531917_0_f9e826",
+      "question": "离职最后工作日，我得把哪些东西完整还给行政资产部？",
+      "ground_truth_answer": "笔记本电脑、电源适配器、扩展坞、工牌、门禁卡、办公柜钥匙等完整归还至行政资产部。",
+      "relevant_chunk_ids": [
+        "2111418510977531917"
+      ],
+      "relevant_contexts": [
+        "笔记本电脑、电源适配器、扩展坞、工牌、门禁卡、办公柜钥匙等完整归还至行政资产部。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531918_0_ea9381",
+      "question": "离职最后一天，我得把哪些东西还给公司？还到哪儿去？",
+      "ground_truth_answer": "笔记本电脑、电源适配器、扩展坞、工牌、门禁卡、办公柜钥匙等完整归还至行政资产部。",
+      "relevant_chunk_ids": [
+        "2111418510977531918"
+      ],
+      "relevant_contexts": [
+        "笔记本电脑、电源适配器、扩展坞、工牌、门禁卡、办公柜钥匙等完整归还至行政资产部。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531919_0_6103ff",
+      "question": "我想把公司配的电脑回购带走，得先办什么手续？",
+      "ground_truth_answer": "须在 IT 部完成深度数据安全擦除（Data Wipe）并取得《安全清盘确认书》后方可带离。",
+      "relevant_chunk_ids": [
+        "2111418510977531919"
+      ],
+      "relevant_contexts": [
+        "须在 IT 部完成深度数据安全擦除（Data Wipe）并取得《安全清盘确认书》后方可带离。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531920_0_b1d583",
+      "question": "我离职前备用金和个人借款要提前多久结清？",
+      "ground_truth_answer": "离职日前 7 个工作日结清所有企业备用金、个人借款，并完成全部差旅与商务招待报销单据的贴票审批。",
+      "relevant_chunk_ids": [
+        "2111418510977531920"
+      ],
+      "relevant_contexts": [
+        "离职日前 7 个工作日结清所有企业备用金、个人借款，并完成全部差旅与商务招待报销单据的贴票审批。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531921_0_2a5b6d",
+      "question": "我最后一天上班，公司的系统账号和门禁分别几点会被停掉？",
+      "ground_truth_answer": "最后工作日下午18:00系统自动冻结SSO、VPN、企业微信/飞书/邮件账号；门禁通行权限于当日20:00自动降级注销。",
+      "relevant_chunk_ids": [
+        "2111418510977531921"
+      ],
+      "relevant_contexts": [
+        "最后工作日下午18:00系统自动冻结SSO、VPN、企业微信/飞书/邮件账号；门禁通行权限于当日20:00自动降级注销。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531922_0_1312fe",
+      "question": "员工最后工作日那天，系统下午几点会自动联动 LDAP/Active Directory 发广播消息？",
+      "ground_truth_answer": "下午 18:00（整点）",
+      "relevant_chunk_ids": [
+        "2111418510977531922"
+      ],
+      "relevant_contexts": [
+        "下午 18:00（整点）"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531924_0_9508cb",
+      "question": "离职前多久的电脑操作记录会被信息安全部审计？",
+      "ground_truth_answer": "离职前30日内的外部存储设备插入记录、网盘传输记录及大批量代码导出记录。",
+      "relevant_chunk_ids": [
+        "2111418510977531924"
+      ],
+      "relevant_contexts": [
+        "离职前30日内的外部存储设备插入记录、网盘传输记录及大批量代码导出记录。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531925_0_63c7d5",
+      "question": "竞业限制期从哪天开始算？最长能有多久？",
+      "ground_truth_answer": "自员工离职次日起计算，最长不超过24个月（2年）。",
+      "relevant_chunk_ids": [
+        "2111418510977531925"
+      ],
+      "relevant_contexts": [
+        "自员工离职次日起计算，最长不超过24个月（2年）。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531927_0_4b143d",
+      "question": "哪些员工要签《竞业限制与知识产权保密协议》？",
+      "ground_truth_answer": "集团高级管理人员、核心技术架构师、算法科学家、核心销售总监以及知悉集团核心商业秘密或技术秘密的涉密人员，在入职时或调岗时已签署。",
+      "relevant_chunk_ids": [
+        "2111418510977531927"
+      ],
+      "relevant_contexts": [
+        "集团高级管理人员、核心技术架构师、算法科学家、核心销售总监以及知悉集团核心商业秘密或技术秘密的涉密人员，在入职时或调岗时已签署。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531928_0_2d0f6d",
+      "question": "竞业限制期内，我还能去阿里、腾讯这类公司上班吗？",
+      "ground_truth_answer": "不得在与华远科技从事相同或类似业务、具有直接竞争关系的企业任职、担任顾问或自行创业开展同类竞争性业务。",
+      "relevant_chunk_ids": [
+        "2111418510977531928"
+      ],
+      "relevant_contexts": [
+        "不得在与华远科技从事相同或类似业务、具有直接竞争关系的企业任职、担任顾问或自行创业开展同类竞争性业务。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531929_0_cfecef",
+      "question": "竞业限制的月补偿金是怎么算的？",
+      "ground_truth_answer": "按离职前12个月月平均税前基本工资的30%至50%，具体比例以签署的个别竞业协议为准，且不低于离职地当期法定最低工资标准。",
+      "relevant_chunk_ids": [
+        "2111418510977531929"
+      ],
+      "relevant_contexts": [
+        "按离职前12个月月平均税前基本工资的30%至50%，具体比例以签署的个别竞业协议为准，且不低于离职地当期法定最低工资标准。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    },
+    {
+      "id": "gen2111418510977531930_0_1e5d48",
+      "question": "我要是不小心违反了竞业限制，会有什么后果？",
+      "ground_truth_answer": "立即停止违约行为，全额退还公司已发放的全部竞业限制补偿金，并支付相当于竞业补偿金总额3倍的违约金；损失超过违约金的，全额赔偿实际损失。",
+      "relevant_chunk_ids": [
+        "2111418510977531930"
+      ],
+      "relevant_contexts": [
+        "立即停止违约行为，全额退还公司已发放的全部竞业限制补偿金，并支付相当于竞业补偿金总额3倍的违约金；损失超过违约金的，全额赔偿实际损失。"
+      ],
+      "category": "generated",
+      "source_document_id": 2111418499422224385
+    }
+  ]
+}

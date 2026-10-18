@@ -59,7 +59,10 @@ class RerankSettings(BaseSettings):
     base_url: str = "https://api.siliconflow.cn/v1"
     api_key: str = ""
     model: str = "BAAI/bge-reranker-v2-m3"
+    # top_n：请求体里"送打分条数"的语义（调用方恒传候选数，这里仅作兜底默认）
     top_n: int = 10
+    # keep_top_n：本地保留条数；0 = 不截断（默认），避免静默封顶父块多样性
+    keep_top_n: int = 0
     connect_timeout_ms: int = 3000
     read_timeout_ms: int = 6000
     inject_title_breadcrumbs: bool = True

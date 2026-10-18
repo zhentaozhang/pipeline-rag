@@ -1,0 +1,1349 @@
+{
+  "meta": {
+    "method": "llm",
+    "dataset_size": 85,
+    "chunks": 273,
+    "min_ratio": 0.92,
+    "grounded_questions": 78,
+    "ungrounded_questions": 7,
+    "elapsed_s": 19.2
+  },
+  "questions": {
+    "emp002": {
+      "relevant_chunk_ids": [
+        "2111417690865270789"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882181"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417690865270789"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp004": {
+      "relevant_chunk_ids": [
+        "2111417690865270789"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882181"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417690865270789"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp005": {
+      "relevant_chunk_ids": [
+        "2111417690865270786"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882178"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417690865270786",
+        "2111417692308111366"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp001": {
+      "relevant_chunk_ids": [
+        "2111417690865270789"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882181"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417690865270789"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp003": {
+      "relevant_chunk_ids": [
+        "2111417690865270790",
+        "2111417690865270811",
+        "2111418510977531909",
+        "2111418510977531910",
+        "2111418510977531911"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882182",
+        "2111417690861076489",
+        "2111418510973337600",
+        "2111418510973337601",
+        "2111418510973337602"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417690865270790"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp008": {
+      "relevant_chunk_ids": [
+        "2111417685869854733"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660421"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417685869854733"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp010": {
+      "relevant_chunk_ids": [],
+      "relevant_parent_ids": [],
+      "ungrounded": [
+        "L1 公开",
+        "L2 内部",
+        "L3 敏感",
+        "L4 绝密"
+      ],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "none"
+    },
+    "emp009": {
+      "relevant_chunk_ids": [
+        "2111417685869854729"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660417"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417685869854729",
+        "2111417685869854735",
+        "2111417685869854736"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp006": {
+      "relevant_chunk_ids": [
+        "2111417685869854735"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660423"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417685869854731",
+        "2111417685869854732",
+        "2111417685869854735"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp007": {
+      "relevant_chunk_ids": [
+        "2111417685869854735"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660423"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417685869854731",
+        "2111417685869854732",
+        "2111417685869854735"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp011": {
+      "relevant_chunk_ids": [
+        "2111417690164822021"
+      ],
+      "relevant_parent_ids": [
+        "2111417690156433413"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417690164822021"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp014": {
+      "relevant_chunk_ids": [
+        "2111417690865270807"
+      ],
+      "relevant_parent_ids": [
+        "2111417690861076485"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417690865270807",
+        "2111417690865270789"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp012": {
+      "relevant_chunk_ids": [
+        "2111417690865270792"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882184"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp013": {
+      "relevant_chunk_ids": [
+        "2111417690865270795"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882187"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417690865270795"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp015": {
+      "relevant_chunk_ids": [
+        "2111417692308111374"
+      ],
+      "relevant_parent_ids": [
+        "2111417692303917065"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp018": {
+      "relevant_chunk_ids": [
+        "2111417696863125514"
+      ],
+      "relevant_parent_ids": [
+        "2111417696858931202"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417696863125514"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp019": {
+      "relevant_chunk_ids": [
+        "2111417698897362953"
+      ],
+      "relevant_parent_ids": [
+        "2111417698893168649"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417698897362953"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp020": {
+      "relevant_chunk_ids": [
+        "2111417706291920897"
+      ],
+      "relevant_parent_ids": [
+        "2111417706287726593"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417706291920897"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp017": {
+      "relevant_chunk_ids": [
+        "2111417694161993743"
+      ],
+      "relevant_parent_ids": [
+        "2111417694157799426"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417694161993743",
+        "2111417694161993742"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp016": {
+      "relevant_chunk_ids": [],
+      "relevant_parent_ids": [],
+      "ungrounded": [
+        "学费与报名费的 80%",
+        "每自然年度累计最高补贴限额为人民币 20,000 元"
+      ],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "none"
+    },
+    "emp021": {
+      "relevant_chunk_ids": [],
+      "relevant_parent_ids": [],
+      "ungrounded": [
+        "资助对象须为集团正式在册员工，且通过试用期转正、入职满 6 个月以上",
+        "上一年度或最近两次季度绩效考核均达到 B 级及以上",
+        "提前至少 15 个工作日在 OA 系统提交《考证资助预申请》"
+      ],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "none"
+    },
+    "emp022": {
+      "relevant_chunk_ids": [
+        "2111417694161993748",
+        "2111417694161993749",
+        "2111417694161993750",
+        "2111417694161993751",
+        "2111417694161993752"
+      ],
+      "relevant_parent_ids": [
+        "2111417694157799430",
+        "2111417694157799431",
+        "2111417694157799432",
+        "2111417694157799433",
+        "2111417694157799434"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417694161993748",
+        "2111417694161993749",
+        "2111417694161993750",
+        "2111417694161993751",
+        "2111417694161993752"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp025": {
+      "relevant_chunk_ids": [
+        "2111417767218380800",
+        "2111417767218380806",
+        "2111417767218380807"
+      ],
+      "relevant_parent_ids": [
+        "2111417767209992193",
+        "2111417767209992198",
+        "2111417767209992199"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417767218380800",
+        "2111417767218380806"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp023": {
+      "relevant_chunk_ids": [
+        "2111417696863125523",
+        "2111417696863125524",
+        "2111417696863125525",
+        "2111417696863125526",
+        "2111417696863125527"
+      ],
+      "relevant_parent_ids": [
+        "2111417696858931211",
+        "2111417696858931212",
+        "2111417696863125504",
+        "2111417696863125505",
+        "2111417696863125506"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417696863125523",
+        "2111417696863125524",
+        "2111417696863125525",
+        "2111417696863125526",
+        "2111417696863125527"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp024": {
+      "relevant_chunk_ids": [
+        "2111417700247928834"
+      ],
+      "relevant_parent_ids": [
+        "2111417700239540226"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417700247928834",
+        "2111417700247928835"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp026": {
+      "relevant_chunk_ids": [
+        "2111418510977531925",
+        "2111418510977531930"
+      ],
+      "relevant_parent_ids": [
+        "2111418510973337616",
+        "2111418510977531907"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111418510977531925",
+        "2111418510977531930"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp027": {
+      "relevant_chunk_ids": [
+        "2111417690865270792",
+        "2111417690865270793"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882184",
+        "2111417690856882185"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp029": {
+      "relevant_chunk_ids": [
+        "2111417690164822021"
+      ],
+      "relevant_parent_ids": [
+        "2111417690156433413"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417690164822021"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp028": {
+      "relevant_chunk_ids": [
+        "2111417690865270791"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882183"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417690865270791"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp030": {
+      "relevant_chunk_ids": [
+        "2111417694161993743"
+      ],
+      "relevant_parent_ids": [
+        "2111417694157799426"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417694161993743"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp031": {
+      "relevant_chunk_ids": [
+        "2111417700247928839"
+      ],
+      "relevant_parent_ids": [
+        "2111417700243734532"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417700247928839",
+        "2111417700247928841",
+        "2111417700247928842"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp032": {
+      "relevant_chunk_ids": [
+        "2111417767218380808",
+        "2111417767218380809"
+      ],
+      "relevant_parent_ids": [
+        "2111417767209992200",
+        "2111417767209992201"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417767218380808",
+        "2111417767218380809"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp033": {
+      "relevant_chunk_ids": [],
+      "relevant_parent_ids": [],
+      "ungrounded": [
+        "设立 2 年的服务期协议",
+        "未满服务期主动提出辞职",
+        "须按尚未履约的月份比例全额返还公司已支付的进修资助资金"
+      ],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "none"
+    },
+    "emp034": {
+      "relevant_chunk_ids": [
+        "2111417700247928834",
+        "2111417700247928836"
+      ],
+      "relevant_parent_ids": [
+        "2111417700239540226",
+        "2111417700243734529"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417700247928834",
+        "2111417700247928836"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp035": {
+      "relevant_chunk_ids": [
+        "2111417696863125514",
+        "2111417696863125516"
+      ],
+      "relevant_parent_ids": [
+        "2111417696858931202",
+        "2111417696858931204"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417696863125514",
+        "2111417696863125516"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp037": {
+      "relevant_chunk_ids": [
+        "2111417767218380812",
+        "2111417767218380813",
+        "2111417767218380814",
+        "2111417767218380815"
+      ],
+      "relevant_parent_ids": [
+        "2111417767209992204",
+        "2111417767209992205",
+        "2111417767214186496",
+        "2111417767214186497"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417767218380812",
+        "2111417767218380813",
+        "2111417767218380814",
+        "2111417767218380815"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp036": {
+      "relevant_chunk_ids": [
+        "2111417694161993753",
+        "2111417694161993754"
+      ],
+      "relevant_parent_ids": [
+        "2111417694157799435",
+        "2111417694157799436"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417694161993753",
+        "2111417694161993754"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp038": {
+      "relevant_chunk_ids": [
+        "2111417706296115206",
+        "2111417706296115208"
+      ],
+      "relevant_parent_ids": [
+        "2111417706287726605",
+        "2111417706287726607"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417706296115206",
+        "2111417706296115208"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp039": {
+      "relevant_chunk_ids": [
+        "2111417690865270801",
+        "2111417692308111376",
+        "2111417692308111375",
+        "2111417692308111377",
+        "2111417692308111368"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882193",
+        "2111417692303917067",
+        "2111417692303917066",
+        "2111417692308111360",
+        "2111417692303917059"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp041": {
+      "relevant_chunk_ids": [
+        "2111417685869854735",
+        "2111417695911018504"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660423",
+        "2111417695902629896"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417695911018504"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp040": {
+      "relevant_chunk_ids": [],
+      "relevant_parent_ids": [],
+      "ungrounded": [
+        "连续工作满 1 年以上且已顺利转正",
+        "合同期限1年以上不满3年为2个月"
+      ],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "none"
+    },
+    "emp043": {
+      "relevant_chunk_ids": [
+        "2111417695911018512",
+        "2111417695911018508"
+      ],
+      "relevant_parent_ids": [
+        "2111417695906824194",
+        "2111417695902629900"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417695911018508",
+        "2111417695911018512",
+        "2111417695911018519"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp042": {
+      "relevant_chunk_ids": [
+        "2111417694161993748",
+        "2111417694161993750"
+      ],
+      "relevant_parent_ids": [
+        "2111417694157799430",
+        "2111417694157799432"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417702097616905",
+        "2111417702097616906",
+        "2111417694161993748",
+        "2111417694161993750"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp044": {
+      "relevant_chunk_ids": [
+        "2111417694161993743",
+        "2111418510977531917",
+        "2111418510977531919"
+      ],
+      "relevant_parent_ids": [
+        "2111417694157799426",
+        "2111418510973337608",
+        "2111418510973337610"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417694161993743",
+        "2111417694161993747"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp045": {
+      "relevant_chunk_ids": [
+        "2111417690865270805",
+        "2111417696863125522",
+        "2111417690164822018",
+        "2111417690164822022"
+      ],
+      "relevant_parent_ids": [
+        "2111417690861076483",
+        "2111417696858931210",
+        "2111417690156433410",
+        "2111417690156433414"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417696863125522"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp046": {
+      "relevant_chunk_ids": [
+        "2111417698897362953",
+        "2111417698897362945",
+        "2111417698897362947"
+      ],
+      "relevant_parent_ids": [
+        "2111417698893168649",
+        "2111417698893168641",
+        "2111417698893168643"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417698897362953",
+        "2111417698897362956"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp047": {
+      "relevant_chunk_ids": [
+        "2111417767218380800",
+        "2111417767218380807"
+      ],
+      "relevant_parent_ids": [
+        "2111417767209992193",
+        "2111417767209992199"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417767218380800",
+        "2111417695911018508",
+        "2111417695911018517"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp048": {
+      "relevant_chunk_ids": [
+        "2111417685869854733"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660421"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417706291920897",
+        "2111417706291920900"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp049": {
+      "relevant_chunk_ids": [
+        "2111418510977531921",
+        "2111418510977531922",
+        "2111418510977531923"
+      ],
+      "relevant_parent_ids": [
+        "2111418510973337612",
+        "2111418510973337613",
+        "2111418510973337614"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111418510977531921",
+        "2111418510977531922"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp050": {
+      "relevant_chunk_ids": [
+        "2111418510977531925",
+        "2111418510977531929"
+      ],
+      "relevant_parent_ids": [
+        "2111418510973337616",
+        "2111418510977531906"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111418510977531925",
+        "2111418510977531929"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp051": {
+      "relevant_chunk_ids": [
+        "2111417698897362953"
+      ],
+      "relevant_parent_ids": [
+        "2111417698893168649"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417698897362953"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp052": {
+      "relevant_chunk_ids": [
+        "2111417706291920901",
+        "2111417706291920902",
+        "2111417706296115200"
+      ],
+      "relevant_parent_ids": [
+        "2111417706287726597",
+        "2111417706287726598",
+        "2111417706287726599"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417706291920901",
+        "2111417706291920902",
+        "2111417706296115204"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp053": {
+      "relevant_chunk_ids": [
+        "2111417690865270793"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882185"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp054": {
+      "relevant_chunk_ids": [
+        "2111417696863125514",
+        "2111417696863125516"
+      ],
+      "relevant_parent_ids": [
+        "2111417696858931202",
+        "2111417696858931204"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417696863125514",
+        "2111417696863125516"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp055": {
+      "relevant_chunk_ids": [
+        "2111417767218380812"
+      ],
+      "relevant_parent_ids": [
+        "2111417767209992204"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417767218380812",
+        "2111417767218380813",
+        "2111417767218380815"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp056": {
+      "relevant_chunk_ids": [
+        "2111417685869854735"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660423"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp058": {
+      "relevant_chunk_ids": [
+        "2111417702097616905",
+        "2111417702097616906",
+        "2111417702097616896"
+      ],
+      "relevant_parent_ids": [
+        "2111417702093422601",
+        "2111417702093422602",
+        "2111417702093422592"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417702097616905",
+        "2111417702097616906"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp060": {
+      "relevant_chunk_ids": [
+        "2111417685869854734"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660422"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417702097616902",
+        "2111417702097616904"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp059": {
+      "relevant_chunk_ids": [
+        "2111417702097616902",
+        "2111417702097616903"
+      ],
+      "relevant_parent_ids": [
+        "2111417702093422598",
+        "2111417702093422599"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417702097616902",
+        "2111417702097616903"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp057": {
+      "relevant_chunk_ids": [
+        "2111417685869854733",
+        "2111417702097616897"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660421",
+        "2111417702093422593"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417685869854733",
+        "2111417702097616897",
+        "2111417702097616899"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp061": {
+      "relevant_chunk_ids": [
+        "2111417685874049024",
+        "2111417685874049029"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660428",
+        "2111417685865660432"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp064": {
+      "relevant_chunk_ids": [
+        "2111417702097616896",
+        "2111417702097616905",
+        "2111417702097616900"
+      ],
+      "relevant_parent_ids": [
+        "2111417702093422592",
+        "2111417702093422601",
+        "2111417702093422596"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp063": {
+      "relevant_chunk_ids": [
+        "2111417685869854731"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660419"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417702097616897"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp062": {
+      "relevant_chunk_ids": [
+        "2111417702097616896"
+      ],
+      "relevant_parent_ids": [
+        "2111417702093422592"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417702097616896"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp065": {
+      "relevant_chunk_ids": [
+        "2111417702097616900",
+        "2111417685869854735"
+      ],
+      "relevant_parent_ids": [
+        "2111417702093422596",
+        "2111417685865660423"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417702097616900"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp067": {
+      "relevant_chunk_ids": [
+        "2111417690865270789"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882181"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp066": {
+      "relevant_chunk_ids": [
+        "2111417702097616897"
+      ],
+      "relevant_parent_ids": [
+        "2111417702093422593"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417702097616897"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp071": {
+      "relevant_chunk_ids": [],
+      "relevant_parent_ids": [],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "none"
+    },
+    "emp069": {
+      "relevant_chunk_ids": [
+        "2111417685869854733"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660421"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp070": {
+      "relevant_chunk_ids": [
+        "2111417702097616902"
+      ],
+      "relevant_parent_ids": [
+        "2111417702093422598"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417702097616902"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp068": {
+      "relevant_chunk_ids": [
+        "2111417685869854735"
+      ],
+      "relevant_parent_ids": [
+        "2111417685865660423"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp072": {
+      "relevant_chunk_ids": [
+        "2111418510977531925",
+        "2111418510977531908"
+      ],
+      "relevant_parent_ids": [
+        "2111418510973337616",
+        "2111418510964948992"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111418510977531925",
+        "2111418510977531908"
+      ],
+      "candidates": 25,
+      "source": "lexical"
+    },
+    "emp074": {
+      "relevant_chunk_ids": [
+        "2111417700247928837",
+        "2111417700247928839"
+      ],
+      "relevant_parent_ids": [
+        "2111417700243734530",
+        "2111417700243734532"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417700247928837",
+        "2111417700247928839"
+      ],
+      "candidates": 25,
+      "source": "lexical"
+    },
+    "emp075": {
+      "relevant_chunk_ids": [],
+      "relevant_parent_ids": [],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "none"
+    },
+    "emp076": {
+      "relevant_chunk_ids": [
+        "2111417692308111365"
+      ],
+      "relevant_parent_ids": [
+        "2111417692303917056"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417692308111365"
+      ],
+      "candidates": 25,
+      "source": "lexical"
+    },
+    "emp073": {
+      "relevant_chunk_ids": [
+        "2111417706291920901"
+      ],
+      "relevant_parent_ids": [
+        "2111417706287726597"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417706291920901"
+      ],
+      "candidates": 25,
+      "source": "lexical"
+    },
+    "emp077": {
+      "relevant_chunk_ids": [
+        "2111417690164822016",
+        "2111417690164822018",
+        "2111417690164822026"
+      ],
+      "relevant_parent_ids": [
+        "2111417690156433408",
+        "2111417690156433410",
+        "2111417690156433418"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp079": {
+      "relevant_chunk_ids": [
+        "2111417685869854726",
+        "2111417702097616896"
+      ],
+      "relevant_parent_ids": [
+        "2111417685500755968",
+        "2111417702093422592"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417685869854726",
+        "2111417702097616896"
+      ],
+      "candidates": 25,
+      "source": "lexical"
+    },
+    "emp080": {
+      "relevant_chunk_ids": [
+        "2111417690865270792",
+        "2111417690865270801"
+      ],
+      "relevant_parent_ids": [
+        "2111417690856882184",
+        "2111417690856882193"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp078": {
+      "relevant_chunk_ids": [
+        "2111418510977531921",
+        "2111418510977531924"
+      ],
+      "relevant_parent_ids": [
+        "2111418510973337612",
+        "2111418510973337615"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111418510977531921"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp081": {
+      "relevant_chunk_ids": [
+        "2111417696863125522",
+        "2111417690865270805",
+        "2111417690164822018",
+        "2111417690164822022"
+      ],
+      "relevant_parent_ids": [
+        "2111417696858931210",
+        "2111417690861076483",
+        "2111417690156433410",
+        "2111417690156433414"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417696863125522"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp083": {
+      "relevant_chunk_ids": [
+        "2111417706296115206",
+        "2111417706296115207"
+      ],
+      "relevant_parent_ids": [
+        "2111417706287726605",
+        "2111417706287726606"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417706291920896"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp082": {
+      "relevant_chunk_ids": [
+        "2111417700247928837",
+        "2111417700247928839"
+      ],
+      "relevant_parent_ids": [
+        "2111417700243734530",
+        "2111417700243734532"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417700247928837",
+        "2111417700247928839"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp085": {
+      "relevant_chunk_ids": [
+        "2111417685874049038"
+      ],
+      "relevant_parent_ids": [
+        "2111417685869854723"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417685869854726",
+        "2111417702097616896"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    },
+    "emp084": {
+      "relevant_chunk_ids": [
+        "2111417767218380800",
+        "2111417767218380802",
+        "2111417767218380803",
+        "2111417767218380806",
+        "2111417767218380807"
+      ],
+      "relevant_parent_ids": [
+        "2111417767209992193",
+        "2111417767209992194",
+        "2111417767209992195",
+        "2111417767209992198",
+        "2111417767209992199"
+      ],
+      "ungrounded": [],
+      "lexical_chunk_ids": [
+        "2111417767218380800"
+      ],
+      "candidates": 25,
+      "source": "llm"
+    }
+  }
+}

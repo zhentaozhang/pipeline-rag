@@ -46,6 +46,8 @@ _jev_breaker = CircuitBreakerRegistry.get_or_register(
 # 所以这里按 flag 统计 decided / failed / disabled 与调用耗时，供评测报告直接引用。
 _COVERAGE: dict[str, dict[str, int]] = {}
 _COVERAGE_LATENCIES: dict[str, list[float]] = {}
+# 常驻进程里样本只增不裁会无界增长；只保留最近 N 个用于 p50/p95 估计。
+_MAX_COVERAGE_LATENCIES: int = 512
 
 
 def reset_jev_coverage() -> None:
@@ -236,6 +238,9 @@ async def jev_decide(
         _bump(flag, "failed")
         logger.warning(f"{log_context} failed, falling back", error=str(e)[:120])
         return None
-    _COVERAGE_LATENCIES.setdefault(flag, []).append((time.perf_counter() - t0) * 1000)
+    samples = _COVERAGE_LATENCIES.setdefault(flag, [])
+    samples.append((time.perf_counter() - t0) * 1000)
+    if len(samples) > _MAX_COVERAGE_LATENCIES:
+        del samples[: len(samples) - _MAX_COVERAGE_LATENCIES]
     _bump(flag, "decided")
     return parsed
