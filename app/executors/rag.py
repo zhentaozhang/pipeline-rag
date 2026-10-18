@@ -267,6 +267,10 @@ class RagChatExecutor(ConversationExecutor):
 
     async def execute(self, plan: ExecutionPlan) -> AsyncIterator[str]:
         tracer = self.task.tracer
+        # T0 观测：按请求统计 JEV 判定次数（审计时一个带引用的回答曾达 7 次）
+        from app.infra.jev_client import reset_request_jev_calls
+
+        reset_request_jev_calls()
         self.task.thinking_steps.append("正在根据问题规划知识检索范围。")
         yield self._emit(SSEEventType.THINKING, "正在根据问题规划知识检索范围。")
 
@@ -462,6 +466,16 @@ class RagChatExecutor(ConversationExecutor):
             )
 
         final_answer = "".join(self.task.answer_buffer)
+        try:
+            from app.infra.jev_client import jev_calls_this_request
+
+            logger.info(
+                "rag_answer_jev_calls",
+                jev_calls=jev_calls_this_request(),
+                answer_chars=len(final_answer),
+            )
+        except Exception:  # pragma: no cover - 观测失败不影响主流程
+            pass
         if (
             settings.rag.evaluation_enabled
             and not _answer_blocked

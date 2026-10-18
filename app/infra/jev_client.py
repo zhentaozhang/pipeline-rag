@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from contextvars import ContextVar
 from typing import Any, TypeVar, cast
 
 import httpx
@@ -45,6 +46,22 @@ _jev_breaker = CircuitBreakerRegistry.get_or_register(
 # 服务不可达 / 开关关闭时 jev_decide 全部 fail-open 回退，报告上却看不出任何异常，
 # 所以这里按 flag 统计 decided / failed / disabled 与调用耗时，供评测报告直接引用。
 _COVERAGE: dict[str, dict[str, int]] = {}
+
+# 按请求统计 JEV 调用次数（contextvar 而非全局计数：并发请求互不污染）。
+# 一个带引用的 RAG 回答历史上会打 7 次 JEV（见 2026-10-21 审计），这是延迟与成本的直接刻度。
+_REQUEST_CALLS: ContextVar[int] = ContextVar("jev_request_calls", default=0)
+
+
+def reset_request_jev_calls() -> None:
+    """在新请求开始时清零（executor/中间件入口调用）。"""
+    _REQUEST_CALLS.set(0)
+
+
+def jev_calls_this_request() -> int:
+    """当前请求已发出的 JEV 调用次数。"""
+    return int(_REQUEST_CALLS.get() or 0)
+
+
 _COVERAGE_LATENCIES: dict[str, list[float]] = {}
 # 常驻进程里样本只增不裁会无界增长；只保留最近 N 个用于 p50/p95 估计。
 _MAX_COVERAGE_LATENCIES: int = 512
@@ -158,6 +175,7 @@ class JEVClient:
             JEV_CALL_TOTAL.labels(outcome="empty").inc()
             return {}
 
+        _REQUEST_CALLS.set(_REQUEST_CALLS.get() + 1)
         url = f"{self.base_url}/v1/systemone"
         payload = {
             "model": "jev-local",
