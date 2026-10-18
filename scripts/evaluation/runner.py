@@ -160,6 +160,8 @@ def _apply_id_metrics(
         compute_id_recall_at_k,
     )
 
+    if not getattr(question, "answerable", True):
+        return
     gold_chunks = list(getattr(question, "relevant_chunk_ids", None) or []) or list(
         grounded.get("relevant_chunk_ids") or []
     )
@@ -177,6 +179,31 @@ def _apply_id_metrics(
     result.recall_at_final_k_parent_ids = compute_id_recall_at_k(
         retrieved_parents, gold_parents, eval_depth
     )
+
+
+def _apply_legacy_metrics(result, question, eval_depth: int) -> None:
+    """旧口径召回（gold 片段 vs 提升后父块全文 bigram 重合）。
+
+    只对"可答题"计算：不可答/拒答题没有 gold 片段，旧实现让它们恒记 0 分并拉低均值，
+    把"本就不该召回"与"检索没召回"混为一谈。现在改为 None（不进均值），
+    由拒答指标（`refusal_rates`）单独衡量。
+    """
+    from scripts.evaluation.metrics import (
+        compute_mrr,
+        compute_ndcg_at_k,
+        compute_recall_at_k,
+    )
+
+    if not getattr(question, "answerable", True):
+        return
+    rel = list(getattr(question, "relevant_contexts", None) or [])
+    if not rel:
+        return
+    result.recall_at_5 = compute_recall_at_k(result.retrieved_contexts, rel, 5)
+    result.recall_at_final_k = compute_recall_at_k(result.retrieved_contexts, rel, eval_depth)
+    result.mrr = compute_mrr(result.retrieved_contexts, rel)
+    result.ndcg_at_5 = compute_ndcg_at_k(result.retrieved_contexts, rel, 5)
+    result.ndcg_at_final_k = compute_ndcg_at_k(result.retrieved_contexts, rel, eval_depth)
 
 
 def _load_gold_file(path: str) -> dict[str, dict[str, list[str]]]:
@@ -315,12 +342,16 @@ async def evaluate_single(
     rewriter: ChatQueryRewriteService | None = None,
     recommender: RecommendationService | None = None,
     retrieval_only: bool = False,
+    judge_enabled: bool = True,
 ) -> EvalResult:
     """对一条测试数据执行完整的 检索→生成→评估 流水线"""
     result = EvalResult(
         question_id=q.id,
         question=q.question,
         ground_truth_answer=q.ground_truth_answer,
+        answerable=q.answerable,
+        expected_refusal=q.expected_refusal,
+        unanswerable_reason=str(q.metadata.get("unanswerable_reason") or ""),
     )
 
     # ── 0. 查询改写 ────────────────────────────────────────────────────
@@ -421,6 +452,24 @@ async def evaluate_single(
 
     result.total_ms = (time.perf_counter() - total_start) * 1000
 
+    # ── 2c. 拒答判定（Task 2）：只对不可答题有意义 ────────────────────
+    if q.expected_refusal:
+        from scripts.evaluation.refusal import judge_refusal
+
+        result.refused = await judge_refusal(
+            q.question, result.generated_answer, fallback=model_fallback
+        )
+        logger.info(
+            "refusal judged",
+            question_id=q.id,
+            refused=result.refused,
+            reason=q.metadata.get("unanswerable_reason"),
+        )
+
+    if not judge_enabled:
+        result.status = "completed"
+        return result
+
     # ── 3. 评估（使用传入的 eval_service 真实评分，激活代理链路）───
     try:
         service = eval_service or RAGEvaluationService()
@@ -449,6 +498,7 @@ async def run_evaluation(
     dataset: list[EvalQuestion],
     concurrency: int = 1,
     retrieval_only: bool = False,
+    judge_enabled: bool = True,
 ) -> list[EvalResult]:
     """批量运行离线评估"""
     from app.db.session import close_db, init_db
@@ -484,6 +534,7 @@ async def run_evaluation(
                     rewriter=rewriter,
                     recommender=recommender,
                     retrieval_only=retrieval_only,
+                    judge_enabled=judge_enabled,
                 )
 
         tasks = [_run_one(q) for q in dataset]
@@ -494,23 +545,12 @@ async def run_evaluation(
         await close_pg()
 
     # 量化能力 #2：Recall@5/10 + MRR + nDCG@5/10（基于 relevant_contexts 的排序质量）
-    from scripts.evaluation.metrics import (
-        compute_mrr,
-        compute_ndcg_at_k,
-        compute_recall_at_k,
-    )
-
     final: list[EvalResult] = []
     # 评估深度与 final_top_k 对齐：final_top_k=8 时 R@10 实际只能看到 8 条，指标结构性失真
     eval_depth = max(1, int(settings.rag.final_top_k or 10))
     for i, r in enumerate(results):
         if isinstance(r, EvalResult):
-            rel = dataset[i].relevant_contexts
-            r.recall_at_5 = compute_recall_at_k(r.retrieved_contexts, rel, 5)
-            r.recall_at_final_k = compute_recall_at_k(r.retrieved_contexts, rel, eval_depth)
-            r.mrr = compute_mrr(r.retrieved_contexts, rel)
-            r.ndcg_at_5 = compute_ndcg_at_k(r.retrieved_contexts, rel, 5)
-            r.ndcg_at_final_k = compute_ndcg_at_k(r.retrieved_contexts, rel, eval_depth)
+            _apply_legacy_metrics(r, dataset[i], eval_depth)
             _apply_id_metrics(r, dataset[i], grounded_gold.get(dataset[i].id) or {}, eval_depth)
             final.append(r)
         else:
@@ -587,6 +627,15 @@ def _print_report(
         if r.recall_at_final_k_parent_ids is not None
     ]
 
+    from scripts.evaluation.refusal import refusal_rates
+
+    refusal = refusal_rates(completed)
+    corpus_gap_cases = sum(
+        1
+        for r in completed
+        if r.expected_refusal and r.unanswerable_reason == "source_document_absent"
+    )
+
     avg = {
         "faithfulness": _avg(faithfulness),
         "recall_at_5": _avg(recall5),
@@ -606,6 +655,11 @@ def _print_report(
         "recall_at_5_parent_ids": _avg(recall5_pids),
         "recall_at_final_k_parent_ids": _avg(recall_final_pids),
         "grounded_questions": len(recall5_ids),
+        # Task 2：拒答表现（None = 本轮没有不可答题，不参与门禁）
+        "correct_refusal_rate": refusal["correct_refusal_rate"],
+        "false_answer_rate": refusal["false_answer_rate"],
+        "refusal_cases": refusal["refusal_cases"],
+        "corpus_gap_cases": corpus_gap_cases,
     }
 
     stage_totals: dict[str, Any] = {
@@ -617,6 +671,8 @@ def _print_report(
         "unrecalled": 0,
     }
     for r in completed:
+        if not r.answerable:
+            continue
         stg = r.stage_attribution.get("stats", {})
         for k in ["hit", "cutoff_dropped", "rerank_demoted", "fusion_dropped", "unrecalled"]:
             stage_totals[k] += stg.get(k, 0)
@@ -664,6 +720,12 @@ def _print_report(
         avg.get("mrr", 0.0),
         avg.get("ndcg_at_final_k", 0.0),
     )
+    if refusal["refusal_cases"]:
+        logger.info(
+            "  │ 拒答正确率 / 编造率  │ %s / %s │",
+            f"{refusal['correct_refusal_rate']:.3f}",
+            f"{refusal['false_answer_rate']:.3f}",
+        )
     _judge_failed_total = sum(judge_failed.values())
     if _judge_failed_total:
         logger.info("  │ Judge failures       │ %-8d │", _judge_failed_total)
@@ -750,6 +812,11 @@ if __name__ == "__main__":
         type=str,
         default="",
         help="预生成的 gold chunk_id 文件（scripts.evaluation.ground_gold 产出）；缺省时用词法自动对齐",
+    )
+    parser.add_argument(
+        "--no-judge",
+        action="store_true",
+        help="跳过 5 个 LLM judge 指标（仍生成回答并测拒答），用于快速迭代",
     )
     parser.add_argument(
         "--judge-model",
@@ -936,6 +1003,7 @@ if __name__ == "__main__":
             dataset,
             concurrency=args.concurrency,
             retrieval_only=args.retrieval_only,
+            judge_enabled=not args.no_judge,
         )
     )
 
@@ -1003,6 +1071,8 @@ if __name__ == "__main__":
                             "recall_at_5_parent_ids": r.recall_at_5_parent_ids,
                             "recall_at_final_k_parent_ids": r.recall_at_final_k_parent_ids,
                             "retrieved_chunk_ids": r.retrieved_chunk_ids,
+                            "expected_refusal": r.expected_refusal,
+                            "refused": r.refused,
                             "retrieval_ms": round(r.retrieval_ms, 1) if r.retrieval_ms else None,
                             "generation_ms": round(r.generation_ms, 1) if r.generation_ms else None,
                         }
@@ -1069,7 +1139,7 @@ if __name__ == "__main__":
             )
 
     # 门禁判定：阈值 0 表示跳过该指标；retrieval_only 模式下跳过生成指标门禁
-    if not args.retrieval_only:
+    if not args.retrieval_only and not args.no_judge:
         gates = [
             ("faithfulness", args.min_faithfulness, avg["faithfulness"]),
             ("answer_relevancy", args.min_relevancy, avg["answer_relevancy"]),
@@ -1084,5 +1154,7 @@ if __name__ == "__main__":
             logger.error("Regression gate failed (%d violations)", len(violations))
             sys.exit(1)
         logger.info("Regression gate passed ✓")
+    elif args.no_judge:
+        logger.info("Judge-disabled evaluation completed ✓（仅生成 + 拒答 + 召回）")
     else:
         logger.info("Retrieval-only evaluation completed ✓")

@@ -792,3 +792,40 @@ EMPLOYEE_DATASET: list[EvalQuestion] = [
         relevant_contexts=["差旅与报销管理制度", "因公出差交通工具审批等级"],
     ),
 ]
+
+# ── Task 2：题目"该不该作答"的三分法 ──────────────────────────────────────────
+# 复盘这 20 道题后发现它们混了三种语义（此前一律被当作"召回失败记 0 分"）：
+#   1) 无制度依据型（emp071 公车私用 / emp075 携宠上班）：语料里根本没有对应制度，
+#      正确答案是"无依据、无法办理" → 召回指标无意义，看拒答率。
+#   2) 语料缺口型（emp010 数据安全分级 / emp016/021/033/040 进修补贴）：
+#      题目本身有标准答案，但 **对应的两份文档（03 进修补贴办法、06 数据安全分级）不在语料里**，
+#      检索注定失败；正确行为是明说无依据，绝不能编造金额与文件名 → 看"编造率"。
+#   3) 禁止性作答型（emp076-085 中的 10 题）：语料**有**可检索条款（如"禁止公款吃喝与奢靡消费"），
+#      正确答案是明确给出"禁止/不可以"并引用依据 → 它们是**正常可答题**，
+#      把"严禁"当作"拒答"会误判为失败（实测中确实发生过）。
+_NO_POLICY_IDS = {"emp071", "emp075"}
+_CORPUS_GAP_IDS = {"emp010", "emp016", "emp021", "emp033", "emp040"}
+_PROHIBITION_IDS = {
+    "emp076",
+    "emp077",
+    "emp078",
+    "emp079",
+    "emp080",
+    "emp081",
+    "emp082",
+    "emp083",
+    "emp084",
+    "emp085",
+}
+
+for _q in EMPLOYEE_DATASET:
+    if _q.id in _NO_POLICY_IDS:
+        _q.answerable = False
+        _q.expected_refusal = True
+        _q.metadata["unanswerable_reason"] = "no_policy_in_corpus"
+    elif _q.id in _CORPUS_GAP_IDS:
+        _q.answerable = False
+        _q.expected_refusal = True
+        _q.metadata["unanswerable_reason"] = "source_document_absent"
+    elif _q.id in _PROHIBITION_IDS:
+        _q.metadata["question_kind"] = "prohibition_with_evidence"

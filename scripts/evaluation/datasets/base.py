@@ -16,6 +16,10 @@ class EvalQuestion(BaseModel):
     # Task 1：chunk 级标注（按 ID 精确判定召回）。为空时由 ground_gold_chunks 由片段对齐得到。
     relevant_chunk_ids: list[str] = Field(default_factory=list)
     relevant_parent_ids: list[str] = Field(default_factory=list)
+    # Task 2：False = 检索/作答指标不适用（正确答案是"说明无依据"，不是召回到某条款）。
+    answerable: bool = True
+    # Task 2：True = 该题的正确答案是**不得编造**（无依据时必须明说，而不是给出具体数字）。
+    expected_refusal: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -83,6 +87,12 @@ class EvalResult(BaseModel):
     recall_at_final_k_parent_ids: float | None = None
     generation_ms: float | None = None
     total_ms: float | None = None
+
+    # Task 2：拒答表现（只对 expected_refusal 的题有意义）
+    answerable: bool = True
+    expected_refusal: bool = False
+    refused: bool | None = None
+    unanswerable_reason: str = ""
 
     # 归因分析 (Retrieval Lab 方法论)
     stage_attribution: dict[str, Any] = Field(default_factory=dict)

@@ -24,12 +24,21 @@ def _fmt(value: float | None) -> str:
     return "  N/A" if value is None else f"{value:.4f}"
 
 
-def compare(report_path: str, gold_path: str) -> int:
+def _answerable_ids() -> set[str]:
+    from scripts.evaluation.datasets.employee_dataset import EMPLOYEE_DATASET
+
+    return {q.id for q in EMPLOYEE_DATASET if q.answerable}
+
+
+def compare(report_path: str, gold_path: str, *, answerable_only: bool = False) -> int:
     report = json.loads(Path(report_path).read_text(encoding="utf-8"))
     gold = json.loads(Path(gold_path).read_text(encoding="utf-8"))["questions"]
     grounded = {qid for qid, v in gold.items() if v.get("relevant_chunk_ids")}
     rows = {r["question_id"]: r for r in report["results"]}
     subset = [qid for qid in rows if qid in grounded]
+    if answerable_only:
+        answerable = _answerable_ids()
+        subset = [qid for qid in subset if qid in answerable]
 
     print(f"报告：{report_path}")
     print(f"gold：{gold_path}")
@@ -67,8 +76,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="新旧召回口径并排比较")
     parser.add_argument("--report", required=True)
     parser.add_argument("--gold-file", required=True)
+    parser.add_argument(
+        "--answerable-only",
+        action="store_true",
+        help="只统计可答题（排除拒答/语料缺失题），用于和排除不可答题的报告对齐",
+    )
     args = parser.parse_args(argv)
-    return compare(args.report, args.gold_file)
+    return compare(args.report, args.gold_file, answerable_only=args.answerable_only)
 
 
 if __name__ == "__main__":

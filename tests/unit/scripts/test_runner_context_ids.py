@@ -132,3 +132,48 @@ class TestApplyIdMetrics:
         )
         assert result.recall_at_5_ids == 0.0
         assert result.recall_at_5_parent_ids == 1.0
+
+
+class TestApplyLegacyMetrics:
+    def _pair(self, *, answerable=True):
+        from types import SimpleNamespace
+
+        result = SimpleNamespace(
+            retrieved_contexts=["[1] 合同期限3个月以上不满1年：试用期1个月"],
+            recall_at_5=None,
+            recall_at_final_k=None,
+            mrr=None,
+            ndcg_at_5=None,
+            ndcg_at_final_k=None,
+        )
+        question = SimpleNamespace(
+            answerable=answerable,
+            relevant_contexts=["合同期限3个月以上不满1年：试用期1个月"],
+        )
+        return result, question
+
+    def test_answerable_question_gets_scores(self):
+        from scripts.evaluation.runner import _apply_legacy_metrics
+
+        result, question = self._pair()
+        _apply_legacy_metrics(result, question, 8)
+        assert result.recall_at_5 == 1.0
+        assert result.mrr == 1.0
+
+    def test_unanswerable_question_gets_none_not_zero(self):
+        from scripts.evaluation.runner import _apply_legacy_metrics
+
+        result, question = self._pair(answerable=False)
+        _apply_legacy_metrics(result, question, 8)
+        assert result.recall_at_5 is None
+        assert result.recall_at_final_k is None
+        assert result.mrr is None
+        assert result.ndcg_at_5 is None
+
+    def test_empty_gold_stays_none(self):
+        from scripts.evaluation.runner import _apply_legacy_metrics
+
+        result, question = self._pair()
+        question.relevant_contexts = []
+        _apply_legacy_metrics(result, question, 8)
+        assert result.recall_at_5 is None
