@@ -7,9 +7,9 @@ import asyncio
 import pytest
 
 from scripts.evaluation.generate_questions import (
+    build_generated_dataset,
     build_generation_messages,
     build_verification_messages,
-    build_generated_dataset,
     parse_generation,
     parse_verification,
     question_id,
@@ -124,7 +124,8 @@ class TestBuildGeneratedDataset:
 
         async def fake_chat(client, messages, *, model):
             counter["n"] += 1
-            return '{"question": "第%d 个问题？", "answer": "600 元"}' % counter["n"]
+            n = counter["n"]
+            return f'{{"question": "第{n} 个问题？", "answer": "600 元"}}'
 
         monkeypatch.setattr("scripts.evaluation.generate_questions._chat", fake_chat)
         out = asyncio.run(build_generated_dataset(_chunks(), per_chunk=1, verify=False))

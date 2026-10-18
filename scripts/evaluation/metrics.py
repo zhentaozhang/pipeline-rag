@@ -401,3 +401,29 @@ def compute_id_ndcg_at_k(
     ideal_n = min(k, len(gold))
     idcg = sum(1.0 / math.log2(i + 2) for i in range(ideal_n))
     return round(dcg / idcg, 4) if idcg > 0 else 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────
+# P0-3：延迟分位数
+#
+# V3 的主张是"质量非劣 + 延迟更低"，所以延迟必须和召回一样有确定性口径：
+# 线性插值的 p50 / p95，空样本返回 None（而不是 0），避免 retrieval-only
+# 跑（没有 generation_ms）时把缺失阶段当 0 拉低均值。
+# ─────────────────────────────────────────────────────────────────────
+
+
+def percentile(values: list[float], p: float) -> float | None:
+    """线性插值分位数；``p`` 取 0~100，越界自动裁剪，空列表返回 None。"""
+    if not values:
+        return None
+    pct = min(100.0, max(0.0, float(p)))
+    ordered = sorted(float(v) for v in values)
+    if len(ordered) == 1:
+        return ordered[0]
+    pos = (len(ordered) - 1) * pct / 100.0
+    lower = math.floor(pos)
+    upper = math.ceil(pos)
+    if lower == upper:
+        return ordered[int(pos)]
+    weight = pos - lower
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * weight

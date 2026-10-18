@@ -616,6 +616,33 @@ async def run_evaluation(
     return final
 
 
+_LATENCY_STAGES = ("total", "retrieval", "generation")
+
+
+def _latency_block(results: list[Any]) -> dict[str, Any]:
+    """按阶段聚合 p50/p95 延迟（P0-3）。
+
+    V3 的主张是"质量非劣 + 延迟更低"，没有延迟口径这个主张无法证伪。
+    只统计 completed 且该阶段有值的样本：retrieval-only 跑没有 generation_ms，
+    不能当 0 计入，否则会凭空造出一个"极快"的生成阶段。
+    """
+    from scripts.evaluation.metrics import percentile
+
+    completed = [r for r in results if getattr(r, "status", "") == "completed"]
+    block: dict[str, Any] = {}
+    for stage in _LATENCY_STAGES:
+        values = [
+            float(v)
+            for r in completed
+            if (v := getattr(r, f"{stage}_ms", None)) is not None and float(v) > 0
+        ]
+        block[f"latency_{stage}_p50_ms"] = round(percentile(values, 50), 1) if values else None
+        block[f"latency_{stage}_p95_ms"] = round(percentile(values, 95), 1) if values else None
+        block[f"latency_{stage}_samples"] = len(values)
+    block["latency_samples"] = block.get("latency_total_samples", 0)
+    return block
+
+
 def _print_report(
     results: list[EvalResult], run_tag: str
 ) -> tuple[dict[str, float], dict[str, Any]]:
@@ -711,6 +738,7 @@ def _print_report(
         "refusal_cases": refusal["refusal_cases"],
         "corpus_gap_cases": corpus_gap_cases,
     }
+    avg.update(_latency_block(results))
 
     stage_totals: dict[str, Any] = {
         "total_snippets": 0,
@@ -779,6 +807,22 @@ def _print_report(
     _judge_failed_total = sum(judge_failed.values())
     if _judge_failed_total:
         logger.info("  │ Judge failures       │ %-8d │", _judge_failed_total)
+    if avg.get("latency_samples"):
+        logger.info("  ├──────────────────────────────────────────────┤")
+        logger.info("  │ 延迟 (ms, p50 / p95)                        │")
+        for stage, label in (("total", "端到端"), ("retrieval", "检索"), ("generation", "生成")):
+            p50 = avg.get(f"latency_{stage}_p50_ms")
+            if p50 is None:
+                continue
+            p95 = avg.get(f"latency_{stage}_p95_ms")
+            n = avg.get(f"latency_{stage}_samples", 0)
+            logger.info(
+                "  │ • %-6s %9.1f / %9.1f  (n=%d)          │",
+                label,
+                p50,
+                p95,
+                n,
+            )
     if tot > 0:
         logger.info("  ├──────────────────────────────────────────────┤")
         logger.info("  │ Retrieval Lab 召回归因 (Stage Attribution)   │")
@@ -1138,6 +1182,7 @@ if __name__ == "__main__":
                             "retrieved_chunk_ids": r.retrieved_chunk_ids,
                             "expected_refusal": r.expected_refusal,
                             "refused": r.refused,
+                            "total_ms": round(r.total_ms, 1) if r.total_ms else None,
                             "retrieval_ms": round(r.retrieval_ms, 1) if r.retrieval_ms else None,
                             "generation_ms": round(r.generation_ms, 1) if r.generation_ms else None,
                         }
@@ -1165,11 +1210,31 @@ if __name__ == "__main__":
         b_avg, o_avg = base["averages"], opt["averages"]
         print("\n=== 优化对比（base → opt）===")
         for metric in sorted(set(b_avg) | set(o_avg)):
+            if metric.startswith("latency_"):
+                continue  # 延迟单位是 ms，单独成表
             b = b_avg.get(metric, 0.0)
             o = o_avg.get(metric, 0.0)
             delta = o - b
             arrow = "▲" if delta > 0.005 else ("▼" if delta < -0.005 else "＝")
             print(f"  {metric:<20} {b:.3f} → {o:.3f}  {arrow} {delta:+.3f}")
+
+        if any(k.startswith("latency_") for k in set(b_avg) | set(o_avg)):
+            print("\n=== 延迟对比（ms，p50 / p95，负值=更快）===")
+            for stage, label in (
+                ("total", "端到端"),
+                ("retrieval", "检索"),
+                ("generation", "生成"),
+            ):
+                bp50 = b_avg.get(f"latency_{stage}_p50_ms")
+                op50 = o_avg.get(f"latency_{stage}_p50_ms")
+                if bp50 is None or op50 is None:
+                    continue
+                bp95 = b_avg.get(f"latency_{stage}_p95_ms")
+                op95 = o_avg.get(f"latency_{stage}_p95_ms")
+                print(
+                    f"  {label:<6} p50 {bp50:8.1f} → {op50:8.1f}  ({op50 - bp50:+8.1f})"
+                    f"   p95 {bp95:8.1f} → {op95:8.1f}  ({op95 - bp95:+8.1f})"
+                )
 
         # 配对 bootstrap：85 题量级下 ±0.02 的均值差可能完全来自噪声，
         # 因此对逐题指标做配对重采样，给出 95% CI 与显著性判定。
@@ -1191,12 +1256,17 @@ if __name__ == "__main__":
             "recall_at_final_k_ids",
             "mrr_ids",
             "ndcg_at_5_ids",
+            "total_ms",
+            "retrieval_ms",
+            "generation_ms",
         ):
             b_vals, o_vals = extract_metric_series(base, opt, metric)
             if not b_vals:
                 continue
             r = paired_bootstrap_delta(b_vals, o_vals)
             verdict = "显著" if r["significant"] else "噪声（不足以判定）"
+            if metric.endswith("_ms"):
+                verdict += " [延迟：Δ<0 为更快]"
             print(
                 f"  {metric:<18} Δ{r['delta']:+.4f}  "
                 f"95%CI[{r['ci_low']:+.4f}, {r['ci_high']:+.4f}]  "
