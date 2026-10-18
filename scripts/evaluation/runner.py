@@ -34,9 +34,11 @@ def _apply_channel_selection(channels: str, settings_obj) -> None:
 
 
 def _filter_subset(questions: list, subset: str) -> list:
-    """按题号前缀切子集：emp = 85 道自然语言题，lex = 编号类题。"""
+    """按题号前缀切子集：emp = 自然语言题，lex = 编号类题，unans = 全部不可答题。"""
     if subset == "all":
         return list(questions)
+    if subset == "unans":
+        return [q for q in questions if not getattr(q, "answerable", True)]
     return [q for q in questions if str(getattr(q, "id", "")).startswith(subset)]
 
 
