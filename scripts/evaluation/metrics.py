@@ -270,7 +270,7 @@ def paired_bootstrap_delta(
             "significant": False,
         }
 
-    diffs = [float(o) - float(b) for b, o in zip(base, opt)]
+    diffs = [float(o) - float(b) for b, o in zip(base, opt, strict=True)]
     delta = sum(diffs) / n
 
     rng = random.Random(seed)
