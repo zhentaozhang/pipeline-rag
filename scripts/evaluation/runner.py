@@ -42,6 +42,39 @@ def _filter_subset(questions: list, subset: str) -> list:
     return [q for q in questions if str(getattr(q, "id", "")).startswith(subset)]
 
 
+def _category_counts(questions: list[Any]) -> dict[str, int]:
+    """按 metadata["category"] 统计题量（无标签的题不计入）。"""
+    counts: dict[str, int] = {}
+    for question in questions:
+        category = str((getattr(question, "metadata", {}) or {}).get("category") or "")
+        if category:
+            counts[category] = counts.get(category, 0) + 1
+    return counts
+
+
+def _attach_grounded_gold(questions: list[Any], grounded: dict[str, dict[str, Any]]) -> int:
+    """把 gold 对齐结果补到"自身没有 chunk 级 gold"的题上，返回补了几题。
+
+    切分（`--split`）读的是 `question.relevant_chunk_ids`，而手写题这一列为空，
+    必须在切分之前先补齐，否则按文档切分退化成"全部落 dev"。
+    """
+    filled = 0
+    for question in questions:
+        if getattr(question, "relevant_chunk_ids", None):
+            continue
+        record = grounded.get(question.id) or {}
+        chunk_ids = list(record.get("relevant_chunk_ids") or [])
+        if not chunk_ids:
+            continue
+        question.relevant_chunk_ids = chunk_ids
+        parent_ids = list(record.get("relevant_parent_ids") or [])
+        if parent_ids and not getattr(question, "relevant_parent_ids", None):
+            question.relevant_parent_ids = parent_ids
+        filled += 1
+    return filled
+
+
+
 def _build_plan(
     q: EvalQuestion,
     rewritten: str | None = None,
@@ -615,6 +648,14 @@ async def run_evaluation(
     # Task 0：通道隔离（只影响评测进程内的 settings，不改生产默认值）
     _apply_channel_selection(getattr(args, "channels", "both"), settings)
 
+    # Task 1：gold 片段对齐成 chunk_id（确定性映射，不需要人工或 LLM 标注）
+    # ⚠️ 必须排在 `--split` 之前：切分读的是题目的 relevant_chunk_ids，
+    # 手写题这一列为空，先切分会把全部题判成 dev（test 集被架空）。
+    grounded_gold = await _ground_dataset_gold(dataset, gold_file=args.gold_file)
+    _attached = _attach_grounded_gold(dataset, grounded_gold)
+    if _attached:
+        logger.info("grounded gold attached before split", questions=_attached)
+
     # Task 4：按文档切分（dev 调参 / test 验泛化）
     if getattr(args, "split", "all") != "all":
         from scripts.evaluation.splits import filter_by_split
@@ -624,9 +665,6 @@ async def run_evaluation(
         total = len(dataset)
         dataset = filter_by_split(dataset, chunk_docs, args.split)
         logger.info("split applied", split=args.split, kept=len(dataset), total=total)
-
-    # Task 1：gold 片段对齐成 chunk_id（确定性映射，不需要人工或 LLM 标注）
-    grounded_gold = await _ground_dataset_gold(dataset, gold_file=args.gold_file)
 
     try:
         engine = RagRetrievalEngine()
@@ -1231,7 +1269,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--subset",
-        choices=["all", "emp", "lex"],
+        choices=["all", "emp", "lex", "unans"],
         default="all",
         help="题库子集：emp=85 道自然语言题，lex=编号类题",
     )
@@ -1245,12 +1283,28 @@ if __name__ == "__main__":
     dataset = load_dataset()
     if args.sample_per_category > 0:
         n = args.sample_per_category
-        cat1 = [q for q in dataset if 1 <= int(q.id.replace("emp", "")) <= 20][:n]
-        cat2 = [q for q in dataset if 21 <= int(q.id.replace("emp", "")) <= 38][:n]
-        cat3 = [q for q in dataset if 39 <= int(q.id.replace("emp", "")) <= 55][:n]
-        cat4 = [q for q in dataset if 56 <= int(q.id.replace("emp", "")) <= 70][:n]
-        cat5 = [q for q in dataset if 71 <= int(q.id.replace("emp", "")) <= 85][:n]
-        dataset = cat1 + cat2 + cat3 + cat4 + cat5
+        # 优先用 metadata["category"]（数据集自带标签）；缺失时按 empNNN 的序号区间兜底，
+        # 两者都取不到就跳过该题——绝不再用 int(q.id.replace("emp","")) 硬解析，
+        # 那对 lex/ref 题会 ValueError，对顺序变化会静默切错类。
+        buckets: dict[str, list[Any]] = {}
+        for q in dataset:
+            category = str((q.metadata or {}).get("category") or "")
+            if not category:
+                digits = "".join(ch for ch in str(q.id) if ch.isdigit())
+                number = int(digits) if digits else 0
+                if 1 <= number <= 20:
+                    category = "numeric_limit"
+                elif 21 <= number <= 38:
+                    category = "conditional_branch"
+                elif 39 <= number <= 55:
+                    category = "cross_document"
+                elif 56 <= number <= 70:
+                    category = "time_version"
+                elif 71 <= number <= 85:
+                    category = "safety_boundary"
+            if category:
+                buckets.setdefault(category, []).append(q)
+        dataset = [q for name in sorted(buckets) for q in buckets[name][:n]]
     elif args.questions:
         dataset = dataset[: args.questions]
 

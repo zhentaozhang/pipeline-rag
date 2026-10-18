@@ -856,7 +856,34 @@ _PROHIBITION_IDS = {
     "emp085",
 }
 
+# 业务难点分类（与 docstring 中的五类一一对应）。
+# 早期只写在 docstring 里，`--sample-per-category` 靠 id 区间硬编码，
+# 换个数据集就静默全空。现在把分类写进 metadata，采样读标签、区间只作兜底。
+_CATEGORY_RANGES: tuple[tuple[int, int, str], ...] = (
+    (1, 20, "numeric_limit"),
+    (21, 38, "conditional_branch"),
+    (39, 55, "cross_document"),
+    (56, 70, "time_version"),
+    (71, 85, "safety_boundary"),
+)
+
+
+def _category_of(question_id: str) -> str:
+    """按题目序号映射到业务难点分类；非 empNNN 形式的 id 返回空串。"""
+    digits = "".join(ch for ch in question_id if ch.isdigit())
+    if not digits:
+        return ""
+    number = int(digits)
+    for low, high, name in _CATEGORY_RANGES:
+        if low <= number <= high:
+            return name
+    return ""
+
+
 for _q in EMPLOYEE_DATASET:
+    _category = _category_of(_q.id)
+    if _category:
+        _q.metadata["category"] = _category
     if _q.id in _NO_POLICY_IDS:
         _q.answerable = False
         _q.expected_refusal = True
