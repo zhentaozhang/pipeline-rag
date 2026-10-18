@@ -25,6 +25,21 @@ logger = structlog.get_logger(__name__)
 settings = get_settings()
 
 
+def _apply_channel_selection(channels: str, settings_obj) -> None:
+    """评测专用：把两路通道隔离，用于测量单通道指标（不改生产默认值）。"""
+    if channels == "vector":
+        settings_obj.rag.keyword_channel_enabled = False
+    elif channels == "keyword":
+        settings_obj.rag.vector_channel_enabled = False
+
+
+def _filter_subset(questions: list, subset: str) -> list:
+    """按题号前缀切子集：emp = 85 道自然语言题，lex = 编号类题。"""
+    if subset == "all":
+        return list(questions)
+    return [q for q in questions if str(getattr(q, "id", "")).startswith(subset)]
+
+
 def _build_plan(
     q: EvalQuestion,
     rewritten: str | None = None,
@@ -161,6 +176,8 @@ def _apply_id_metrics(
     该题无 gold（拒答题）时指标保持 None，不计入均值。
     """
     from scripts.evaluation.metrics import (
+        compute_any_of_mrr,
+        compute_any_of_recall_at_k,
         compute_id_mrr,
         compute_id_ndcg_at_k,
         compute_id_recall_at_k,
@@ -177,10 +194,18 @@ def _apply_id_metrics(
     retrieved = list(result.retrieved_chunk_ids or [])
     retrieved_parents = list(result.retrieved_parent_ids or [])
 
-    result.recall_at_5_ids = compute_id_recall_at_k(retrieved, gold_chunks, 5)
-    result.recall_at_final_k_ids = compute_id_recall_at_k(retrieved, gold_chunks, eval_depth)
-    result.mrr_ids = compute_id_mrr(retrieved, gold_chunks)
-    result.ndcg_at_5_ids = compute_id_ndcg_at_k(retrieved, gold_chunks, 5)
+    if getattr(question, "gold_mode", "all") == "any_of":
+        result.recall_at_5_ids = compute_any_of_recall_at_k(retrieved, gold_chunks, 5)
+        result.recall_at_final_k_ids = compute_any_of_recall_at_k(
+            retrieved, gold_chunks, eval_depth
+        )
+        result.mrr_ids = compute_any_of_mrr(retrieved, gold_chunks)
+        result.ndcg_at_5_ids = compute_id_ndcg_at_k(retrieved, gold_chunks, 5)
+    else:
+        result.recall_at_5_ids = compute_id_recall_at_k(retrieved, gold_chunks, 5)
+        result.recall_at_final_k_ids = compute_id_recall_at_k(retrieved, gold_chunks, eval_depth)
+        result.mrr_ids = compute_id_mrr(retrieved, gold_chunks)
+        result.ndcg_at_5_ids = compute_id_ndcg_at_k(retrieved, gold_chunks, 5)
     result.recall_at_5_parent_ids = compute_id_recall_at_k(retrieved_parents, gold_parents, 5)
     result.recall_at_final_k_parent_ids = compute_id_recall_at_k(
         retrieved_parents, gold_parents, eval_depth
@@ -584,6 +609,9 @@ async def run_evaluation(
     await init_db()
     await init_pg()
     await init_es()
+
+    # Task 0：通道隔离（只影响评测进程内的 settings，不改生产默认值）
+    _apply_channel_selection(getattr(args, "channels", "both"), settings)
 
     # Task 4：按文档切分（dev 调参 / test 验泛化）
     if getattr(args, "split", "all") != "all":
@@ -1129,6 +1157,18 @@ if __name__ == "__main__":
         help="按文档切分：dev 调参、test 验泛化（--generated-file 时才有意义）",
     )
     parser.add_argument(
+        "--channels",
+        choices=["both", "vector", "keyword"],
+        default="both",
+        help="通道隔离（仅评测用）：vector=关关键词通道，keyword=关向量通道",
+    )
+    parser.add_argument(
+        "--subset",
+        choices=["all", "emp", "lex"],
+        default="all",
+        help="题库子集：emp=85 道自然语言题，lex=编号类题",
+    )
+    parser.add_argument(
         "--free",
         action="store_true",
         help="零成本模式 = --retrieval-only + --no-rewrite + --reranker-off",
@@ -1149,6 +1189,9 @@ if __name__ == "__main__":
 
     if args.generated_file:
         dataset = dataset + _load_generated_questions(args.generated_file)
+
+    # 题库子集与通道隔离（必须在 gold 对齐之前，gold 只对留下的题做）
+    dataset = _filter_subset(dataset, args.subset)
     # dev/test 切分需要 chunk→document 映射，放到 run_evaluation 里 init_db 之后做
 
     from app.config import get_settings as _gs

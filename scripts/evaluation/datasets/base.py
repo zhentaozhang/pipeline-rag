@@ -20,6 +20,9 @@ class EvalQuestion(BaseModel):
     answerable: bool = True
     # Task 2：True = 该题的正确答案是**不得编造**（无依据时必须明说，而不是给出具体数字）。
     expected_refusal: bool = False
+    # 多解 gold 口径："all" = 覆盖比例（默认）；"any_of" = 任一命中即算召回
+    # （条款号跨文档重号的编号类题用这个）。
+    gold_mode: str = "all"
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

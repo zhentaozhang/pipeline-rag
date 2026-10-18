@@ -403,6 +403,39 @@ def compute_id_ndcg_at_k(
     return round(dcg / idcg, 4) if idcg > 0 else 0.0
 
 
+def compute_any_of_recall_at_k(
+    retrieved_ids: list[Any],
+    gold_ids: set[Any] | list[Any] | tuple[Any, ...],
+    k: int,
+) -> float | None:
+    """any-of 召回：top-k 里出现**任一** gold 即算命中。
+
+    条款号在语料里跨文档重号（"第9条"分别出现在员工手册/差旅制度/商务招待），
+    这类题若按"全部 gold 覆盖比例"计分，等于要求模型把三份不相关文档全召回，
+    会把真实能力算低。多解题按 any-of 判定。
+    """
+    gold = _id_set(gold_ids)
+    if not gold:
+        return None
+    if k <= 0:
+        return 0.0
+    return 1.0 if any(_id_key(raw) in gold for raw in (retrieved_ids or [])[:k]) else 0.0
+
+
+def compute_any_of_mrr(
+    retrieved_ids: list[Any],
+    gold_ids: set[Any] | list[Any] | tuple[Any, ...],
+) -> float | None:
+    """any-of MRR：首个命中任一 gold 的名次倒数。"""
+    gold = _id_set(gold_ids)
+    if not gold:
+        return None
+    for rank, raw in enumerate(retrieved_ids or [], start=1):
+        if _id_key(raw) in gold:
+            return round(1.0 / rank, 4)
+    return 0.0
+
+
 # ─────────────────────────────────────────────────────────────────────
 # P0-3：延迟分位数
 #
