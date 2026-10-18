@@ -192,6 +192,7 @@ class RewriteResult:
     needs_rewrite: bool = False  # 该问题是否需要改写（False = 无需改写，可跳过本阶段）
     # P0-1b: 意图分类合并进改写（原独立 IntentClassifyStage 的 LLM 调用）
     intent: str = "knowledge"  # knowledge | open | ambiguous
+    intent_source: str = "unknown"  # jev | llm | rule —— 判定来源，便于排查"两套模型打架"
 
 
 @dataclass
@@ -207,6 +208,51 @@ class AnswerHistoryContextResult:
     @property
     def is_empty(self) -> bool:
         return not self.rendered_text.strip()
+
+
+# 意图标签归一：JEV 与 LLM 两条路径必须共用同一张映射表，
+# 否则 capability 在 JEV 侧被映射成 open、在 LLM 侧被兜成 knowledge，
+# 同一问题换条路径就换结论（T4 审计发现）。
+_INTENT_LABELS = ("knowledge", "open", "ambiguous")
+_INTENT_ALIASES = {"capability": "open", "chitchat": "open", "chat": "open"}
+
+# JEV Choice 灰区：最高概率不足 _INTENT_MIN_CONF，或领先优势不足 _INTENT_MIN_MARGIN 时
+# 不硬判、退回规则层（规则层对"天气/新闻/闲聊"是确定性的）。
+_INTENT_MIN_CONF = 0.55
+_INTENT_MIN_MARGIN = 0.15
+
+
+def normalize_intent(raw: object) -> str:
+    """把 JEV / LLM 给出的意图标签统一映射到 knowledge|open|ambiguous。"""
+    if not isinstance(raw, str):
+        return "knowledge"
+    label = raw.strip().lower()
+    label = _INTENT_ALIASES.get(label, label)
+    return label if label in _INTENT_LABELS else "knowledge"
+
+
+async def jev_decide_safe(question: str, parse):
+    """调用 JEV 意图判定；开关关闭或异常时返回 None（调用方回退规则层）。"""
+    from app.infra.jev_client import jev_decide
+
+    return await jev_decide(
+        "intent_detection_enabled",
+        state=question,
+        questions={
+            "intent": {
+                "type": "choice",
+                "instructions": "该用户问题的知识检索意图类型",
+                "options": {
+                    "knowledge": "可从企业内部文档与知识库中查证的业务咨询",
+                    "open": "需要外部搜索的实时信息（天气、新闻、股票等）或日常闲聊",
+                    "capability": "询问助手本身的功能、用法或身份",
+                    "ambiguous": "信息不完整或模糊不清，需要澄清",
+                },
+            }
+        },
+        parse=parse,
+        log_context="JEV intent in query rewriter",
+    )
 
 
 class ChatQueryRewriteService:
@@ -296,13 +342,14 @@ JSON 格式：
             not force and not _needs_rewrite(normalized_question, history_summary)
         ):
             # P0-1b: 无需改写时进行意图判定（优先 JEV System 1 Choice）
-            resolved_intent = await self._resolve_intent(normalized_question)
+            resolved_intent, intent_source = await self._resolve_intent(normalized_question)
             return RewriteResult(
                 rewritten=normalized_question,
                 sub_questions=[normalized_question],
                 keywords=[],
                 needs_rewrite=False,
                 intent=resolved_intent,
+                intent_source=intent_source,
             )
 
         # ── LLM rewrite ───────────────────────────────────────────────
@@ -395,48 +442,54 @@ JSON 格式：
                 question=normalized_question[:50],
                 sub_count=len(sub_qs),
             )
+        intent_from_rules, intent_source_from_rules = await self._resolve_intent(
+            normalized_question
+        )
         return RewriteResult(
             rewritten=normalized_question,
             sub_questions=sub_qs,
             keywords=[],
             needs_rewrite=True,
-            # P0-1b: 规则回退时用 JEV 意图判定（失败兜底回退规则）
-            intent=await self._resolve_intent(normalized_question),
+            intent=intent_from_rules,
+            intent_source=intent_source_from_rules,
         )
 
-    async def _resolve_intent(self, question: str) -> str:
-        from app.infra.jev_client import jev_decide
+    async def _resolve_intent(self, question: str) -> tuple[str, str]:
+        """意图判定：JEV 高置信直接采用；灰区/不可用回退规则层。返回 (intent, source)。"""
 
-        def _parse(answers: dict) -> str | None:
-            intent_res = answers.get("intent")
-            choice = intent_res.get("choice") if isinstance(intent_res, dict) else intent_res
-            if choice in ("open", "capability"):
-                return "open"
-            if choice in ("knowledge", "ambiguous"):
-                return str(choice)
-            return None
+        def _parse(answers: dict) -> tuple[str, float, float] | None:
+            res = answers.get("intent")
+            if not isinstance(res, dict):
+                return None
+            choice = normalize_intent(res.get("choice"))
+            dist = res.get("distribution")
+            top = margin = 0.0
+            if isinstance(dist, dict) and dist:
+                probs = sorted(
+                    (float(v) for v in dist.values() if isinstance(v, (int, float))),
+                    reverse=True,
+                )
+                top = probs[0]
+                margin = probs[0] - probs[1] if len(probs) > 1 else 1.0
+            else:
+                conf = res.get("confidence")
+                top = float(conf) if isinstance(conf, (int, float)) else 0.0
+                margin = 1.0  # 无分布时只靠置信度阈值把关
+            return choice, top, margin
 
-        jev_intent = await jev_decide(
-            "intent_detection_enabled",
-            state=question,
-            questions={
-                "intent": {
-                    "type": "choice",
-                    "instructions": "该用户问题的知识检索意图类型",
-                    "options": {
-                        "knowledge": "可从企业内部文档与知识库中查证的业务咨询",
-                        "open": "需要外部搜索的实时信息（天气、新闻、股票等）或日常闲聊",
-                        "capability": "询问助手本身的功能、用法或身份",
-                        "ambiguous": "信息不完整或模糊不清，需要澄清",
-                    },
-                }
-            },
-            parse=_parse,
-            log_context="JEV intent in query rewriter",
-        )
-        if jev_intent is not None:
-            return jev_intent
-        return self._rule_based_intent(question)
+        judge = await jev_decide_safe(question, _parse)
+        if judge is not None:
+            choice, top, margin = judge
+            if top >= _INTENT_MIN_CONF and margin >= _INTENT_MIN_MARGIN:
+                return choice, "jev"
+            logger.info(
+                "JEV 意图判定落入灰区，回退规则层",
+                choice=choice,
+                top=round(top, 3),
+                margin=round(margin, 3),
+                question=question[:50],
+            )
+        return self._rule_based_intent(question), "rule"
 
     def _rule_based_intent(self, question: str) -> str:
         """规则意图判定：开放提问/闲聊/能力问答 → open，其余默认 knowledge（P0-1b）"""
@@ -472,8 +525,7 @@ JSON 格式：
             keywords = []
             if isinstance(keywords_raw, list):
                 keywords = [str(k).strip() for k in keywords_raw if str(k).strip()]
-            intent_raw = root.get("intent", "knowledge")
-            intent = intent_raw if intent_raw in ("knowledge", "open", "ambiguous") else "knowledge"
+            intent = normalize_intent(root.get("intent"))
             return {
                 "rewrite": rewrite,
                 "should_split": should_split,
@@ -502,9 +554,7 @@ JSON 格式：
         should_split_val = parsed.get("should_split")
         sub_questions = [s for s in parsed.get("sub_questions", []) if s]
         keywords = [k for k in parsed.get("keywords", []) if k]
-        intent = parsed.get("intent", "knowledge")
-        if intent not in ("knowledge", "open", "ambiguous"):
-            intent = "knowledge"
+        intent = normalize_intent(parsed.get("intent"))
 
         explicit_multi = _looks_like_explicit_multi_question(original_question)
         # P2 多跳拆分：仅当开关开启时，才把"条件型单句问题"也视为可拆分
@@ -537,6 +587,7 @@ JSON 格式：
             sub_questions=sub_questions,
             keywords=keywords,
             intent=intent,
+            intent_source="llm",
         )
 
     # ── AnswerHistoryContext 组装 ────────────────────────────────────────────
