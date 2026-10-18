@@ -237,7 +237,7 @@ class TestDocumentHeaderMetadata:
             document_name="员工手册",
             section_path="1. 总则",
             section_title="总则",
-            )
+        )
         ev.child_chunk_text = "y" * 100
         budget = PromptBudget(total_budget=400, per_sub_question_budget=400)
         rendered = svc._append_references([ev], set(), budget)

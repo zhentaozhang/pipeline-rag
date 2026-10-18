@@ -141,9 +141,7 @@ async def _ensure_chunk_index() -> None:
             await _warn_if_index_analyzer_mismatch(es, analyzer)
             return
         await es.indices.create(index=CHUNK_INDEX, body=mapping)
-        logger.info(
-            "elasticsearch chunk index created", index=CHUNK_INDEX, analyzer=analyzer
-        )
+        logger.info("elasticsearch chunk index created", index=CHUNK_INDEX, analyzer=analyzer)
         return
 
     logger.error("no usable analyzer for chunk index", index=CHUNK_INDEX)
@@ -236,9 +234,7 @@ async def _ensure_navigation_index() -> None:
         mapping = _build_navigation_mapping(analyzer, search_analyzer)
         if exists:
             try:
-                await es.indices.put_mapping(
-                    index=NAVIGATION_INDEX, body=mapping["mappings"]
-                )
+                await es.indices.put_mapping(index=NAVIGATION_INDEX, body=mapping["mappings"])
             except Exception as e:
                 logger.warning(
                     "elasticsearch navigation index mapping update failed",

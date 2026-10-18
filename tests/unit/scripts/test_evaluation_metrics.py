@@ -139,8 +139,18 @@ class TestPairedBootstrapDelta:
     def test_extract_metric_series_pairs_by_question_id(self):
         from scripts.evaluation.metrics import extract_metric_series
 
-        base = {"results": [{"question_id": "a", "recall_at_5": 1.0}, {"question_id": "b", "recall_at_5": 0.0}]}
-        opt = {"results": [{"question_id": "b", "recall_at_5": 1.0}, {"question_id": "a", "recall_at_5": 1.0}]}
+        base = {
+            "results": [
+                {"question_id": "a", "recall_at_5": 1.0},
+                {"question_id": "b", "recall_at_5": 0.0},
+            ]
+        }
+        opt = {
+            "results": [
+                {"question_id": "b", "recall_at_5": 1.0},
+                {"question_id": "a", "recall_at_5": 1.0},
+            ]
+        }
         b_vals, o_vals = extract_metric_series(base, opt, "recall_at_5")
         assert b_vals == [1.0, 0.0]
         assert o_vals == [1.0, 1.0]
@@ -148,7 +158,12 @@ class TestPairedBootstrapDelta:
     def test_extract_metric_series_skips_missing_questions(self):
         from scripts.evaluation.metrics import extract_metric_series
 
-        base = {"results": [{"question_id": "a", "recall_at_5": 1.0}, {"question_id": "b", "recall_at_5": 0.0}]}
+        base = {
+            "results": [
+                {"question_id": "a", "recall_at_5": 1.0},
+                {"question_id": "b", "recall_at_5": 0.0},
+            ]
+        }
         opt = {"results": [{"question_id": "a", "recall_at_5": 0.0}]}
         b_vals, o_vals = extract_metric_series(base, opt, "recall_at_5")
         assert b_vals == [1.0]

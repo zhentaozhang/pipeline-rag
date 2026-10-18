@@ -164,9 +164,23 @@ async def test_lookup_and_store_are_tenant_scoped(monkeypatch):
     assert captured["get"] != key_a
 
     await store(
-        _FakeDb(), "c1", "问题", "auto", [], ['data: {"type": "done"}'], "答案", tenant_id="tenant-a"
+        _FakeDb(),
+        "c1",
+        "问题",
+        "auto",
+        [],
+        ['data: {"type": "done"}'],
+        "答案",
+        tenant_id="tenant-a",
     )
     await store(
-        _FakeDb(), "c1", "问题", "auto", [], ['data: {"type": "done"}'], "答案", tenant_id="tenant-b"
+        _FakeDb(),
+        "c1",
+        "问题",
+        "auto",
+        [],
+        ['data: {"type": "done"}'],
+        "答案",
+        tenant_id="tenant-b",
     )
     assert captured["set"] != key_a  # 最后一次写入的是 tenant-b 的键

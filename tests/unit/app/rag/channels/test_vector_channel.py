@@ -66,9 +66,7 @@ class TestBuildSql:
         assert args[1] == "default"
 
     def test_blank_tenant_falls_back_to_default(self):
-        sql, args = VectorRetrievalChannel._build_sql(
-            make_sub_question(tenant_id="   "), "[1]", 10
-        )
+        sql, args = VectorRetrievalChannel._build_sql(make_sub_question(tenant_id="   "), "[1]", 10)
         assert args[1] == "default"
 
     def test_tenant_and_scope(self):
@@ -364,9 +362,7 @@ async def test_embed_cache_key_includes_model(monkeypatch):
             return _types.SimpleNamespace(data=[_types.SimpleNamespace(embedding=[0.1, 0.2])])
 
     channel = VectorRetrievalChannel()
-    monkeypatch.setattr(
-        channel, "_openai", _types.SimpleNamespace(embeddings=_FakeEmbeddings())
-    )
+    monkeypatch.setattr(channel, "_openai", _types.SimpleNamespace(embeddings=_FakeEmbeddings()))
     monkeypatch.setattr(
         vector_module,
         "settings",
