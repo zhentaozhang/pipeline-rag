@@ -114,7 +114,7 @@ class RAGSettings(BaseSettings):
     # P2 多跳拆分：复合/多条件（含 且/并且/同时/满足…等条件连接）单句问题拆为多个检索子查询。
     # A/B 实测（25 题）：R@10 持平、R@5/命中略降，未验证收益，故默认关（opt-in）。
     # 用 runner --multi-hop-split 开启做对照；待 chunk/embedding 优化后复测再评估是否转正。
-    multi_hop_split_enabled: bool = True
+    multi_hop_split_enabled: bool = False
     no_evidence_reply: str = "当前没有从已接入文档中检索到足够证据，暂时不能给出可靠结论。"
     stream_timeout_seconds: int = 600
     answer_system_prompt: str = ""
@@ -142,10 +142,12 @@ class RAGSettings(BaseSettings):
     evaluation_timeout_seconds: int = 30
     evaluation_sample_rate: float = 0.0
     evidence_min_score: float = 0.1
-    rerank_min_score: float = 0.35  # 绝对下限：滤无关块（0.10-0.25）不伤相关块（0.45+）
+    # 默认关闭阈值：85 题实测 0.35 阈值使 Recall@5 从 0.8020 掉到 0.7333，
+    # 阈值只应在按语料标定过 rerank 分数分布后再开启。
+    rerank_min_score: float = 0.0
     # P1 相对阈值：保留 rerank_score >= top_score * ratio 的候选（默认 0.35 相对放行）。
     # 避免"整体低分区间被一刀切"造成的召回坍塌（如 0.17/0.06 全被 0.35 滤掉）。
-    rerank_relative_ratio: float = 0.35
+    rerank_relative_ratio: float = 0.0
     knowledge_route_confidence_threshold: float = 0.40
     vectorize_batch_size: int = 10
     # P0-2: Contextual Chunking——embedding 文本附加文档名+章节路径（重索引后生效，可回退关闭）

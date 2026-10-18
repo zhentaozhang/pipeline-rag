@@ -59,7 +59,7 @@ class RerankSettings(BaseSettings):
     base_url: str = "https://api.siliconflow.cn/v1"
     api_key: str = ""
     model: str = "BAAI/bge-reranker-v2-m3"
-    top_n: int = 3
+    top_n: int = 10
     connect_timeout_ms: int = 3000
     read_timeout_ms: int = 6000
     inject_title_breadcrumbs: bool = True

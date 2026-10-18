@@ -96,7 +96,8 @@ class TestLLMSettings:
         s = RerankSettings(_env_file=None)
         assert not s.enabled
         assert s.model == "BAAI/bge-reranker-v2-m3"
-        assert s.top_n == 3
+        # top_n 既是 API 侧截断也是本地截断；小于 final_top_k 会把候选硬砍掉
+        assert s.top_n == 10
 
 
 class TestPipelineSettings:
@@ -113,6 +114,18 @@ class TestPipelineSettings:
         assert s.no_evidence_reply.startswith("当前没有")
         assert s.knowledge_route_confidence_threshold == 0.40
         assert s.evaluation_sample_rate == 0.0
+
+    def test_rag_retrieval_defaults_match_measured_best(self, monkeypatch):
+        """默认值必须等于 85 题实测最优配置，避免代码默认与 .env 长期背离。
+
+        reports/ 实测（85 题，retrieval-only）：
+          rerank 阈值 0.35 → Recall@5 0.7333；阈值关闭 → 0.8020
+          multi-hop 拆分 → Recall@5 0.7133；不拆分 → 0.7267
+        """
+        s = RAGSettings(_env_file=None)
+        assert s.rerank_relative_ratio == 0.0
+        assert s.rerank_min_score == 0.0
+        assert s.multi_hop_split_enabled is False
 
     def test_agent_defaults(self):
         s = AgentSettings()
