@@ -742,6 +742,31 @@ def _fmt_num(value: float | None, width: int = 5) -> str:
     return f"{'N/A':<{width}}" if value is None else f"{value:.3f}"
 
 
+def _judge_coverage(
+    completed: list[EvalResult], metric_fields: dict[str, str]
+) -> dict[str, float | None]:
+    """每个 judge 指标的判分覆盖率（成功判分样本 / 完成样本）。
+
+    事故背景：LLM 余额耗尽时 47/85 题生成失败，剩下的 38 题照样被算出均值，
+    指标看起来比真实值高 0.06 且无任何告警。覆盖率必须显式暴露。
+    """
+    if not completed:
+        return {name: None for name in metric_fields}
+    coverage: dict[str, float | None] = {}
+    for name, field in metric_fields.items():
+        scored = sum(1 for r in completed if getattr(r, field) is not None)
+        coverage[name] = scored / len(completed)
+    return coverage
+
+
+def _min_judge_coverage(coverage: dict[str, float | None]) -> float | None:
+    """最差指标的覆盖率：任一指标准不出，整轮判分就不完整。"""
+    values = [v for v in coverage.values() if v is not None]
+    if not values:
+        return None
+    return min(values)
+
+
 def _print_report(
     results: list[EvalResult], run_tag: str
 ) -> tuple[dict[str, float], dict[str, Any]]:
@@ -770,6 +795,7 @@ def _print_report(
         name: sum(1 for r in completed if getattr(r, field) is None)
         for name, field in metric_fields.items()
     }
+    judge_cov = _judge_coverage(completed, metric_fields)
 
     faithfulness = [r.faithfulness_score for r in completed if r.faithfulness_score is not None]
     relevancy = [
@@ -844,6 +870,9 @@ def _print_report(
         "recall_at_5_parent_ids": _avg(recall5_pids),
         "recall_at_final_k_parent_ids": _avg(recall_final_pids),
         "grounded_questions": len(recall5_ids),
+        # 判分覆盖率：<1.0 说明均值只代表子集，必须结合报警解读
+        "judge_coverage": _min_judge_coverage(judge_cov),
+        "judge_samples": len(completed),
         # P0-2：执行器后处理的产出（None = 该题没有引用 / 未跑后处理）
         "citation_accuracy": _avg(citation_acc) if citation_acc else None,
         "citation_samples": len(citation_acc),
@@ -875,6 +904,7 @@ def _print_report(
         stage_totals["total_snippets"] += stg.get("total", 0)
 
     stage_totals["judge_failed"] = judge_failed
+    stage_totals["judge_coverage_by_metric"] = judge_cov
 
     tot = stage_totals["total_snippets"]
     if tot > 0:
@@ -924,6 +954,15 @@ def _print_report(
     _judge_failed_total = sum(judge_failed.values())
     if _judge_failed_total:
         logger.info("  │ Judge failures       │ %-8d │", _judge_failed_total)
+    cov_min = _min_judge_coverage(judge_cov)
+    if cov_min is not None:
+        logger.info("  │ 判分覆盖率 (最差指标) │ %.3f  │", cov_min)
+        if cov_min < 1.0:
+            logger.warning(
+                "判分覆盖率不足 %.3f：下列指标均值只代表已判分子集，不可与完整跑次直接比较；"
+                "缺失明细见 stage_attribution.judge_coverage_by_metric",
+                cov_min,
+            )
     if avg.get("latency_samples"):
         logger.info("  ├──────────────────────────────────────────────┤")
         logger.info("  │ 延迟 (ms, p50 / p95)                        │")
@@ -1067,6 +1106,12 @@ if __name__ == "__main__":
     parser.add_argument("--min-correctness", type=float, default=0.6)
     # 检索层门禁：0 = 跳过；用 chunk_id 口径的 R@5（不依赖 LLM judge，可在 retrieval-only 下跑）
     parser.add_argument("--min-recall-ids", type=float, default=0.0)
+    parser.add_argument(
+        "--min-judge-coverage",
+        type=float,
+        default=0.0,
+        help="判分覆盖率门禁（0=跳过）。低于阈值说明均值只代表子集，应判该轮无效",
+    )
     parser.add_argument("--json-report", type=str, default="", help="Write JSON report to path")
     parser.add_argument(
         "--gold-file",
@@ -1477,6 +1522,8 @@ if __name__ == "__main__":
     if args.min_recall_ids > 0:
         # 检索层门禁不依赖 judge，任何模式下都应生效
         gates.append(("recall_at_5_ids", args.min_recall_ids, avg.get("recall_at_5_ids")))
+    if args.min_judge_coverage > 0:
+        gates.append(("judge_coverage", args.min_judge_coverage, avg.get("judge_coverage")))
     if not args.retrieval_only and not args.no_judge:
         gates.extend(
             [
