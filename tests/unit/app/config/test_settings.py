@@ -230,3 +230,21 @@ class TestJWTSettings:
         )
         assert s.algorithm == "HS512"
         assert s.expire_minutes == 30
+
+
+class TestParentRerankDefaults:
+    def test_parent_rerank_on_with_head_only(self):
+        """父块级重排默认开：排序质量显著改善，且只重排头部以控制延迟。
+
+        reports/trunc_k16.json（关闭）vs pr08_k16.json（top_n=8，均为 85 题 retrieval-only）：
+          MRR_ids 0.8170 → 0.8428（+2.57pp，CI[0.68,5.10]pp，显著）
+          nDCG@5_ids 0.8018 → 0.8210（显著）
+          R@final_k_ids 0.9462 → 0.9462（不变）
+          检索 p50 742ms → 939ms
+        top_n=20 与 =8 效果相同但更慢；top_n=50 显著变差。
+        """
+        s = RAGSettings(_env_file=None)
+        assert s.parent_rerank_enabled is True
+        assert s.parent_rerank_top_n == 8
+        assert s.parent_rerank_max_chars == 2000
+        assert s.parent_rerank_blend == 1.0

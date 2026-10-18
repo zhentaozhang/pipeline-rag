@@ -87,10 +87,16 @@ class RAGSettings(BaseSettings):
     prompt_budget_total: int = 20000
     prompt_budget_per_subquestion: int = 8000
     parent_evidence_max_chars: int = 4000
-    # 父块级重排（实验）：在父块提升之后再对 top-N 父块打一次分，让重排看到
-    # "最终喂给 LLM 的文本"而不是子块。默认关闭，由 hard85/115 评测判定是否采纳。
-    parent_rerank_enabled: bool = False
-    parent_rerank_top_n: int = 20
+    # 父块级重排：在父块提升之后再对 top-N 父块打一次分，让重排看到"最终喂给 LLM
+    # 的文本"而不是子块（此前打分对象 ≠ 生成对象，是设计缺陷）。
+    # 85 题 retrieval-only（final_top_k=16，reports/trunc_k16.json → pr08_k16.json）：
+    #   MRR_ids 0.8170 → 0.8428（+2.57pp，配对 bootstrap CI[+0.7,+5.1]pp，显著）
+    #   nDCG@5_ids 0.8018 → 0.8210（显著）、R@5_ids 0.8543 → 0.8650（方向为正、不显著）
+    #   R@final_k_ids 0.9462 不变（只重排头部，未打分尾部保持原序）
+    #   检索 p50 742ms → 939ms（+197ms）
+    # top_n=8 与 20 的效果相同但更快；top_n=50 会把空父块提上来，实测显著变差。
+    parent_rerank_enabled: bool = True
+    parent_rerank_top_n: int = 8
     parent_rerank_max_chars: int = 2000
     # 父块分与子块分的混合权重：1.0 = 纯父块分，0.0 = 纯子块分（等价于只重排子块）。
     parent_rerank_blend: float = 1.0
@@ -146,6 +152,9 @@ class RAGSettings(BaseSettings):
     stream_timeout_seconds: int = 600
     answer_system_prompt: str = ""
     answer_max_chars: int = 0  # 回答长度上限（0=不限；>0 时 prompt 注入简明约束，D 项 A/B）
+    # 证据对齐合同（078 生成侧）：要求"数值必带引用、多条款题逐条对齐、查不到就说查不到"。
+    # 与 app/chat/answer_grounding.py 的确定性校验配套（后者判负，前者减少触发）。
+    answer_grounding_contract_enabled: bool = True
     citation_verify_enabled: bool = (
         True  # 017 生成侧：引用验证器（每轮 1 次轻量 LLM 自检引用-证据对应）
     )

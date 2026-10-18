@@ -1,7 +1,8 @@
 """父块级重排（实验开关）：让重排看到"最终喂给 LLM 的文本"。
 
 已知问题：现有重排打分的是子块文本，而 LLM 读到的是父块全文。
-父块级重排是对齐这两者的最小改动，默认关闭，靠评测判定是否采纳。
+父块级重排是对齐这两者的最小改动；实测 MRR +2.57pp（显著）后已默认开启，
+只重排 head（top_n=8）以控制 +197ms 的延迟代价。
 """
 
 from __future__ import annotations
@@ -30,6 +31,8 @@ def parent_rerank_on(monkeypatch):
 
 
 async def test_disabled_keeps_order_and_skips_api(monkeypatch):
+    # 默认已开启，这里显式关掉以验证"关闭即零调用"的不变量
+    monkeypatch.setattr(get_settings().rag, "parent_rerank_enabled", False, raising=False)
     engine = RagRetrievalEngine()
     calls: list[int] = []
 
