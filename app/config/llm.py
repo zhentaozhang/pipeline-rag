@@ -62,6 +62,6 @@ class RerankSettings(BaseSettings):
     top_n: int = 3
     connect_timeout_ms: int = 3000
     read_timeout_ms: int = 6000
-    inject_title_breadcrumbs: bool = False
+    inject_title_breadcrumbs: bool = True
 
     model_config = SettingsConfigDict(env_prefix="RERANK_", env_file=_ENV_FILE, extra="ignore")

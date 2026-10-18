@@ -90,7 +90,8 @@ def _run_config(
         "v_weight": v_weight,
         "k_weight": k_weight,
         "recall_at_5": avg.get("recall_at_5", 0.0),
-        "recall_at_10": avg.get("recall_at_10", 0.0),
+        "recall_at_final_k": avg.get("recall_at_final_k", 0.0),
+        "eval_depth": data.get("provenance", {}).get("retrieval_eval_depth", 10),
         "hit_rate": stage.get("hit_rate", 0.0),
         "unrecalled_rate": stage.get("unrecalled_rate", 0.0),
         "rerank_demote_rate": stage.get("rerank_demote_rate", 0.0),
@@ -129,17 +130,18 @@ def main() -> int:
         print("无有效结果。", file=sys.stderr)
         return 1
 
-    rows.sort(key=lambda r: (r["recall_at_10"], r["hit_rate"]), reverse=True)
+    depth = rows[0].get("eval_depth", 10)
+    rows.sort(key=lambda r: (r["recall_at_final_k"], r["hit_rate"]), reverse=True)
     header = (
-        f"{'config':<20} {'R@5':>6} {'R@10':>6} {'hit':>6} "
+        f"{'config':<20} {'R@5':>6} {f'R@{depth}':>6} {'hit':>6} "
         f"{'unrec':>6} {'demote':>7} {'fusion':>7} {'cutoff':>7}"
     )
-    print("\n=== RRF 网格搜索结果（按 Recall@10 降序）===")
+    print(f"\n=== RRF 网格搜索结果（按 Recall@{depth} 降序）===")
     print(header)
     print("-" * len(header))
     for r in rows:
         print(
-            f"{r['tag']:<20} {r['recall_at_5']:>6.3f} {r['recall_at_10']:>6.3f} "
+            f"{r['tag']:<20} {r['recall_at_5']:>6.3f} {r['recall_at_final_k']:>6.3f} "
             f"{r['hit_rate']:>6.3f} {r['unrecalled_rate']:>6.3f} "
             f"{r['rerank_demote_rate']:>7.3f} {r['fusion_drop_rate']:>7.3f} "
             f"{r['cutoff_drop_rate']:>7.3f}"

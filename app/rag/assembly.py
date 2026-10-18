@@ -91,8 +91,7 @@ class PromptAssemblyService:
         user_prompt = self._build_user_prompt(plan, deduped, budget, rendered_reference_keys)
 
         # ── Step 3: Context Window 预检 ────────────────────────────
-        raw_total = len(system_prompt) + len(user_prompt)
-        estimated_tokens = self._estimate_tokens(raw_total)
+        estimated_tokens = self._estimate_tokens(system_prompt + user_prompt)
         context_limit = settings.llm.context_window_limit
         actual_limit = int(context_limit * (1.0 - settings.rag.context_window_safety_margin))
         utilization = estimated_tokens / context_limit if context_limit > 0 else 0.0
@@ -116,8 +115,7 @@ class PromptAssemblyService:
                 new_budget=budget.total_budget,
             )
             user_prompt = self._build_user_prompt(plan, deduped, budget, rendered_reference_keys)
-            raw_total = len(system_prompt) + len(user_prompt)
-            estimated_tokens = self._estimate_tokens(raw_total)
+            estimated_tokens = self._estimate_tokens(system_prompt + user_prompt)
             utilization = estimated_tokens / context_limit if context_limit > 0 else 0.0
             CONTEXT_WINDOW_UTILIZATION.set(utilization)
 
@@ -430,8 +428,15 @@ class PromptAssemblyService:
         return f"{ev.source_type}:{ev.title}:{ev.content[:50] if ev.content else ''}"
 
     @staticmethod
-    def _estimate_tokens(char_count: int) -> int:
-        return max(1, char_count // 4)
+    def _estimate_tokens(text: str) -> int:
+        """估算 token 数：复用 CJK 感知口径（中文≈1/1.5 token/字，ASCII≈1/4）。
+
+        旧实现 ``chars // 4`` 是英文口径，对中文低估约 3~4 倍，
+        会让 CONTEXT_WINDOW_UTILIZATION 与上下文溢出保护失真。
+        """
+        from app.chat.service_utils import _estimate_tokens as _estimate
+
+        return max(1, _estimate(text or ""))
 
     def _reference_summary(self, ev: Evidence, suffix: str) -> str:
         title = ev.title or ""

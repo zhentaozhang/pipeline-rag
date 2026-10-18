@@ -18,6 +18,10 @@ logger = structlog.get_logger(__name__)
 settings = get_settings()
 
 
+_EMBED_CACHE: dict[str, list[float]] = {}
+_MAX_EMBED_CACHE_SIZE: int = 512
+
+
 class VectorRetrievalChannel:
     """
     PGVector 语义检索通道。
@@ -28,12 +32,24 @@ class VectorRetrievalChannel:
         self._openai = get_embedding_client()
 
     async def _embed(self, text: str) -> list[float]:
-        """调用 Embedding API 获取查询向量"""
+        """调用 Embedding API 获取查询向量（带内存 LRU 缓存，避免重复计算）"""
+        cache_key = text.strip()
+        if cache_key in _EMBED_CACHE:
+            vec = _EMBED_CACHE.pop(cache_key)
+            _EMBED_CACHE[cache_key] = vec
+            return vec
+
         resp = await self._openai.embeddings.create(
             model=settings.llm.embedding_model,
             input=text,
         )
-        return resp.data[0].embedding
+        vec = resp.data[0].embedding
+        if len(_EMBED_CACHE) >= _MAX_EMBED_CACHE_SIZE:
+            # 淘汰最先插入的一项
+            first_key = next(iter(_EMBED_CACHE))
+            _EMBED_CACHE.pop(first_key, None)
+        _EMBED_CACHE[cache_key] = vec
+        return vec
 
     @staticmethod
     def _build_sql(sub_q: SubQuestion, embedding_str: str, limit: int) -> tuple[str, list]:
@@ -137,7 +153,8 @@ class VectorRetrievalChannel:
 
         # 3. 构建 SQL
         top_k = settings.rag.vector_top_k
-        limit = 10 if top_k <= 0 else min(top_k, 50)
+        max_k = getattr(settings.rag, "max_channel_top_k", 50) or 50
+        limit = 10 if top_k <= 0 else min(top_k, max_k)
         sql, args = self._build_sql(sub_q, embedding_str, limit)
 
         from app.infra.pg import fetch as _pg_fetch

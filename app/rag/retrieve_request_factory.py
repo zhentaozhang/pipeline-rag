@@ -81,9 +81,13 @@ class DocumentRetrieveRequestFactory:
             retrieval_query, query_context_hints = self._build_query_augmentation(
                 normalized_question, plan, sub_q.query_context_hints, sub_q_keywords=sub_q.keywords
             )
-            # Store augmented query in retrieval_query (and keep text synchronized)
             sub_q.retrieval_query = retrieval_query
-            sub_q.text = retrieval_query
+            # 正常完整查询保持 sub_q.text 为干净的自然语言句子，供 Embedding 与 Reranker 语义使用；
+            # 仅当为代词/短追问时才用包含上下文的增强 query 覆盖 sub_q.text。
+            if self._looks_like_short_follow_up(normalized_question):
+                sub_q.text = retrieval_query
+            else:
+                sub_q.text = normalized_question
 
             # ── 2. Filters：年份/章节/文档名/业务分类/标签 ─────────────────
             filters = self._build_filters(normalized_question)

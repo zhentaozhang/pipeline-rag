@@ -44,9 +44,16 @@ class KeywordRetrievalChannel:
                         "chunkText",
                     ],
                     "type": "best_fields",
+                    "minimum_should_match": "1<50%",
                 }
             },
         ]
+
+        # 针对改写提取的关键词单独注入 should 加权匹配，避免污染主查询语法
+        if getattr(sub_q, "query_context_hints", None):
+            for kw in sub_q.query_context_hints[:5]:
+                if kw and kw != query_text:
+                    should_clauses.append({"match": {"chunkText": {"query": kw, "boost": 2.0}}})
 
         # 过滤条件值类型混杂（str / int / list），显式标注避免被首个子句收敛成 str
         filter_clauses: list[dict[str, Any]] = []
@@ -93,13 +100,14 @@ class KeywordRetrievalChannel:
         if not sub_q.text or not sub_q.text.strip():
             return []
 
-        query_text = sub_q.text.strip()
+        query_text = (getattr(sub_q, "retrieval_query", None) or sub_q.text or "").strip()
         query_text = normalize_step_numeral(query_text)
         logger.debug("keyword channel query", query=query_text[:50])
 
         es = get_es()
         top_k = settings.rag.keyword_top_k
-        limit = 10 if top_k <= 0 else min(top_k, 50)
+        max_k = getattr(settings.rag, "max_channel_top_k", 50) or 50
+        limit = 10 if top_k <= 0 else min(top_k, max_k)
 
         query_body = self._build_es_query(query_text, sub_q, limit)
 

@@ -56,6 +56,12 @@ _COMPOUND_QUESTION_HINTS = (
     "满足",
     "前提下",
     "且",
+    "转正",
+    "试用期",
+    "能否",
+    "是否能",
+    "可以吗",
+    "情况下",
 )
 
 
@@ -63,12 +69,17 @@ def _looks_like_compound_question(question: str) -> bool:
     """判断是否为"需组合多个条款/条件才能回答"的复合问题（用于多跳拆分护栏）。
 
     与 `_looks_like_explicit_multi_question` 互补：后者只认显式分隔符/多问号，
-    本函数额外覆盖"单句但含条件连接词"的业务多跳题（如"转正满一年且考核S级…"）。
+    本函数额外覆盖"单句但含条件连接词或背景前提+诉求"的业务复合题（如"转正满一年且考核S级…"、"试用期2个月能否申请补贴…"）。
     """
     normalized = (question or "").strip()
     if not normalized:
         return False
     if _looks_like_explicit_multi_question(normalized):
+        return True
+    # 逗号分隔的复合条件句（如"签了3年合同（试用期2个月），转正刚满1个月能否申请…"）
+    if ("，" in normalized or "," in normalized) and any(
+        h in normalized for h in ("能否", "是否", "可否", "怎样", "如何")
+    ):
         return True
     return any(hint in normalized for hint in _COMPOUND_QUESTION_HINTS)
 

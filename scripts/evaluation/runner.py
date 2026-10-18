@@ -120,13 +120,17 @@ def _compute_stage_attribution(
         tgt = str(target).strip()
         if not tgt or not candidates:
             return False
+        # 短片段（<12 字符）要求更高匹配比率或直接子串包含，避免泛化虚词撞车
+        ratio = 0.65 if len(tgt) < 12 else cover_ratio
+        if any(tgt.lower() in c.lower() for c in candidates):
+            return True
         tgt_bigrams = _char_bigrams(tgt)
         if not tgt_bigrams:
-            return any(tgt.lower() in c.lower() for c in candidates)
+            return False
         tgt_len = len(tgt_bigrams)
         for cand in candidates:
             cand_bigrams = _char_bigrams(cand)
-            if cand_bigrams and (len(tgt_bigrams & cand_bigrams) / tgt_len >= cover_ratio):
+            if cand_bigrams and (len(tgt_bigrams & cand_bigrams) / tgt_len >= ratio):
                 return True
         return False
 
@@ -357,14 +361,16 @@ async def run_evaluation(
     )
 
     final: list[EvalResult] = []
+    # 评估深度与 final_top_k 对齐：final_top_k=8 时 R@10 实际只能看到 8 条，指标结构性失真
+    eval_depth = max(1, int(settings.rag.final_top_k or 10))
     for i, r in enumerate(results):
         if isinstance(r, EvalResult):
             rel = dataset[i].relevant_contexts
             r.recall_at_5 = compute_recall_at_k(r.retrieved_contexts, rel, 5)
-            r.recall_at_10 = compute_recall_at_k(r.retrieved_contexts, rel, 10)
+            r.recall_at_final_k = compute_recall_at_k(r.retrieved_contexts, rel, eval_depth)
             r.mrr = compute_mrr(r.retrieved_contexts, rel)
             r.ndcg_at_5 = compute_ndcg_at_k(r.retrieved_contexts, rel, 5)
-            r.ndcg_at_10 = compute_ndcg_at_k(r.retrieved_contexts, rel, 10)
+            r.ndcg_at_final_k = compute_ndcg_at_k(r.retrieved_contexts, rel, eval_depth)
             final.append(r)
         else:
             final.append(
@@ -417,19 +423,21 @@ def _print_report(
         r.answer_correctness_score for r in completed if r.answer_correctness_score is not None
     ]
     recall = [r.context_recall_score for r in completed if r.context_recall_score is not None]
+    # 评估深度与 final_top_k 对齐（final_top_k=8 时不报 R@10）
+    eval_depth = max(1, int(settings.rag.final_top_k or 10))
     recall5 = [r.recall_at_5 for r in completed if r.recall_at_5 is not None]
-    recall10 = [r.recall_at_10 for r in completed if r.recall_at_10 is not None]
+    recall_final = [r.recall_at_final_k for r in completed if r.recall_at_final_k is not None]
     mrr = [r.mrr for r in completed if r.mrr is not None]
     ndcg5 = [r.ndcg_at_5 for r in completed if r.ndcg_at_5 is not None]
-    ndcg10 = [r.ndcg_at_10 for r in completed if r.ndcg_at_10 is not None]
+    ndcg_final = [r.ndcg_at_final_k for r in completed if r.ndcg_at_final_k is not None]
 
     avg = {
         "faithfulness": _avg(faithfulness),
         "recall_at_5": _avg(recall5),
-        "recall_at_10": _avg(recall10),
+        "recall_at_final_k": _avg(recall_final),
         "mrr": _avg(mrr),
         "ndcg_at_5": _avg(ndcg5),
-        "ndcg_at_10": _avg(ndcg10),
+        "ndcg_at_final_k": _avg(ndcg_final),
         "answer_relevancy": _avg(relevancy),
         "context_precision": _avg(precision),
         "answer_correctness": _avg(correctness),
@@ -481,14 +489,16 @@ def _print_report(
     logger.info("  │ Answer Correctness   │ %s    │", _fmt(correctness))
     logger.info("  │ Context Recall       │ %s    │", _fmt(recall))
     logger.info(
-        "  │ Recall@5 / Recall@10 │ %.3f / %.3f │",
+        "  │ Recall@5 / Recall@%-2d │ %.3f / %.3f │",
+        eval_depth,
         avg.get("recall_at_5", 0.0),
-        avg.get("recall_at_10", 0.0),
+        avg.get("recall_at_final_k", 0.0),
     )
     logger.info(
-        "  │ MRR / nDCG@10        │ %.3f / %.3f │",
+        "  │ MRR / nDCG@%-2d        │ %.3f / %.3f │",
+        eval_depth,
         avg.get("mrr", 0.0),
-        avg.get("ndcg_at_10", 0.0),
+        avg.get("ndcg_at_final_k", 0.0),
     )
     _judge_failed_total = sum(judge_failed.values())
     if _judge_failed_total:
@@ -775,6 +785,7 @@ if __name__ == "__main__":
                         "keyword_top_k": _settings.rag.keyword_top_k,
                         "candidate_top_k": _settings.rag.candidate_top_k,
                         "final_top_k": _settings.rag.final_top_k,
+                        "retrieval_eval_depth": max(1, int(_settings.rag.final_top_k or 10)),
                         "rrf_k": _settings.rag.rrf_k,
                         "rrf_vector_weight": _settings.rag.rrf_vector_weight,
                         "rrf_keyword_weight": _settings.rag.rrf_keyword_weight,
@@ -811,10 +822,10 @@ if __name__ == "__main__":
                             "answer_correctness_score": r.answer_correctness_score,
                             "context_recall_score": r.context_recall_score,
                             "recall_at_5": r.recall_at_5,
-                            "recall_at_10": r.recall_at_10,
+                            "recall_at_final_k": r.recall_at_final_k,
                             "mrr": r.mrr,
                             "ndcg_at_5": r.ndcg_at_5,
-                            "ndcg_at_10": r.ndcg_at_10,
+                            "ndcg_at_final_k": r.ndcg_at_final_k,
                             "retrieval_ms": round(r.retrieval_ms, 1) if r.retrieval_ms else None,
                             "generation_ms": round(r.generation_ms, 1) if r.generation_ms else None,
                         }
@@ -848,18 +859,21 @@ if __name__ == "__main__":
             arrow = "▲" if delta > 0.005 else ("▼" if delta < -0.005 else "＝")
             print(f"  {metric:<20} {b:.3f} → {o:.3f}  {arrow} {delta:+.3f}")
 
-    # 门禁判定：阈值 0 表示跳过该指标
-    gates = [
-        ("faithfulness", args.min_faithfulness, avg["faithfulness"]),
-        ("answer_relevancy", args.min_relevancy, avg["answer_relevancy"]),
-        ("context_precision", args.min_precision, avg["context_precision"]),
-        ("context_recall", args.min_recall, avg["context_recall"]),
-        ("answer_correctness", args.min_correctness, avg["answer_correctness"]),
-    ]
-    violations = [g for g in gates if g[1] > 0 and g[2] < g[1]]
-    if violations:
-        for name, threshold, actual in violations:
-            logger.error("GATE FAILED: %s = %.3f < %.3f", name, actual, threshold)
-        logger.error("Regression gate failed (%d violations)", len(violations))
-        sys.exit(1)
-    logger.info("Regression gate passed ✓")
+    # 门禁判定：阈值 0 表示跳过该指标；retrieval_only 模式下跳过生成指标门禁
+    if not args.retrieval_only:
+        gates = [
+            ("faithfulness", args.min_faithfulness, avg["faithfulness"]),
+            ("answer_relevancy", args.min_relevancy, avg["answer_relevancy"]),
+            ("context_precision", args.min_precision, avg["context_precision"]),
+            ("context_recall", args.min_recall, avg["context_recall"]),
+            ("answer_correctness", args.min_correctness, avg["answer_correctness"]),
+        ]
+        violations = [g for g in gates if g[1] > 0 and g[2] < g[1]]
+        if violations:
+            for name, threshold, actual in violations:
+                logger.error("GATE FAILED: %s = %.3f < %.3f", name, actual, threshold)
+            logger.error("Regression gate failed (%d violations)", len(violations))
+            sys.exit(1)
+        logger.info("Regression gate passed ✓")
+    else:
+        logger.info("Retrieval-only evaluation completed ✓")

@@ -785,19 +785,35 @@ class RagRetrievalEngine:
             return docs
         abs_min = getattr(settings.rag, "rerank_min_score", 0.0) or 0.0
         ratio = getattr(settings.rag, "rerank_relative_ratio", 0.0) or 0.0
-        # 相对阈值：保留 >= 最高分 × ratio 的候选，避免整体低分区间被绝对阈值一刀切；
-        # 最终以绝对下限与相对阈值中较大者为准。
         top_score = max((e.rerank_score or 0.0) for e in scored)
-        threshold = max(abs_min, top_score * ratio)
+        # 相对阈值：当 ratio > 0 时按相对最高分动态放行（加 0.02 底线滤纯负噪点），
+        # 彻底避免整体低分区间（如 0.15~0.25）被 0.35 绝对下限一刀切；未配 ratio 时使用绝对下限。
+        threshold = max(0.02, top_score * ratio) if ratio > 0 else abs_min
+
         if threshold > 0:
             filtered = [e for e in scored if (e.rerank_score or 1.0) >= threshold]
-            # 兜底：阈值语义失效（该查询整体低分区间）时保留最高分 top-1，
-            # 避免空证据导致拒答（实证："请假"类查询相关块仅 0.05-0.17）
-            docs = (
-                filtered
-                if filtered
-                else sorted(scored, key=lambda e: e.rerank_score or 0.0, reverse=True)[:1]
-            )
+            # D3 不变量：阈值不得把证据集砍到目标深度以下，否则上下文被饥饿、召回坍塌。
+            # 触发时跳过阈值（保留全部已重排候选），截断交给 final_top_k。
+            target_depth = min(int(getattr(settings.rag, "final_top_k", 8) or 8), len(scored))
+            if (
+                getattr(settings.rag, "rerank_filter_starvation_guard_enabled", True)
+                and len(filtered) < target_depth
+            ):
+                logger.warning(
+                    "rerank_filter_starved",
+                    threshold=round(threshold, 4),
+                    kept=len(filtered),
+                    target_depth=target_depth,
+                    candidates=len(scored),
+                )
+                docs = scored
+            else:
+                # 兜底：阈值语义失效时至少保留最高分 top-1，避免空证据拒答
+                docs = (
+                    filtered
+                    if filtered
+                    else sorted(scored, key=lambda e: e.rerank_score or 0.0, reverse=True)[:1]
+                )
         else:
             docs = scored
         return docs

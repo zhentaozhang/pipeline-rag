@@ -183,7 +183,15 @@ class TestApplyRerankFilterAndTopk:
 
     def test_min_rerank_filters_low(self, monkeypatch):
         monkeypatch.setattr(
-            engine_module, "settings", make_settings(rag=dict(rerank_min_score=0.5, final_top_k=10))
+            engine_module,
+            "settings",
+            make_settings(
+                rag=dict(
+                    rerank_min_score=0.5,
+                    final_top_k=10,
+                    rerank_filter_starvation_guard_enabled=False,
+                )
+            ),
         )
         docs = [
             make_evidence(chunk_id="a", rerank_score=0.8),
@@ -213,7 +221,13 @@ class TestApplyRerankFilterAndTopk:
         monkeypatch.setattr(
             engine_module,
             "settings",
-            make_settings(rag=dict(rerank_min_score=0.35, final_top_k=10)),
+            make_settings(
+                rag=dict(
+                    rerank_min_score=0.35,
+                    final_top_k=10,
+                    rerank_filter_starvation_guard_enabled=False,
+                )
+            ),
         )
         docs = [
             make_evidence(chunk_id="high", rerank_score=0.17),

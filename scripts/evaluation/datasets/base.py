@@ -64,10 +64,11 @@ class EvalResult(BaseModel):
     # 性能
     retrieval_ms: float | None = None
     recall_at_5: float | None = None  # 量化能力 #2
-    recall_at_10: float | None = None
+    # 与 settings.rag.final_top_k 对齐：final_top_k=8 时不再报 R@10（可用结果<10 会让指标结构性失真）
+    recall_at_final_k: float | None = None
     mrr: float | None = None  # 排序质量：首个命中的排名倒数
     ndcg_at_5: float | None = None  # 排序质量：nDCG@5
-    ndcg_at_10: float | None = None  # 排序质量：nDCG@10
+    ndcg_at_final_k: float | None = None  # 排序质量：nDCG@final_top_k
     generation_ms: float | None = None
     total_ms: float | None = None
 

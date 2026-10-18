@@ -127,11 +127,16 @@ class TestTrimSnippet:
 
 
 class TestEstimateTokens:
-    def test_quarter(self):
-        assert PromptAssemblyService._estimate_tokens(100) == 25
+    def test_ascii_quarter(self):
+        # ASCII：约 4 字符/token
+        assert PromptAssemblyService._estimate_tokens("a" * 100) == 25
+
+    def test_cjk_not_underestimated(self):
+        # 中文不能被 chars//4 低估（D4：复用 CJK 感知口径）
+        assert PromptAssemblyService._estimate_tokens("中" * 100) > 25
 
     def test_at_least_one(self):
-        assert PromptAssemblyService._estimate_tokens(0) == 1
+        assert PromptAssemblyService._estimate_tokens("") == 1
 
 
 class TestRenderReferenceBlock:

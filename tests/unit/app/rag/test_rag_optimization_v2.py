@@ -74,6 +74,7 @@ class TestMultiUserAndEngineV2:
         engine = RagRetrievalEngine()
         settings = get_settings()
         monkeypatch.setattr(settings.rag, "min_vector_similarity", 0.50)
+        monkeypatch.setattr(settings.rag, "vector_relative_ratio", 0.0)
 
         # 场景 1: 分数 0.45 (>= 0.50 * 0.85 = 0.425)，触发软兜底
         docs = [
@@ -114,6 +115,46 @@ class TestMultiUserAndEngineV2:
         result2 = RetrievalChannelResult(channel_name="vector", documents=docs2)
         filtered2 = engine._apply_evidence_gate(result2)
         assert len(filtered2.documents) == 0
+
+    def test_vector_gate_relative_ratio(self, monkeypatch):
+        """测试开启相对门限 (vector_relative_ratio > 0) 时的自适应放行"""
+        from app.config import get_settings
+
+        engine = RagRetrievalEngine()
+        settings = get_settings()
+        monkeypatch.setattr(settings.rag, "vector_relative_ratio", 0.50)
+
+        # top_score 为 0.60，相对阈值为 0.60 * 0.50 = 0.30
+        docs = [
+            Evidence(
+                chunk_id="c1",
+                doc_id="d1",
+                title="D1",
+                content="t1",
+                score=0.60,
+                original_score=0.60,
+            ),
+            Evidence(
+                chunk_id="c2",
+                doc_id="d1",
+                title="D1",
+                content="t2",
+                score=0.35,
+                original_score=0.35,
+            ),
+            Evidence(
+                chunk_id="c3",
+                doc_id="d1",
+                title="D1",
+                content="t3",
+                score=0.20,
+                original_score=0.20,
+            ),
+        ]
+        result = RetrievalChannelResult(channel_name="vector", documents=docs)
+        filtered = engine._apply_evidence_gate(result)
+        assert len(filtered.documents) == 2
+        assert {d.chunk_id for d in filtered.documents} == {"c1", "c2"}
 
     def test_citation_verifier_child_chunk_priority(self):
         """测试引用文本提取优先包含 child_chunk_text，且突破 280 限制至 1200"""

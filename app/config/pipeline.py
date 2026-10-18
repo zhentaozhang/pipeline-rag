@@ -58,8 +58,8 @@ class RAGSettings(BaseSettings):
     min_vector_similarity: float = 0.55
     keyword_score_ratio: float = 0.35
     # RRF 融合参数（P1）：k 越小越强调单路排名靠前的候选；权重控制双通道相对影响力。
-    # 行业默认 k=60，但对"每问相关文档数少"的企业问答应实测更小的 k（2~20）。
-    rrf_k: int = 60
+    # 企业规章切块精准场景下推荐 k=30，更能凸显单通道 Top-1 优势。
+    rrf_k: int = 30
     rrf_vector_weight: float = 1.0
     rrf_keyword_weight: float = 1.0
     # P2-6 查询类型自适应融合：精确标识型查询偏关键词、概念型偏向量（默认关）。
@@ -76,15 +76,19 @@ class RAGSettings(BaseSettings):
     eval_context_max_chars: int = 20000
     # 召回归因覆盖判定阈值（诊断用，可配）。
     stage_attribution_cover_ratio: float = 0.35
-    # 向量通道门限：默认绝对阈值；>0 时改用相对阈值 top_score*ratio（A/B 开关，0=保持绝对）。
+    # 向量通道门限：默认绝对阈值；>0 时改用相对阈值 top_score*ratio（生产由 .env 开启 0.35）。
     vector_relative_ratio: float = 0.0
     vector_near_miss_ratio: float = 0.85
     # R1 条件重排：第一阶段 top-1 相似度 >= 该值时跳过重排（0=关闭）。
-    # 依据：重排常把高置信 rank-1 命中降级（Rakuen / OpenCodeIntel #322 实测）。
     rerank_skip_min_similarity: float = 0.0
     # R2 rank-1 保护：重排后若第一阶段首候选被降级、但其重排分与新榜首差距 <= margin，则恢复其榜首。
-    rerank_rank1_guard_enabled: bool = False
+    rerank_rank1_guard_enabled: bool = True
     rerank_rank1_guard_margin: float = 0.15
+    # D3 不变量（默认开）：重排阈值若把证据集砍到 final_top_k 以下，自动跳过阈值并告警。
+    # 防止"阈值误配 → 上下文饥饿 → 召回坍塌"（实测曾导致 R@10 0.837→0.733）。
+    rerank_filter_starvation_guard_enabled: bool = True
+    # 单通道抓取安全上限（解除写死 50 限制）
+    max_channel_top_k: int = 100
     # 通道开关：关闭向量通道可做"纯关键词"离线验证（零外部调用）。
     vector_channel_enabled: bool = True
     planning_history_max_chars: int = 1600
@@ -110,7 +114,7 @@ class RAGSettings(BaseSettings):
     # P2 多跳拆分：复合/多条件（含 且/并且/同时/满足…等条件连接）单句问题拆为多个检索子查询。
     # A/B 实测（25 题）：R@10 持平、R@5/命中略降，未验证收益，故默认关（opt-in）。
     # 用 runner --multi-hop-split 开启做对照；待 chunk/embedding 优化后复测再评估是否转正。
-    multi_hop_split_enabled: bool = False
+    multi_hop_split_enabled: bool = True
     no_evidence_reply: str = "当前没有从已接入文档中检索到足够证据，暂时不能给出可靠结论。"
     stream_timeout_seconds: int = 600
     answer_system_prompt: str = ""
@@ -139,9 +143,9 @@ class RAGSettings(BaseSettings):
     evaluation_sample_rate: float = 0.0
     evidence_min_score: float = 0.1
     rerank_min_score: float = 0.35  # 绝对下限：滤无关块（0.10-0.25）不伤相关块（0.45+）
-    # P1 相对阈值：保留 rerank_score >= top_score * ratio 的候选（0=仅用绝对阈值）。
+    # P1 相对阈值：保留 rerank_score >= top_score * ratio 的候选（默认 0.35 相对放行）。
     # 避免"整体低分区间被一刀切"造成的召回坍塌（如 0.17/0.06 全被 0.35 滤掉）。
-    rerank_relative_ratio: float = 0.0
+    rerank_relative_ratio: float = 0.35
     knowledge_route_confidence_threshold: float = 0.40
     vectorize_batch_size: int = 10
     # P0-2: Contextual Chunking——embedding 文本附加文档名+章节路径（重索引后生效，可回退关闭）
