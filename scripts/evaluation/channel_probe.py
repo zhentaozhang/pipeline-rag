@@ -62,8 +62,7 @@ async def probe(channel: str, *, top_k: int, gold: dict[str, dict]) -> list[dict
     from app.rag.channels.vector import VectorRetrievalChannel
 
     # Task 2 之前还没有 combined.py：先用 85 题；Task 2 完成后改成
-    #   from scripts.evaluation.datasets.combined import ALL_QUESTIONS
-    from scripts.evaluation.datasets.employee_dataset import EMPLOYEE_DATASET as ALL_QUESTIONS
+    from scripts.evaluation.datasets.combined import ALL_QUESTIONS
 
     await init_pg()
     await init_es()

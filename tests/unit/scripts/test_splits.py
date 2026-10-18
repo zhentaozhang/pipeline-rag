@@ -49,6 +49,15 @@ class TestQuestionSplit:
     def test_unknown_chunk_stays_dev(self) -> None:
         assert question_split(_q("a", ["99"]), {"1": 8}) == "dev"
 
+    def test_explicit_split_hint_wins(self) -> None:
+        """编号类题是人工分好 dev/test 的，不能被文档 id 覆盖。"""
+        q = _q("a", ["1"])
+        q.metadata = {"split_hint": "test"}
+        assert question_split(q, {"1": 9}) == "test"
+        q_dev = _q("b", ["2"])
+        q_dev.metadata = {"split_hint": "dev"}
+        assert question_split(q_dev, {"2": 8}) == "dev"
+
 
 class TestFilterBySplit:
     def test_all_returns_everything(self) -> None:

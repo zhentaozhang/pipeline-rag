@@ -28,9 +28,13 @@ def question_split(
 ) -> str:
     """判断一道题属于 dev 还是 test：看它的 gold chunk 落在哪些文档。
 
+    - 题目自带 `metadata["split_hint"]`（人工分好的题库）→ 以它为准
     - 没有 gold（不可答/无标注）→ dev（只在 dev 上做对比，避免污染 test）
     - 任一 gold chunk 属于 test 文档 → test
     """
+    hint = (getattr(question, "metadata", None) or {}).get("split_hint")
+    if hint in {"dev", "test"}:
+        return hint
     gold_ids = list(getattr(question, "relevant_chunk_ids", None) or [])
     for cid in gold_ids:
         doc = chunk_docs.get(str(cid))
