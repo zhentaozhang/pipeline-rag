@@ -16,7 +16,10 @@ import torch.nn.functional as F
 
 logger = logging.getLogger("jev_service.judger")
 
-from jev_service.prompt_budget import fit_state_to_budget  # noqa: E402
+try:  # 兼容两种启动方式：仓库根目录 `python -m uvicorn jev_service.server:app` 与 jev_service/ 内启动
+    from jev_service.prompt_budget import fit_state_to_budget
+except ImportError:
+    from prompt_budget import fit_state_to_budget
 
 
 def _safe_encode_first_token(tokenizer, text: str) -> int:
@@ -410,8 +413,44 @@ class LocalJEVJudger:
         批次，仅做**一次模型前向**，再逐行抽取对应 logits —— 相比"每个问题各跑一次
         前向"，N 个问题的耗时由 O(N) 降为 O(1) 次前向。
         """
+        entries, answers = self._build_entries(state, questions)
+        scored = self._score_flat(entries)
+        for (q_name, *_rest), res in zip(entries, scored, strict=False):
+            answers[q_name] = res
+        return answers
+
+    def judge_entries_multi(self, batch: list[tuple[str, dict[str, Any]]]) -> list[dict[str, Any]]:
+        """跨请求批量推理：把多个 (state, questions) 展开成行，一次前向后按请求切回。
+
+        这是解决"并发被全局锁串行化"的关键：多个 HTTP 请求可以在**同一次**前向里
+        完成，而不是排队。单次合并的行数由 JEV_BATCH_MAX_ROWS 控制。
+        """
+        if not batch:
+            return []
+        per_request: list[tuple[list[tuple], dict[str, Any]]] = [
+            self._build_entries(state, questions) for state, questions in batch
+        ]
+        flat: list[tuple] = [entry for entries, _ in per_request for entry in entries]
+        scored = self._score_flat(flat)
+
+        out: list[dict[str, Any]] = []
+        cursor = 0
+        for entries, answers in per_request:
+            merged = dict(answers)
+            for (q_name, *_rest), res in zip(
+                entries, scored[cursor : cursor + len(entries)], strict=False
+            ):
+                merged[q_name] = res
+            cursor += len(entries)
+            out.append(merged)
+        return out
+
+    def _build_entries(
+        self, state: str, questions: dict[str, Any]
+    ) -> tuple[list[tuple], dict[str, Any]]:
+        """把 questions 展开成 (q_name, kind, prompt, keys) 行；非法项直接落答案。"""
         if not questions:
-            return {}
+            return [], {}
 
         raw_state = _sanitize_chatml(state)
         self.tokenizer.padding_side = "left"
@@ -472,7 +511,11 @@ class LocalJEVJudger:
             else:
                 logger.warning("Unsupported JEV primitive type: %s", q_type)
 
-        # 分批前向（每批内所有问题共享一次模型调用）
+        return entries, answers
+
+    def _score_flat(self, entries: list[tuple]) -> list[dict[str, Any]]:
+        """对展开后的行做分批前向，返回与输入等长的结果列表。"""
+        results: list[dict[str, Any]] = []
         for start in range(0, len(entries), self._batch_chunk):
             group = entries[start : start + self._batch_chunk]
             prompts = [e[2] for e in group]
@@ -491,7 +534,7 @@ class LocalJEVJudger:
             latency_ms = (time.perf_counter() - t0) * 1000
             per_question_ms = round(latency_ms / len(group), 2)
 
-            for idx, (q_name, kind, _prompt, keys) in enumerate(group):
+            for idx, (_q_name, kind, _prompt, keys) in enumerate(group):
                 next_logits = batch_logits[idx]
                 if kind == "noul":
                     res = self._score_noul_row(next_logits)
@@ -506,6 +549,5 @@ class LocalJEVJudger:
                     else:
                         res = choice_res
                 res["_latency_ms"] = per_question_ms
-                answers[q_name] = res
-
-        return answers
+                results.append(res)
+        return results

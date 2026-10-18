@@ -14,10 +14,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 try:
+    from jev_service.batching import MicroBatcher
     from jev_service.judger import LocalJEVJudger
     from jev_service.model_loader import get_device, get_model_and_tokenizer
     from jev_service.schemas import SystemOneRequest, SystemOneResponse
 except ImportError:
+    from batching import MicroBatcher
     from judger import LocalJEVJudger
     from model_loader import get_device, get_model_and_tokenizer
     from schemas import SystemOneRequest, SystemOneResponse
@@ -29,17 +31,29 @@ logging.basicConfig(
 logger = logging.getLogger("jev_service.server")
 
 judger: LocalJEVJudger | None = None
-_inference_lock: asyncio.Lock | None = None
+_batcher: MicroBatcher | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global judger, _inference_lock
+    global judger, _batcher
     logger.info("Initializing JEV service...")
-    _inference_lock = asyncio.Lock()
     model, tokenizer = get_model_and_tokenizer()
     device = get_device()
     judger = LocalJEVJudger(model=model, tokenizer=tokenizer, device=device)
+
+    # 微批调度：替代原先的全局锁（队列化 + 可观测），默认**不合并**——实测在 MPS 上
+    # 合并无吞吐收益（prefill 计算量不变，8 行已是 809ms/行，16 行掉到 1270ms/行），
+    # 只有 GPU（A100 级）批处理才值得把 JEV_BATCH_MAX/WINDOW 调大。
+    window_ms = float(os.getenv("JEV_BATCH_WINDOW_MS", "0") or 0)
+    max_batch = int(os.getenv("JEV_BATCH_MAX", "1") or 1)
+    _batcher = MicroBatcher(
+        run=lambda batch: judger.judge_entries_multi(batch),
+        window_ms=window_ms,
+        max_batch=max_batch,
+    )
+    await _batcher.start()
+    logger.info("JEV micro-batcher started (window_ms=%.0f, max_batch=%d)", window_ms, max_batch)
 
     # 预热前向推理，初始化 CUDA/MPS 显存分配器并预热 PyTorch 算子，消除首次真实请求的 500ms 冷启动延迟
     try:
@@ -51,6 +65,8 @@ async def lifespan(app: FastAPI):
 
     logger.info("JEV service initialized and ready to serve.")
     yield
+    if _batcher is not None:
+        await _batcher.close()
     logger.info("JEV service shutting down.")
 
 
@@ -78,7 +94,7 @@ async def health_check():
 
 @app.post("/v1/systemone", response_model=SystemOneResponse)
 async def system_one(request: SystemOneRequest):
-    if judger is None or _inference_lock is None:
+    if judger is None or _batcher is None:
         raise HTTPException(status_code=503, detail="JEV Judger not initialized yet.")
 
     # 防御性负载校验，防止超大请求导致长时间锁占用或内存膨胀
@@ -95,14 +111,10 @@ async def system_one(request: SystemOneRequest):
 
     t0 = time.perf_counter()
     try:
-        # 使用 asyncio.Lock + to_thread，并附加 60s 硬超时兜底，防止挂起请求死锁
-        async with _inference_lock:
-            answers = await asyncio.wait_for(
-                asyncio.to_thread(
-                    judger.judge_batch, state=request.state, questions=request.questions
-                ),
-                timeout=60.0,
-            )
+        # 交给微批调度器：同窗口内的并发请求合并成一次前向，60s 硬超时兜底防挂起
+        answers = await asyncio.wait_for(
+            _batcher.submit(request.state, request.questions), timeout=60.0
+        )
         duration_ms = (time.perf_counter() - t0) * 1000
         return SystemOneResponse(
             answers=answers,
