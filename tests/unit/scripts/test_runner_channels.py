@@ -73,7 +73,13 @@ def test_subset_unans_keeps_every_unanswerable_question():
 
     qs = [
         EvalQuestion(id="emp001", question="问题一是什么？", ground_truth_answer="a"),
-        EvalQuestion(id="ref001", question="问题二是什么？", ground_truth_answer="b", answerable=False, expected_refusal=True),
+        EvalQuestion(
+            id="ref001",
+            question="问题二是什么？",
+            ground_truth_answer="b",
+            answerable=False,
+            expected_refusal=True,
+        ),
         EvalQuestion(id="lex001", question="问题三是什么？", ground_truth_answer="c"),
     ]
     got = _filter_subset(qs, "unans")

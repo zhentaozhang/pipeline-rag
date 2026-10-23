@@ -565,9 +565,7 @@ class TestZeroHitFallback:
 class TestQueryConstruction:
     """Task 4：查询文本必须用干净问句，结构化 token 走独立子句。"""
 
-    async def test_retrieve_uses_clean_question_not_augmented_retrieval_query(
-        self, monkeypatch
-    ):
+    async def test_retrieve_uses_clean_question_not_augmented_retrieval_query(self, monkeypatch):
         import json
 
         captured: dict = {}
@@ -609,7 +607,9 @@ class TestQueryConstruction:
         monkeypatch.setattr(
             keyword_module.settings.rag, "keyword_pg_fallback_enabled", False, raising=False
         )
-        sub = SubQuestion(index=0, text="那这个呢", retrieval_query="试用期时长 试用期", tenant_id="t1")
+        sub = SubQuestion(
+            index=0, text="那这个呢", retrieval_query="试用期时长 试用期", tenant_id="t1"
+        )
         await KeywordRetrievalChannel().retrieve(sub)
         assert "试用期时长" in json.dumps(captured["body"], ensure_ascii=False)
 
@@ -618,9 +618,7 @@ class TestStructuredTermClauses:
     """Task 5：编号类精确值必须以 term 命中派生 keyword 字段。"""
 
     def test_clause_token_queries_clause_number_field(self):
-        q = KeywordRetrievalChannel._build_es_query(
-            "第九条 住宿费用限额", make_sub_question(), 10
-        )
+        q = KeywordRetrievalChannel._build_es_query("第九条 住宿费用限额", make_sub_question(), 10)
         should = q["query"]["bool"]["should"]
         assert {"term": {"clauseNumber": {"value": "9", "boost": 10.0}}} in should
 
@@ -630,9 +628,7 @@ class TestStructuredTermClauses:
         )
         should = q["query"]["bool"]["should"]
         assert {"term": {"subClauseNumbers": {"value": "9.1", "boost": 8.0}}} in should
-        assert {
-            "term": {"docNameKeyword": {"value": "差旅管理制度", "boost": 6.0}}
-        } in should
+        assert {"term": {"docNameKeyword": {"value": "差旅管理制度", "boost": 6.0}}} in should
         assert {"term": {"gradeCodes": {"value": "M4+", "boost": 4.0}}} in should
         assert {"term": {"cityClasses": {"value": "A", "boost": 3.0}}} in should
 

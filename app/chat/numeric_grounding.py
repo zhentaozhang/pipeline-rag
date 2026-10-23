@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 # 单位表：长的放前面，避免"万元"被"元"吃掉
@@ -214,7 +215,7 @@ def _iter_cited_fragments(answer: str) -> list[tuple[str, list[int]]]:
     return out
 
 
-def _by_ref(references: list[object]) -> dict[int, str]:
+def _by_ref(references: Sequence[object]) -> dict[int, str]:
     return {_reference_ref_id(ref, i): _evidence_blob(ref) for i, ref in enumerate(references)}
 
 
@@ -277,8 +278,8 @@ def polarity_issues(
 
 
 def caution_note(
-    issues: list[NumericIssue],
-    polarity: list[PolarityIssue],
+    issues: Sequence[NumericIssue],
+    polarity: Sequence[PolarityIssue],
     *,
     limit: int = 2,
 ) -> str:
@@ -292,8 +293,8 @@ def caution_note(
         refs = "、".join(f"证据 {r}" for r in issue.ref_ids) or "所引证据"
         parts.append(f"数值 {issue.raw} 未出现在 {refs} 中")
     remaining = max(0, limit - len(parts))
-    for issue in list(polarity)[:remaining]:
-        refs = "、".join(f"证据 {r}" for r in issue.ref_ids) or "所引证据"
+    for p_issue in list(polarity)[:remaining]:
+        refs = "、".join(f"证据 {r}" for r in p_issue.ref_ids) or "所引证据"
         parts.append(f"{refs} 为禁止性规定而回答表述为允许")
     if not parts:
         return ""

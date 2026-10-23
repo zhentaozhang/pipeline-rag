@@ -87,7 +87,6 @@ EMPLOYEE_DATASET: list[EvalQuestion] = [
         relevant_contexts=["L1 公开", "L2 内部", "L3 敏感", "L4 绝密"],
         relevant_chunk_ids=["2111840532341719059", "2111840532341719060"],
         relevant_parent_ids=["2111840532341719042", "2111840532341719043"],
-
     ),
     EvalQuestion(
         id="emp011",
@@ -133,7 +132,6 @@ EMPLOYEE_DATASET: list[EvalQuestion] = [
         ],
         relevant_chunk_ids=["2111840544324845584", "2111840544324845585"],
         relevant_parent_ids=["2111840544324845569", "2111840544324845570"],
-
     ),
     EvalQuestion(
         id="emp017",
@@ -183,7 +181,6 @@ EMPLOYEE_DATASET: list[EvalQuestion] = [
         ],
         relevant_chunk_ids=["2111840544324845583", "2111840544324845588"],
         relevant_parent_ids=["2111840544324845568", "2111840544324845573"],
-
     ),
     EvalQuestion(
         id="emp022",
@@ -333,7 +330,6 @@ EMPLOYEE_DATASET: list[EvalQuestion] = [
             "2111840544324845579",
             "2111840544324845576",
         ],
-
     ),
     EvalQuestion(
         id="emp034",
@@ -413,7 +409,6 @@ EMPLOYEE_DATASET: list[EvalQuestion] = [
         ],
         relevant_chunk_ids=["2111840544324845583"],
         relevant_parent_ids=["2111840544324845568"],
-
     ),
     EvalQuestion(
         id="emp041",

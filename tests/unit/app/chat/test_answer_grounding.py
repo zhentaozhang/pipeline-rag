@@ -166,7 +166,12 @@ def test_chinese_numeral_clause_matches_chinese_evidence():
     """证据写"第二条"，回答也写"第二条" —— 不能因为内部统一成阿拉伯数字就判成假条款。"""
     report = audit_grounding(
         "第二条 差旅住宿城市标准（已作废）[1]",
-        [{"reference_id": 1, "content": "第二条 2022版差旅住宿城市标准（已作废） 出差人员住宿费实行限额。"}],
+        [
+            {
+                "reference_id": 1,
+                "content": "第二条 2022版差旅住宿城市标准（已作废） 出差人员住宿费实行限额。",
+            }
+        ],
     )
     assert report.issues == ()
     assert report.blocking is False

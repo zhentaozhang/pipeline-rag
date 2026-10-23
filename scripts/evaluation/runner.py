@@ -74,7 +74,6 @@ def _attach_grounded_gold(questions: list[Any], grounded: dict[str, dict[str, An
     return filled
 
 
-
 def _build_plan(
     q: EvalQuestion,
     rewritten: str | None = None,

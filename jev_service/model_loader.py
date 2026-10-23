@@ -89,7 +89,6 @@ def get_model_and_tokenizer():
     elif device == "mps":
         dtype = torch.float16
 
-
     _model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=dtype,

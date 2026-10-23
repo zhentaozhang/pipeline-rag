@@ -154,10 +154,7 @@ class TestCautionNote:
         assert "禁止" in note and "请核对原文" in note
 
     def test_note_is_capped(self):
-        many = [
-            numeric_issues(f"上限 90{i} 元[1]。", [_ref(1, "上限 800 元。")])
-            for i in range(4)
-        ]
+        many = [numeric_issues(f"上限 90{i} 元[1]。", [_ref(1, "上限 800 元。")]) for i in range(4)]
         flat = [i for group in many for i in group]
         note = caution_note(flat, [], limit=2)
         assert note.count("·") <= 2

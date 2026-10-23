@@ -47,4 +47,3 @@ def test_attach_grounded_gold_fills_missing_ids_only() -> None:
     assert questions[0].relevant_parent_ids == ["p1"]
     # 题目自带 gold 的，不被对齐结果覆盖
     assert questions[1].relevant_chunk_ids == ["keep-me"]
-

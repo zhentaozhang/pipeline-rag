@@ -24,7 +24,9 @@ class TestJudgeCoverage:
 
     def test_partial_scoring_reports_fraction(self):
         # 真实事故：85 题只判了 38 题，均值仍按 38 题报出高 0.06 的假分数
-        cov = _judge_coverage([_r(1.0, 0.9), _r(None, None), _r(None, None), _r(None, None)], FIELDS)
+        cov = _judge_coverage(
+            [_r(1.0, 0.9), _r(None, None), _r(None, None), _r(None, None)], FIELDS
+        )
         assert cov["faithfulness"] == 0.25
         assert _min_judge_coverage(cov) == 0.25
 

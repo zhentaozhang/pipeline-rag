@@ -201,9 +201,7 @@ async def verify_citations(
                     f"[{ref_n}] {evidence_map.get(ref_n, '（该引用编号无对应证据内容）')}"
                     for ref_n in shard
                 )
-                questions = {
-                    f"cite_{ref_n}": build_citation_question(ref_n) for ref_n in shard
-                }
+                questions = {f"cite_{ref_n}": build_citation_question(ref_n) for ref_n in shard}
                 return await jev.system_one(
                     state=build_citation_state(
                         base_question_answer[0], base_question_answer[1], evidence_block
@@ -255,11 +253,7 @@ async def verify_citations(
                 for issue in getattr(grounding, "polarity_mismatches", ())
                 for n in getattr(issue, "ref_ids", ())
             }
-            forced = [
-                n
-                for n in refs
-                if n in numeric_refs | polarity_refs and n not in suspicious
-            ]
+            forced = [n for n in refs if n in numeric_refs | polarity_refs and n not in suspicious]
             if forced:
                 logger.info("citation verify numeric mismatch -> escalate", refs=forced)
                 suspicious.extend(forced)

@@ -348,6 +348,9 @@ async def test_correct_number_gets_no_note(monkeypatch):
     monkeypatch.setattr(cv_module, "get_settings", lambda: _settings(verify_enabled=False))
     answer = "总监级每日住宿上限 800 元[1]。"
     verified, _bad, _meta = await verify_citations(
-        _Fallback(), answer, [{"reference_id": 1, "content": "每日住宿上限为 800 元/晚。"}], "住宿上限"
+        _Fallback(),
+        answer,
+        [{"reference_id": 1, "content": "每日住宿上限为 800 元/晚。"}],
+        "住宿上限",
     )
     assert verified == answer
