@@ -1,21 +1,11 @@
 import { create } from 'zustand';
-import type { Message } from '../components/chat/MessageList';
-import type { ExchangeReference } from '../types/api';
-import type {
-  ChatSession,
-  DocumentOption,
-  ExchangeItem,
-  RouteTrace,
-} from '../types/api';
 
-interface StreamHandle {
-  controller: AbortController;
-  done: Promise<void>;
-}
-import { errorMessage } from '../lib/utils';
+import type { Message } from '../components/chat/MessageList';
+import type { ChatSession, DocumentOption } from '../types/api';
 import { chatApi, createConversationId } from '../lib/api';
-import { buildRouteTraceLookup, buildChatRouteExplain } from '../lib/knowledgeRoute';
-import { manageApi } from '../lib/api';
+import { toast } from '../lib/toast';
+import { errorMessage } from '../lib/utils';
+import { createUserMessage, loadConversationPayload, runTurn, type StreamHandle } from './chatStream';
 
 export const CHAT_MODES = {
   DOCUMENT: 'DOCUMENT',
@@ -25,432 +15,286 @@ export const CHAT_MODES = {
 
 export type ChatMode = typeof CHAT_MODES[keyof typeof CHAT_MODES];
 
+/** 页面级错误的来源：决定「重试」按钮重新拉什么，避免一错就全屏提示 */
+export type PageErrorScope = 'sessions' | 'conversation' | '';
+
 interface ChatState {
   sessions: ChatSession[];
   currentConversationId: string;
   messages: Message[];
+  /** 正在流式生成的那一条。与 messages 分开存：以前每来一个 token 都要复制整个
+   *  messages 数组（长对话下等于每 token 一次 O(n) 拷贝 + 全列表重渲染）。 */
+  streamingDraft: Message | null;
   isStreaming: boolean;
   isStopping: boolean;
   chatMode: ChatMode;
   documentOptions: DocumentOption[];
   selectedDocumentId: string;
   selectedDocumentName: string;
-  currentAssistantMessageId: string;
+  /** 流式中用户提交的问题，本轮结束后自动发出 */
+  pendingQuestion: string;
   currentStreamHandle: StreamHandle | null;
   loadingSessions: boolean;
   loadingConversation: boolean;
   pageError: string;
+  pageErrorScope: PageErrorScope;
 
-  // Actions
   refreshSessions: () => Promise<void>;
   refreshDocumentOptions: () => Promise<void>;
   loadConversation: (conversationId: string) => Promise<void>;
-  deleteConversation: (conversationId: string) => Promise<void>;
-  renameConversation: (conversationId: string, title: string) => Promise<void>;
-  pinConversation: (conversationId: string, pinned: boolean) => Promise<void>;
+  deleteSession: (conversationId: string) => Promise<void>;
+  renameSession: (conversationId: string, title: string) => Promise<void>;
+  pinSession: (conversationId: string, pinned: boolean) => Promise<void>;
   startNewConversation: () => void;
   setChatMode: (mode: ChatMode) => void;
   setSelectedDocumentId: (id: string) => void;
   sendMessage: (question: string) => Promise<void>;
+  enqueueQuestion: (question: string) => void;
+  clearPendingQuestion: () => void;
+  regenerate: (assistantMessageId: string) => Promise<void>;
+  retryLast: () => Promise<void>;
+  editAndResend: (userMessageId: string, newText: string) => Promise<void>;
   stopStreaming: () => Promise<void>;
-  updateCurrentAssistant: (mutator: (msg: Message) => void) => void;
   setPageError: (err: string) => void;
+  clearPageError: () => void;
+  retryPageError: () => Promise<void>;
 }
 
-function createUserMessage(question: string): Message {
-  return {
-    id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    role: 'user',
-    content: question,
-    createdAt: new Date().toISOString()
+export const useChatStore = create<ChatState>((set, get) => {
+  const patchSession = (conversationId: string, patch: (item: ChatSession) => ChatSession) =>
+    set((state) => ({
+      sessions: state.sessions.map((item) => (item.conversationId === conversationId ? patch(item) : item))
+    }));
+  const patchDraft = (updater: (draft: Message) => Message) =>
+    set((state) => (state.streamingDraft ? { streamingDraft: updater(state.streamingDraft) } : state));
+
+  /** 结束流式：草稿落成正式消息，再决定是否发出排队的问题 */
+  const finishTurn = () => {
+    set({ currentStreamHandle: null, isStreaming: false, isStopping: false });
+    const draft = get().streamingDraft;
+    if (draft) set((state) => ({ messages: [...state.messages, draft], streamingDraft: null }));
+    void get().refreshSessions();
+    const queued = get().pendingQuestion;
+    if (queued) {
+      set({ pendingQuestion: '' });
+      // 只有本轮真正结束（成功/失败/停止）才轮到这里，所以排队问题不会打断正在流的那条
+      void get().sendMessage(queued);
+    }
   };
-}
 
-function createAssistantMessage(): Message {
-  return {
-    id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    role: 'assistant',
-    content: '',
-    thinkingSteps: [],
-    references: [],
-    recommendations: [],
-    status: 'RUNNING',
-    statusText: '',
-    errorMessage: '',
-    routeExplain: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+  /** 跑一轮流式；调用方负责先把用户问题放进 messages */
+  const runStream = async (question: string) => {
+    const conversationId = get().currentConversationId || createConversationId();
+    const { chatMode, selectedDocumentId } = get();
+    set({ currentConversationId: conversationId, isStreaming: true, isStopping: false, pageError: '', pageErrorScope: '' });
+    await runTurn({ conversationId, chatMode, selectedDocumentId }, question, {
+      setDraft: (draft) => set({ streamingDraft: draft }),
+      patchDraft,
+      setStreamHandle: (handle) => set({ currentStreamHandle: handle }),
+      onFinish: finishTurn
+    });
   };
-}
 
-function mapExchangesToMessages(
-  exchanges: ExchangeItem[] = [],
-  routeTraceLookup: Record<string, RouteTrace> = {}
-): Message[] {
-  return exchanges.flatMap((exchange) => {
-    const createdAt = exchange.createdAt || exchange.createTime || null;
-    const updatedAt = exchange.updatedAt || exchange.editTime || createdAt;
-    
-    const userMessage: Message = {
-      id: `exchange-${exchange.exchangeId}-user`,
-      role: 'user',
-      content: exchange.question || '',
-      createdAt: createdAt ?? undefined
-    };
+  return {
+    sessions: [],
+    currentConversationId: '',
+    messages: [],
+    streamingDraft: null,
+    isStreaming: false,
+    isStopping: false,
+    chatMode: CHAT_MODES.AUTO_DOCUMENT,
+    documentOptions: [],
+    selectedDocumentId: '',
+    selectedDocumentName: '',
+    pendingQuestion: '',
+    currentStreamHandle: null,
+    loadingSessions: false,
+    loadingConversation: false,
+    pageError: '',
+    pageErrorScope: '',
 
-    const assistantMessage: Message = {
-      id: `exchange-${exchange.exchangeId}-assistant`,
-      role: 'assistant',
-      exchangeId: exchange.exchangeId ? Number(exchange.exchangeId) : undefined,
-      content: exchange.answer || '',
-      thinkingSteps: exchange.thinkingSteps || [],
-      references: exchange.references || [],
-      recommendations: exchange.recommendations || [],
-      status: exchange.status || '',
-      statusText: '',
-      errorMessage: exchange.errorMessage || '',
-      routeExplain: buildChatRouteExplain(routeTraceLookup[String(exchange.exchangeId)]),
-      createdAt: createdAt ?? undefined,
-      updatedAt: updatedAt ?? undefined
-    };
-
-    return [userMessage, assistantMessage];
-  });
-}
-
-export const useChatStore = create<ChatState>((set, get) => ({
-  sessions: [],
-  currentConversationId: '',
-  messages: [],
-  isStreaming: false,
-  isStopping: false,
-  chatMode: CHAT_MODES.AUTO_DOCUMENT,
-  documentOptions: [],
-  selectedDocumentId: '',
-  selectedDocumentName: '',
-  currentAssistantMessageId: '',
-  currentStreamHandle: null,
-  loadingSessions: false,
-  loadingConversation: false,
-  pageError: '',
-
-  setPageError: (err) => set({ pageError: err }),
-
-  refreshSessions: async () => {
-    set({ loadingSessions: true });
-    try {
-      const data = await chatApi.listSessions();
-      set({ sessions: Array.isArray(data) ? data : [] });
-    } catch (error) {
-      set({ pageError: errorMessage(error, '加载会话列表失败') });
-    } finally {
-      set({ loadingSessions: false });
-    }
-  },
-
-  refreshDocumentOptions: async () => {
-    try {
-      const data = await chatApi.listKnowledgeDocumentOptions();
-      const options = Array.isArray(data) ? data : [];
-      set({ documentOptions: options });
-    } catch (error) {
-      set({ pageError: errorMessage(error, '加载可选知识文档失败') });
-    }
-  },
-
-  startNewConversation: () => {
-    if (get().isStreaming) return;
-    
-    set({
-      currentConversationId: createConversationId(),
-      messages: [],
-      pageError: ''
-    });
-  },
-
-  setChatMode: (mode) => {
-    if (get().isStreaming || get().chatMode === mode) return;
-    set({ chatMode: mode, pageError: '' });
-    if (get().messages.length > 0) {
-      get().startNewConversation();
-    }
-  },
-
-  setSelectedDocumentId: (id) => {
-    const options = get().documentOptions;
-    const opt = options.find((o) => o.documentId === id);
-    set({ 
-      selectedDocumentId: id,
-      selectedDocumentName: opt ? opt.documentName : ''
-    });
-    if (get().chatMode === CHAT_MODES.DOCUMENT && get().messages.length > 0 && !get().isStreaming) {
-      get().startNewConversation();
-    }
-  },
-
-  loadConversation: async (conversationId) => {
-    if (!conversationId || get().isStreaming) return;
-
-    set({ loadingConversation: true, pageError: '' });
-    try {
-      const [sessionResult, routeTraceResult] = await Promise.allSettled([
-        chatApi.getSession(conversationId),
-        manageApi.queryKnowledgeRouteTracePage({
-          conversationId,
-          pageNo: '1',
-          pageSize: '200'
-        })
-      ]);
-
-      if (sessionResult.status !== 'fulfilled') throw sessionResult.reason;
-
-      const session = sessionResult.value;
-      const routeTraceLookup = routeTraceResult.status === 'fulfilled'
-        ? buildRouteTraceLookup(routeTraceResult.value?.records || [])
-        : {};
-
-      set({
-        currentConversationId: conversationId,
-        messages: mapExchangesToMessages(session.exchanges || [], routeTraceLookup),
-        chatMode: (session.chatMode as ChatMode) || CHAT_MODES.OPEN_CHAT,
-        selectedDocumentId: session.selectedDocumentId || '',
-        selectedDocumentName: session.selectedDocumentName || ''
-      });
-      
-      // Upsert session
-      const sessions = [...get().sessions];
-      const idx = sessions.findIndex(s => s.conversationId === conversationId);
-      if (idx === -1) {
-        sessions.unshift(session);
-      } else {
-        sessions[idx] = session;
+    setPageError: (err) => set({ pageError: err, pageErrorScope: 'sessions' }),
+    clearPageError: () => set({ pageError: '', pageErrorScope: '' }),
+    retryPageError: async () => {
+      const { pageErrorScope, currentConversationId } = get();
+      set({ pageError: '', pageErrorScope: '' });
+      if (pageErrorScope === 'conversation' && currentConversationId) await get().loadConversation(currentConversationId);
+      else await get().refreshSessions();
+    },
+    refreshSessions: async () => {
+      set({ loadingSessions: true });
+      try {
+        const data = await chatApi.listSessions();
+        set({ sessions: Array.isArray(data) ? data : [] });
+      } catch (error) {
+        // 页面级：会话列表拿不到，侧边栏整块不可用
+        set({ pageError: errorMessage(error, '加载会话列表失败，请检查网络后重试'), pageErrorScope: 'sessions' });
+      } finally {
+        set({ loadingSessions: false });
       }
-      set({ sessions });
+    },
 
-    } catch (error) {
-      set({ pageError: errorMessage(error, '加载会话详情失败') });
-    } finally {
-      set({ loadingConversation: false });
-    }
-  },
+    refreshDocumentOptions: async () => {
+      try {
+        const data = await chatApi.listKnowledgeDocumentOptions();
+        set({ documentOptions: Array.isArray(data) ? data : [] });
+      } catch (error) {
+        // 操作级：文档下拉失败不影响主流程，一条 toast 足够
+        toast({ title: '加载可选文档失败', description: errorMessage(error, '请稍后重试'), variant: 'error' });
+      }
+    },
 
-  deleteConversation: async (conversationId) => {
-    if (!conversationId || get().isStreaming) return;
+    startNewConversation: () => {
+      if (get().isStreaming) return;
+      // 新会话 id 推迟到第一条消息时生成，否则一进 /chat 就多出一个空会话地址；
+      // 新对话也不该继承上一篇文档的选择（旧实现漏了这两件事）
+      set({ currentConversationId: '', messages: [], streamingDraft: null, pendingQuestion: '', selectedDocumentId: '', selectedDocumentName: '', pageError: '', pageErrorScope: '' });
+    },
 
-    try {
-      await chatApi.deleteSession(conversationId);
-      const nextSessions = get().sessions.filter((item) => item.conversationId !== conversationId);
-      set({ sessions: nextSessions });
+    setChatMode: (mode) => {
+      if (get().isStreaming || get().chatMode === mode) return;
+      // 不再静默清空对话：要不要开新对话由视图层确认后显式调 startNewConversation
+      set({ chatMode: mode, pageError: '', pageErrorScope: '' });
+    },
 
-      if (get().currentConversationId === conversationId) {
-        if (nextSessions.length > 0) {
-          await get().loadConversation(nextSessions[0].conversationId);
-        } else {
-          get().startNewConversation();
+    setSelectedDocumentId: (id) => {
+      const option = get().documentOptions.find((item) => item.documentId === id);
+      set({ selectedDocumentId: id, selectedDocumentName: option ? option.documentName : '' });
+    },
+
+    loadConversation: async (conversationId) => {
+      if (!conversationId || get().isStreaming) return;
+      set({ loadingConversation: true, pageError: '', pageErrorScope: '' });
+      try {
+        const { session, messages } = await loadConversationPayload(conversationId);
+        const sessions = [...get().sessions];
+        const index = sessions.findIndex((item) => item.conversationId === conversationId);
+        if (index === -1) sessions.unshift(session);
+        else sessions[index] = session;
+        set({ currentConversationId: conversationId, messages, sessions, chatMode: (session.chatMode as ChatMode) || CHAT_MODES.OPEN_CHAT, selectedDocumentId: session.selectedDocumentId || '', selectedDocumentName: session.selectedDocumentName || '' });
+      } catch (error) {
+        // 页面级：详情拿不到整页就真的没内容（例如 URL 里的会话已被删除）
+        set({ pageError: errorMessage(error, '加载会话失败，可能已被删除'), pageErrorScope: 'conversation' });
+      } finally {
+        set({ loadingConversation: false });
+      }
+    },
+    deleteSession: async (conversationId) => {
+      if (!conversationId || get().isStreaming) return;
+      const snapshot = get().sessions;
+      const wasCurrent = get().currentConversationId === conversationId;
+      // 乐观更新：先摘掉，失败时连列表顺序一起回滚（Sidebar 的排序依赖顺序）
+      set({ sessions: snapshot.filter((item) => item.conversationId !== conversationId) });
+      if (wasCurrent) {
+        const next = get().sessions[0];
+        if (next) void get().loadConversation(next.conversationId);
+        else get().startNewConversation();
+      }
+      try {
+        await chatApi.deleteSession(conversationId);
+        toast({ title: '会话已删除', variant: 'success' });
+      } catch (error) {
+        set({ sessions: snapshot });
+        if (wasCurrent) void get().loadConversation(conversationId);
+        toast({ title: '删除会话失败', description: errorMessage(error, '已恢复该会话，请稍后重试'), variant: 'error' });
+      }
+    },
+
+    renameSession: async (conversationId, title) => {
+      const nextTitle = title.trim();
+      if (!conversationId || !nextTitle) return;
+      const previous = get().sessions.find((item) => item.conversationId === conversationId)?.title ?? '';
+      patchSession(conversationId, (item) => ({ ...item, title: nextTitle }));
+      try {
+        await chatApi.renameSession(conversationId, nextTitle);
+      } catch (error) {
+        patchSession(conversationId, (item) => ({ ...item, title: previous }));
+        toast({ title: '重命名失败', description: errorMessage(error, '已恢复原名，请稍后重试'), variant: 'error' });
+      }
+    },
+
+    pinSession: async (conversationId, pinned) => {
+      if (!conversationId) return;
+      const previous = Boolean(get().sessions.find((item) => item.conversationId === conversationId)?.isPinned);
+      patchSession(conversationId, (item) => ({ ...item, isPinned: pinned }));
+      try {
+        await chatApi.pinSession(conversationId, pinned);
+      } catch (error) {
+        patchSession(conversationId, (item) => ({ ...item, isPinned: previous }));
+        const title = pinned ? '置顶失败' : '取消置顶失败';
+        toast({ title, description: errorMessage(error, '已恢复原状态，请稍后重试'), variant: 'error' });
+      }
+    },
+
+    sendMessage: async (question) => {
+      const text = question.trim();
+      if (!text) return;
+      if (get().isStreaming) {
+        // 流式中提交：排队等本轮结束，绝不覆盖正在流的那条
+        set({ pendingQuestion: text });
+        return;
+      }
+      if (get().chatMode === CHAT_MODES.DOCUMENT && !get().selectedDocumentId) {
+        toast({ title: '请先选择文档', description: '文档问答模式需要先指定一篇文档再提问', variant: 'error' });
+        return;
+      }
+      set({ messages: [...get().messages, createUserMessage(text)], pageError: '', pageErrorScope: '' });
+      await runStream(text);
+    },
+
+    enqueueQuestion: (question) => {
+      const text = question.trim();
+      if (text) set({ pendingQuestion: text });
+    },
+    clearPendingQuestion: () => set({ pendingQuestion: '' }),
+
+    regenerate: async (assistantMessageId) => {
+      const state = get();
+      if (state.isStreaming) return;
+      const target = state.messages.findIndex((item) => item.id === assistantMessageId);
+      if (target < 0) return;
+      let userIndex = -1;
+      for (let index = target - 1; index >= 0; index -= 1) {
+        if (state.messages[index].role === 'user') {
+          userIndex = index;
+          break;
         }
       }
-    } catch (error) {
-      set({ pageError: errorMessage(error, '删除会话失败') });
-    }
-  },
+      if (userIndex < 0) return;
+      // 丢掉这条回答及其后所有内容，问题本身保留，然后用原问题重发
+      set({ messages: state.messages.slice(0, target) });
+      await runStream(state.messages[userIndex].content);
+    },
 
-  renameConversation: async (conversationId, title) => {
-    if (!conversationId || !title.trim()) return;
-    try {
-      await chatApi.renameSession(conversationId, title.trim());
-      set((state) => ({
-        sessions: state.sessions.map((s) =>
-          s.conversationId === conversationId ? { ...s, title: title.trim() } : s
-        )
-      }));
-    } catch (error) {
-      set({ pageError: errorMessage(error, '重命名失败') });
-    }
-  },
+    retryLast: async () => {
+      const last = [...get().messages].reverse().find((item) => item.role === 'assistant');
+      if (last) await get().regenerate(last.id);
+    },
 
-  pinConversation: async (conversationId, pinned) => {
-    if (!conversationId) return;
-    try {
-      await chatApi.pinSession(conversationId, pinned);
-      set((state) => ({
-        sessions: state.sessions.map((s) =>
-          s.conversationId === conversationId
-            ? { ...s, isPinned: pinned, pinnedAt: pinned ? new Date().toISOString() : null }
-            : s
-        )
-      }));
-    } catch (error) {
-      set({ pageError: errorMessage(error, pinned ? '置顶失败' : '取消置顶失败') });
-    }
-  },
-
-  updateCurrentAssistant: (mutator) => {
-    set((state) => {
-      const idx = state.messages.findIndex((m) => m.id === state.currentAssistantMessageId);
-      if (idx === -1) return state;
-
-      const newMessages = [...state.messages];
-      const updatedMessage = { ...newMessages[idx] };
-      mutator(updatedMessage);
-      newMessages[idx] = updatedMessage;
-      return {
-        messages: newMessages,
-        currentAssistantMessageId: updatedMessage.id
-      };
-    });
-  },
-
-  stopStreaming: async () => {
-    const state = get();
-    if (!state.isStreaming || !state.currentConversationId || !state.currentStreamHandle) return;
-
-    set({ isStopping: true });
-    try {
-      const result = await chatApi.stopSession(state.currentConversationId);
-      get().updateCurrentAssistant((msg) => {
-        msg.status = 'STOPPED';
-        msg.statusText = String(result?.message || '用户已停止生成');
-      });
-    } catch (error) {
-      set({ pageError: errorMessage(error, '停止会话失败'), isStopping: false });
-      return;
-    }
-    
-    if (state.currentStreamHandle.controller) {
+    editAndResend: async (userMessageId, newText) => {
+      const state = get();
+      const text = newText.trim();
+      const index = state.messages.findIndex((item) => item.id === userMessageId);
+      if (state.isStreaming || index < 0 || !text) return;
+      // 改问题等于重开这一轮：该消息之后的旧回答全部作废
+      set({ messages: [...state.messages.slice(0, index), createUserMessage(text)] });
+      await runStream(text);
+    },
+    stopStreaming: async () => {
+      const state = get();
+      if (!state.isStreaming || !state.currentStreamHandle) return;
+      set({ isStopping: true });
+      const markStopped = (text?: string) =>
+        patchDraft((current) => ({ ...current, status: 'STOPPED', statusText: text || current.statusText || '用户已停止生成' }));
+      try {
+        const result = await chatApi.stopSession(state.currentConversationId);
+        markStopped(String(result?.message || ''));
+      } catch (error) {
+        set({ isStopping: false });
+        toast({ title: '停止生成失败', description: errorMessage(error, '请稍后重试'), variant: 'error' });
+        return;
+      }
       state.currentStreamHandle.controller.abort();
     }
-  },
-
-  sendMessage: async (question) => {
-    if (!question || get().isStreaming) return;
-    if (get().chatMode === CHAT_MODES.DOCUMENT && !get().selectedDocumentId) {
-      set({ pageError: '当前文档问答模式下请先选择一个文档' });
-      return;
-    }
-
-    const conversationId = get().currentConversationId || createConversationId();
-    const assistantMessage = createAssistantMessage();
-
-    set({
-      currentConversationId: conversationId,
-      pageError: '',
-      messages: [...get().messages, createUserMessage(question), assistantMessage],
-      currentAssistantMessageId: assistantMessage.id,
-      isStreaming: true,
-      isStopping: false
-    });
-
-    const streamHandle = chatApi.openStream(
-      {
-        question,
-        conversationId,
-        chatMode: get().chatMode,
-        selectedDocumentId: get().chatMode === CHAT_MODES.DOCUMENT ? get().selectedDocumentId || null : null
-      },
-      {
-        onEvent: (event) => {
-          get().updateCurrentAssistant((msg) => {
-            if (event.type === 'clear_answer') {
-              msg.content = '';
-            }
-            if (event.type === 'text' && typeof event.content === 'string') {
-              msg.content += event.content;
-            }
-            if (
-              event.type === 'thinking' &&
-              typeof event.content === 'string' &&
-              !msg.thinkingSteps?.includes(event.content)
-            ) {
-              msg.thinkingSteps = [...(msg.thinkingSteps || []), event.content];
-            }
-            if (event.type === 'reference' && Array.isArray(event.content)) {
-              msg.references = event.content as ExchangeReference[];
-            }
-            if (event.type === 'recommend' && Array.isArray(event.content)) {
-              msg.recommendations = event.content as string[];
-            }
-            if (event.type === 'status' && typeof event.content === 'string') {
-              msg.statusText = event.content;
-            }
-            if (event.type === 'review' && event.content) {
-              msg.content = '';
-              const info = event.content as {
-                round?: number;
-                maxRounds?: number;
-                score?: number;
-                message?: string;
-              };
-              msg.statusText = `回答质量审核中（第 ${info.round}/${info.maxRounds} 轮，得分 ${info.score}）`;
-              if (info.message && !msg.thinkingSteps?.includes(info.message)) {
-                msg.thinkingSteps = [...(msg.thinkingSteps || []), info.message];
-              }
-            }
-            if (event.type === 'review_result' && event.content) {
-              const info = event.content as { passed?: boolean; message?: string | null };
-              msg.statusText =
-                info.message ||
-                (info.passed ? '' : '系统提示：回答质量置信度较低，建议核实关键信息');
-            }
-            if (event.type === 'error') {
-              msg.errorMessage =
-                typeof event.content === 'string' ? event.content : '对话执行失败';
-              msg.status = 'FAILED';
-            }
-            if (event.type === 'done') {
-              if (event.exchangeId) {
-                msg.exchangeId = Number(event.exchangeId);
-                msg.id = `exchange-${event.exchangeId}-assistant`;
-              }
-              if (msg.status !== 'FAILED') {
-                msg.status = 'COMPLETED';
-              }
-              msg.statusText = '';
-            }
-            msg.updatedAt = event.timestamp || new Date().toISOString();
-          });
-        },
-        onReconnect: (attempt, maxRetries) => {
-          get().updateCurrentAssistant((msg) => {
-            msg.statusText = `网络连接不稳定，正在自动重连 (${attempt}/${maxRetries})…`;
-          });
-        }
-      }
-    );
-
-    set({ currentStreamHandle: streamHandle });
-
-    try {
-      await streamHandle.done;
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        get().updateCurrentAssistant((msg) => {
-          msg.status = 'STOPPED';
-          if (!msg.statusText) {
-            msg.statusText = '用户已停止生成';
-          }
-        });
-      } else {
-        get().updateCurrentAssistant((msg) => {
-          msg.errorMessage = errorMessage(error, '流式对话失败');
-          msg.status = 'FAILED';
-        });
-        set({ pageError: errorMessage(error, '流式对话失败') });
-      }
-    } finally {
-      set({
-        currentStreamHandle: null,
-        currentAssistantMessageId: '',
-        isStreaming: false,
-        isStopping: false
-      });
-      
-      // B7 优化：仅刷新会话列表（轻量）；不再重拉会话详情——
-      // SSE 流已包含本轮全部内容（含引用/推荐/路由轨迹），全量重拉是冗余网络与渲染开销。
-      try {
-        await get().refreshSessions();
-      } catch {
-        // Handle silently
-      }
-    }
-  }
-}));
+  };
+});
