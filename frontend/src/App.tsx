@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { isAdminAuthenticated } from './lib/adminAuth';
 import { useTheme } from './lib/useTheme';
+import { Toaster } from './components/ui/Toast';
 
 // P3-1 路由级代码分割：页面按需加载，减小首屏 chunk
 const ChatPage = lazy(() => import('./pages/ChatPage').then((mod) => ({ default: mod.ChatPage })));
@@ -25,8 +26,18 @@ function PageLoader({ children }: { children: React.ReactNode }) {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center min-h-[40vh] text-muted-foreground text-sm">
-          加载中…
+        /* 骨架屏而不是一行"加载中…"：路由切换时页面结构不跳变 */
+        <div role="status" aria-live="polite" className="w-full p-6">
+          <span className="sr-only">页面加载中</span>
+          <div aria-hidden="true" className="flex flex-col gap-4">
+            <div className="h-6 w-48 animate-pulse rounded-md bg-secondary/70" />
+            <div className="h-28 w-full animate-pulse rounded-xl bg-secondary/60" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="h-24 animate-pulse rounded-xl bg-secondary/50" />
+              <div className="h-24 animate-pulse rounded-xl bg-secondary/50" />
+              <div className="h-24 animate-pulse rounded-xl bg-secondary/50" />
+            </div>
+          </div>
         </div>
       }
     >
@@ -70,6 +81,7 @@ function App() {
           <Route path="traces/:traceId" element={<PageLoader><AdminTraceDetailView /></PageLoader>} />
         </Route>
       </Routes>
+      <Toaster />
     </BrowserRouter>
   );
 }

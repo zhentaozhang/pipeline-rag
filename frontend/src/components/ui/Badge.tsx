@@ -1,29 +1,34 @@
 import * as React from "react"
 import { cn } from "../../lib/utils"
 
-export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: "default" | "secondary" | "destructive" | "outline" | "success" | "warning"
+  /** 左侧状态点：颜色之外再给一层形状信号，不只靠色相区分状态 */
+  dot?: boolean
 }
 
-function Badge({ className, variant = "default", ...props }: BadgeProps) {
-  let compClass = "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-  
-  if (variant === "default") {
-    compClass += " bg-primary text-primary-foreground hover:bg-primary/80"
-  } else if (variant === "secondary") {
-    compClass += " bg-secondary text-secondary-foreground hover:bg-secondary/80"
-  } else if (variant === "destructive") {
-    compClass += " bg-destructive text-destructive-foreground hover:bg-destructive/80"
-  } else if (variant === "outline") {
-    compClass += " text-foreground border border-input"
-  } else if (variant === "success") {
-    compClass += " bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-  } else if (variant === "warning") {
-    compClass += " bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-  }
+const VARIANT_CLASS: Record<NonNullable<BadgeProps["variant"]>, string> = {
+  default: "bg-primary text-primary-foreground",
+  secondary: "bg-secondary text-secondary-foreground",
+  destructive: "border border-destructive/25 bg-destructive/10 text-destructive",
+  outline: "border border-border text-foreground",
+  success: "border border-success/25 bg-success/10 text-success",
+  warning: "border border-warning/25 bg-warning/10 text-warning",
+}
 
+function Badge({ className, variant = "default", dot = false, children, ...props }: BadgeProps) {
   return (
-    <div className={cn(compClass, className)} {...props} />
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium leading-4",
+        VARIANT_CLASS[variant],
+        className
+      )}
+      {...props}
+    >
+      {dot ? <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" /> : null}
+      {children}
+    </span>
   )
 }
 
