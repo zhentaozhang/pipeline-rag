@@ -1,340 +1,251 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { PanelLeftClose, Plus, MessageSquare, Settings, Trash2, MoreHorizontal, Pin, PinOff, Pencil, Moon, Sun, Monitor } from 'lucide-react';
-import { clsx } from 'clsx';
-import { useChatStore, CHAT_MODES } from '../../store/chatStore';
-import { sortSessions, sessionTitle } from '../../lib/sessionUtils';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../../lib/useTheme';
-import type { ChatSession } from '../../types/api';
+import { useShallow } from 'zustand/react/shallow';
+import { Monitor, Moon, PanelLeftClose, Plus, Settings, Sun } from 'lucide-react';
+import { clsx } from 'clsx';
+import { useChatStore, CHAT_MODES, type ChatMode } from '../../store/chatStore';
+import { groupSessions } from '../../lib/sessionGrouping';
+import { toast } from '../../lib/toast';
+import { useTheme, type Theme } from '../../lib/useTheme';
+import { Button } from '../ui/Button';
+import { IconButton } from '../ui/IconButton';
+import { SessionList } from './SessionList';
+import { SidebarSearch } from './SidebarSearch';
 
 interface SidebarProps {
   isOpen: boolean;
   toggleSidebar: () => void;
+  /** 窄屏下侧栏是覆盖层抽屉：打开时抢焦点到搜索框，选中会话后自动收起 */
+  drawerMode?: boolean;
 }
 
-const SessionItem: React.FC<{
-  session: ChatSession;
-  currentConversationId: string;
-  isStreaming: boolean;
-  onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
-  onPin: (id: string, pinned: boolean) => void;
-  onRename: (id: string, title: string) => void;
-}> = ({ session, currentConversationId, isStreaming, onSelect, onDelete, onPin, onRename }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState('');
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+const MODE_OPTIONS: { value: ChatMode; label: string }[] = [
+  { value: CHAT_MODES.DOCUMENT, label: '文档问答' },
+  { value: CHAT_MODES.AUTO_DOCUMENT, label: '自动知识库' },
+  { value: CHAT_MODES.OPEN_CHAT, label: '自由对话' },
+];
 
-  const title = sessionTitle(session);
+const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
+  { value: 'light', label: '浅色', icon: Sun },
+  { value: 'system', label: '跟随系统', icon: Monitor },
+  { value: 'dark', label: '深色', icon: Moon },
+];
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    if (menuOpen) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [menuOpen]);
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isEditing]);
-
-  const handleRenameSubmit = () => {
-    if (editTitle.trim() && editTitle.trim() !== title) {
-      onRename(session.conversationId, editTitle.trim());
-    }
-    setIsEditing(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleRenameSubmit();
-    if (e.key === 'Escape') setIsEditing(false);
-  };
-
-  return (
-    <div
-      className={clsx(
-        "group relative w-full flex items-center gap-2 p-2 rounded-lg transition-colors text-sm",
-        session.conversationId === currentConversationId
-          ? "bg-secondary/80 text-foreground font-medium"
-          : "hover:bg-secondary/50 text-muted-foreground"
-      )}
-    >
-      <button
-        onClick={() => !isEditing && onSelect(session.conversationId)}
-        disabled={isStreaming}
-        className="flex items-center gap-2 flex-1 min-w-0 text-left"
-      >
-        <MessageSquare size={16} className="opacity-50 group-hover:opacity-100 flex-shrink-0" />
-        {isEditing ? (
-          <input
-            ref={inputRef}
-            type="text"
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            onBlur={handleRenameSubmit}
-            onKeyDown={handleKeyDown}
-            className="flex-1 min-w-0 bg-background border border-primary text-foreground rounded px-1.5 py-0.5 outline-none -ml-1.5 focus:ring-2 focus:ring-primary/20"
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span className="truncate flex-1">{title}</span>
-        )}
-        {session.running && <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0"></span>}
-      </button>
-
-      {/* Options Menu Toggle */}
-      {!isEditing && (
-        <div className="relative" ref={menuRef}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenuOpen(!menuOpen);
-            }}
-            disabled={isStreaming}
-            className={clsx(
-              "p-1 rounded transition-opacity",
-              menuOpen ? "opacity-100 bg-secondary" : "opacity-0 group-hover:opacity-100 hover:text-foreground"
-            )}
-            title="Options"
-          >
-            <MoreHorizontal size={14} />
-          </button>
-
-          {menuOpen && (
-            <div className="absolute right-0 top-full mt-1 w-32 bg-background border border-border/50 rounded-md shadow-lg py-1 z-50 text-xs text-foreground">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPin(session.conversationId, !session.isPinned);
-                  setMenuOpen(false);
-                }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-secondary transition-colors text-left"
-              >
-                {session.isPinned ? <PinOff size={12} /> : <Pin size={12} />}
-                {session.isPinned ? 'Unpin' : 'Pin'}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditTitle(title);
-                  setIsEditing(true);
-                  setMenuOpen(false);
-                }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-secondary transition-colors text-left"
-              >
-                <Pencil size={12} />
-                Rename
-              </button>
-              <div className="h-px bg-border/50 my-1 mx-2" />
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(session.conversationId);
-                  setMenuOpen(false);
-                }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-destructive/10 text-destructive transition-colors text-left"
-              >
-                <Trash2 size={12} />
-                Delete
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
+export function Sidebar({ isOpen, toggleSidebar, drawerMode = false }: SidebarProps) {
   const {
     sessions,
     loadingSessions,
     currentConversationId,
-    deleteConversation,
-    renameConversation,
-    pinConversation,
+    isStreaming,
     chatMode,
     setChatMode,
     startNewConversation,
     refreshSessions,
-    isStreaming
-  } = useChatStore();
-  
+    renameSession,
+    pinSession,
+    deleteSession,
+  } = useChatStore(
+    useShallow((state) => ({
+      sessions: state.sessions,
+      loadingSessions: state.loadingSessions,
+      currentConversationId: state.currentConversationId,
+      isStreaming: state.isStreaming,
+      chatMode: state.chatMode,
+      setChatMode: state.setChatMode,
+      startNewConversation: state.startNewConversation,
+      refreshSessions: state.refreshSessions,
+      renameSession: state.renameSession,
+      pinSession: state.pinSession,
+      deleteSession: state.deleteSession,
+    }))
+  );
+
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const [query, setQuery] = useState('');
+  // 「N 分钟前」「昨天」这类文案不会自己变，每分钟重算一次比让用户看到过期时间好
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     refreshSessions();
   }, [refreshSessions]);
 
-  const { pinnedSessions, historySessions } = useMemo(() => {
-    const sorted = sortSessions(sessions);
-    return {
-      pinnedSessions: sorted.filter(s => s.isPinned),
-      historySessions: sorted.filter(s => !s.isPinned)
-    };
-  }, [sessions]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    // 抽屉是覆盖层：打开就把焦点放到搜索框，键盘用户不用先 Tab 过整列表
+    if (drawerMode && isOpen) searchInputRef.current?.focus();
+  }, [drawerMode, isOpen]);
+
+  const groups = useMemo(() => groupSessions(sessions, query, now), [sessions, query, now]);
+
+  const handleClearSearch = useCallback(() => {
+    setQuery('');
+    searchInputRef.current?.focus();
+  }, []);
+
+  const handleSelect = useCallback(
+    (conversationId: string) => {
+      navigate(`/chat/${conversationId}`);
+      // 抽屉会挡住正文，选中就收起，否则用户还得再点一次遮罩
+      if (drawerMode && isOpen) toggleSidebar();
+    },
+    [navigate, drawerMode, isOpen, toggleSidebar]
+  );
+
+  const handleNewChat = useCallback(() => {
+    startNewConversation();
+    navigate('/chat');
+    if (drawerMode && isOpen) toggleSidebar();
+  }, [startNewConversation, navigate, drawerMode, isOpen, toggleSidebar]);
+
+  /**
+   * store 的这三个 action 失败时会自己回滚并弹错误 toast（chatStore.ts:400、:422、:443），
+   * 所以这里不再补错误 toast，只补 store 没覆盖的成功反馈；是否成功以列表状态为准 ——
+   * action 用乐观更新 + 回滚，await 之后读到的就是用户真正看到的结果。
+   */
+  const handleRename = useCallback(
+    async (conversationId: string, title: string) => {
+      await renameSession(conversationId, title);
+      const renamed = useChatStore
+        .getState()
+        .sessions.some((item) => item.conversationId === conversationId && item.title === title);
+      if (renamed) toast({ title: '已重命名会话', variant: 'success' });
+    },
+    [renameSession]
+  );
+
+  const handleTogglePin = useCallback(
+    async (conversationId: string, pinned: boolean) => {
+      await pinSession(conversationId, pinned);
+      const current = useChatStore
+        .getState()
+        .sessions.find((item) => item.conversationId === conversationId);
+      if (Boolean(current?.isPinned) === pinned) {
+        toast({ title: pinned ? '已置顶会话' : '已取消置顶', variant: 'success' });
+      }
+    },
+    [pinSession]
+  );
 
   return (
-    <div
+    <aside
+      id="app-sidebar"
+      // 收起时不占位也不能被 Tab 到：inert 才能真正把它移出焦点顺序和读屏范围
+      inert={!isOpen}
+      aria-label="会话侧边栏"
       className={clsx(
-        "flex flex-col h-full bg-secondary/30 border-r border-border/50 transition-all duration-300 flex-shrink-0 z-40",
-        isOpen ? "w-[260px] translate-x-0" : "w-0 -translate-x-full xl:translate-x-0 xl:w-0 overflow-hidden border-transparent"
+        'absolute inset-y-0 left-0 z-40 flex w-[280px] flex-col border-r border-border bg-card transition-[transform,width] duration-200',
+        // 桌面端回到文档流里：宽度收放比位移正确，位移会把内容压在正文上面
+        'xl:static xl:z-auto xl:w-[264px] xl:translate-x-0 xl:shadow-none',
+        isOpen
+          ? 'translate-x-0 shadow-xl'
+          : '-translate-x-full shadow-none xl:w-0 xl:overflow-hidden xl:border-transparent'
       )}
     >
-      <div className="p-3 flex items-center justify-between">
-        <button
-          onClick={() => { startNewConversation(); navigate('/chat'); }}
+      <div className="flex items-center gap-1 border-b border-border px-2 py-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 flex-1 justify-start gap-2 px-2 text-sm font-medium"
           disabled={isStreaming}
-          className="flex-1 flex items-center gap-2 hover:bg-secondary/50 p-2 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 text-foreground"
+          onClick={handleNewChat}
         >
-          <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold">
+          <span
+            aria-hidden="true"
+            className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary/15 text-2xs font-bold text-primary"
+          >
             C
-          </div>
-          <span className="truncate">New Chat</span>
-          <Plus size={16} className="ml-auto opacity-70" />
-        </button>
-
-        <button
+          </span>
+          新对话
+          <Plus size={14} aria-hidden="true" className="ml-auto opacity-70" />
+        </Button>
+        <IconButton
+          label="收起侧边栏"
+          icon={<PanelLeftClose size={18} aria-hidden="true" />}
           onClick={toggleSidebar}
-          className="ml-2 p-2 rounded-lg hover:bg-secondary/50 transition-colors text-muted-foreground"
-          title="Close sidebar"
+        />
+      </div>
+
+      <SidebarSearch inputRef={searchInputRef} value={query} onChange={setQuery} />
+
+      {/* 模式切换只在窄屏出现：宽屏由正文顶部的模式条负责 */}
+      <div className="xl:hidden px-2 pb-1">
+        <div role="group" aria-label="对话模式" className="flex flex-col gap-0.5 rounded-lg bg-secondary/60 p-1">
+          {MODE_OPTIONS.map((option) => {
+            const active = chatMode === option.value;
+            return (
+              <Button
+                key={option.value}
+                variant="ghost"
+                size="sm"
+                aria-pressed={active}
+                disabled={isStreaming}
+                className={clsx(
+                  'w-full justify-start text-xs',
+                  // 选中态靠底色 + 阴影，不只靠文字颜色深浅
+                  active ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
+                )}
+                onClick={() => setChatMode(option.value)}
+              >
+                {option.label}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
+
+      <SessionList
+        groups={groups}
+        loading={loadingSessions}
+        hasSessions={sessions.length > 0}
+        query={query}
+        now={now}
+        currentConversationId={currentConversationId}
+        streaming={isStreaming}
+        onSelect={handleSelect}
+        onRename={handleRename}
+        onTogglePin={handleTogglePin}
+        onDelete={deleteSession}
+        onClearSearch={handleClearSearch}
+        onStartNew={handleNewChat}
+      />
+
+      <div className="flex flex-col gap-2 border-t border-border p-2">
+        <div role="group" aria-label="外观主题" className="flex items-center gap-0.5 rounded-lg bg-secondary/60 p-1">
+          {THEME_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            const active = theme === option.value;
+            return (
+              <IconButton
+                key={option.value}
+                label={option.label}
+                aria-pressed={active}
+                size="sm"
+                icon={<Icon size={14} aria-hidden="true" />}
+                className={clsx('flex-1', active && 'bg-background text-foreground shadow-sm')}
+                onClick={() => setTheme(option.value)}
+              />
+            );
+          })}
+        </div>
+        <a
+          href="/admin"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 rounded-lg p-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         >
-          <PanelLeftClose size={20} />
-        </button>
-      </div>
-
-      {/* Mode Selection — hidden on desktop (xl+), shown on narrow screens */}
-      <div className="xl:hidden px-3 pb-1">
-        <div className="flex flex-col gap-1 bg-secondary/40 rounded-lg p-1.5">
-          <button
-            disabled={isStreaming}
-            onClick={() => { setChatMode(CHAT_MODES.DOCUMENT); }}
-            className={clsx(
-              "px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-left",
-              chatMode === CHAT_MODES.DOCUMENT
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-secondary/80"
-            )}
-          >
-            Document
-          </button>
-          <button
-            disabled={isStreaming}
-            onClick={() => { setChatMode(CHAT_MODES.AUTO_DOCUMENT); }}
-            className={clsx(
-              "px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-left",
-              chatMode === CHAT_MODES.AUTO_DOCUMENT
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-secondary/80"
-            )}
-          >
-            Auto Knowledge
-          </button>
-          <button
-            disabled={isStreaming}
-            onClick={() => { setChatMode(CHAT_MODES.OPEN_CHAT); }}
-            className={clsx(
-              "px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-left",
-              chatMode === CHAT_MODES.OPEN_CHAT
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-secondary/80"
-            )}
-          >
-            Open Chat
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-4">
-        {loadingSessions ? (
-          <div className="text-sm text-muted-foreground opacity-80 px-2 mt-2">Loading...</div>
-        ) : sessions.length === 0 ? (
-          <div className="text-sm text-muted-foreground opacity-80 px-2 mt-2">No history.</div>
-        ) : (
-          <>
-            {pinnedSessions.length > 0 && (
-              <div className="space-y-1">
-                <div className="text-xs font-semibold text-muted-foreground px-2 py-1 flex items-center gap-2">
-                  <Pin size={12} />
-                  Pinned
-                </div>
-                {pinnedSessions.map((session) => (
-                  <SessionItem
-                    key={session.conversationId}
-                    session={session}
-                    currentConversationId={currentConversationId}
-                    isStreaming={isStreaming}
-                    onSelect={(id) => navigate('/chat/' + id)}
-                    onDelete={deleteConversation}
-                    onPin={pinConversation}
-                    onRename={renameConversation}
-                  />
-                ))}
-              </div>
-            )}
-
-            {historySessions.length > 0 && (
-              <div className="space-y-1">
-                <div className="text-xs font-semibold text-muted-foreground px-2 py-1">
-                  History
-                </div>
-                {historySessions.map((session) => (
-                  <SessionItem
-                    key={session.conversationId}
-                    session={session}
-                    currentConversationId={currentConversationId}
-                    isStreaming={isStreaming}
-                    onSelect={(id) => navigate('/chat/' + id)}
-                    onDelete={deleteConversation}
-                    onPin={pinConversation}
-                    onRename={renameConversation}
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      <div className="p-3 border-t border-border/50 flex flex-col gap-2">
-        <div className="flex items-center p-1 bg-secondary/50 rounded-lg">
-          <button
-            onClick={() => setTheme('light')}
-            className={clsx("flex-1 flex justify-center py-1.5 rounded-md transition-colors", theme === 'light' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
-            title="Light Mode"
-          >
-            <Sun size={14} />
-          </button>
-          <button
-            onClick={() => setTheme('system')}
-            className={clsx("flex-1 flex justify-center py-1.5 rounded-md transition-colors", theme === 'system' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
-            title="System Theme"
-          >
-            <Monitor size={14} />
-          </button>
-          <button
-            onClick={() => setTheme('dark')}
-            className={clsx("flex-1 flex justify-center py-1.5 rounded-md transition-colors", theme === 'dark' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
-            title="Dark Mode"
-          >
-            <Moon size={14} />
-          </button>
-        </div>
-        <a href="/admin" target="_blank" className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-secondary/50 transition-colors text-sm text-muted-foreground hover:text-foreground">
-          <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center overflow-hidden shrink-0">
-            <Settings size={14} />
-          </div>
-          <span className="truncate">Admin Console</span>
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-secondary">
+            <Settings size={14} aria-hidden="true" />
+          </span>
+          <span className="truncate">管理后台</span>
         </a>
       </div>
-    </div>
+    </aside>
   );
-};
+}
