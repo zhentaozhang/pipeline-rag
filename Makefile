@@ -10,7 +10,7 @@ FRONTEND_COMPOSE := docker compose -f docker-compose.frontend.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help init build up up-obs down down-all restart logs ps shell migrate verify test test-integration \
-        lint format format-check typecheck check config-check eval-ab \
+        lint format format-check typecheck check hooks config-check eval-ab \
         obs-up obs-down obs-logs \
         jev-up jev-logs \
         fe-build fe-up fe-down fe-restart fe-logs fe-lint fe-test \
@@ -44,6 +44,17 @@ test-integration: ## 运行集成测试（需要本地数据库环境就绪）
 	uv run pytest tests/integration -q
 
 check: lint format-check typecheck test ## 本地全量质量门禁（推代码前必跑）
+
+# 与 CI 同一套 pin：ruff/mypy 版本取自 uv.lock 与 .pre-commit-config.yaml，
+# 装了 hook 之后提交时跑 ruff/mypy，推送时额外跑快速用例，避免"本地绿 / CI 红"。
+hooks: ## 安装 git hooks（pre-commit + pre-push，与 CI 同源）
+	@if [ -n "$$(git config --get core.hooksPath)" ]; then \
+		echo "core.hooksPath 已设置为 '$$(git config --get core.hooksPath)'，pre-commit 会拒绝安装。"; \
+		echo "若该路径已失效（例如指向被删除的目录），先执行： git config --unset core.hooksPath"; \
+		exit 1; \
+	fi
+	uv run pre-commit install --install-hooks
+	uv run pre-commit install --hook-type pre-push
 
 eval-gate: ## 检索回归门禁（chunk_id 口径 R@5；不含 LLM judge）
 	uv run python -m scripts.evaluation.runner --round gate --retrieval-only --no-rewrite \

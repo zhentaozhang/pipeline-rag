@@ -248,6 +248,12 @@ npm run dev
 
 ### 开发常用命令
 
+安装 git hooks（一次性；之后提交时跑 ruff/mypy，推送时额外跑快速用例，与 CI 使用同一套 pin）：
+
+```bash
+make hooks
+```
+
 代码静态检查与格式验证：
 
 ```bash

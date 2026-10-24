@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  # 夜间兜底：即使整天不推代码，也在锁定依赖/基础镜像漂移 24h 内暴露。
+  # 2026-10-23 的事故放大器是 59 个 commit 攒着一次推，中间 6 天无人拦截。
+  schedule:
+    - cron: "0 18 * * *"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
