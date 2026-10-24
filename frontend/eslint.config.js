@@ -19,4 +19,13 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  // 构建/审计脚本跑在 Node 里，用 browser globals 会把 process、fs 全判成未定义
+  {
+    files: ['scripts/**/*.mjs', '*.config.{js,mjs}'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      // 审计脚本在 Node 里跑，但 page.evaluate 的函数体里会用到 DOM API
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
 ])
