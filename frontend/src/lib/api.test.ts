@@ -75,3 +75,41 @@ describe('api visitor id header', () => {
     expect(headers['Content-Type']).toBe('application/json');
   });
 });
+
+/**
+ * 回归保护：checkConnection 曾经是 .catch(() => null)，
+ * 调用方用 `res !== undefined` 判断，null !== undefined 恒为 true，
+ * 于是「后端已断开」这个状态永远不可达，健康指示灯永远是绿的。
+ * 现在它必须只是一个布尔值。
+ */
+describe('checkConnection 返回布尔值', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('后端正常时返回 true', async () => {
+    mockFetchOk();
+    await expect(chatApi.checkConnection()).resolves.toBe(true);
+  });
+
+  it('网络不可达时返回 false', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    }));
+    await expect(chatApi.checkConnection()).resolves.toBe(false);
+  });
+
+  it('后端返回非 0 code 时返回 false', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ code: '500', message: 'boom' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )));
+    await expect(chatApi.checkConnection()).resolves.toBe(false);
+  });
+});
+
