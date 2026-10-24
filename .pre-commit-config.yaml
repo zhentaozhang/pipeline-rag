@@ -1,8 +1,8 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.5.0
+    rev: v0.15.22
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
 
@@ -15,9 +15,11 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # 这些用例已迁到 tests/unit/app/**；旧的 tests/test_*.py 早已不存在，
+      # 原 entry 会让每次 pre-push 以 exit 4 直接失败。
       - id: pytest-quick
-        name: pytest quick (safety + core)
-        entry: uv run pytest tests/test_core.py tests/test_safety_input.py tests/test_safety_output.py tests/test_circuit_breaker.py tests/test_tool_registry.py -x --no-header -q
+        name: pytest quick (safety + circuit breaker)
+        entry: uv run pytest tests/unit/app/safety tests/unit/app/infra/test_circuit_breaker.py -x --no-header -q
         language: system
         pass_filenames: false
         always_run: true

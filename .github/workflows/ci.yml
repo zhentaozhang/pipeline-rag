@@ -30,10 +30,6 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check .
 
-      # 格式门禁：防止代码风格再次偏离
-      - name: Format check (ruff)
-        run: uv run ruff format --check .
-
       - name: Type check (mypy)
         run: uv run mypy app
 
@@ -42,6 +38,11 @@ jobs:
         env:
           LLM_API_KEY: ci-dummy-key
         run: uv run pytest tests/unit -q
+
+      # 格式门禁放在实质检查之后：纯风格失败不再让 mypy/单测被静默跳过
+      # （2026-10-23 的事故就是格式失败把 5 个 mypy 错误掩盖了 6 天）
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
 
       - name: Validate all docker compose files
         run: |
