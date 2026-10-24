@@ -5,9 +5,61 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # 后端单文件上限是 200MB（app/manage/service/document_service.py:79），
+    # 而 nginx 默认只有 1MB：文档超过 1MB 就会拿到 nginx 的 413 HTML 错误页，
+    # 前端解析 JSON 失败后只能显示一句看不懂的报错。这里与后端对齐。
+    client_max_body_size 200m;
+
     gzip on;
+    gzip_vary on;
+    gzip_comp_level 5;
     gzip_min_length 1024;
-    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_proxied any;
+    # 同时写上 text/javascript 与 application/javascript：不同 nginx 版本的
+    # mime.types 对 .js 的映射不一样，漏一个就等于 JS 实际没有压缩。
+    gzip_types
+        text/plain
+        text/css
+        text/javascript
+        application/javascript
+        application/json
+        application/manifest+json
+        image/svg+xml
+        application/xml;
+
+    # 安全响应头。注意：location 里只要出现 add_header，就不再继承 server 级的
+    # add_header，所以下面每个 location 都重复声明了这三行。
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # 带内容哈希的构建产物：缓存一年，且明确 immutable。
+    # 之前没有任何缓存头，浏览器只能按启发式规则缓存，发版后要么拿到旧 JS，
+    # 要么每次访问都重新下载几百 KB。
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options SAMEORIGIN always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        access_log off;
+        try_files $uri =404;
+    }
+
+    # 入口 HTML 必须每次回源校验，否则新版本发布后旧 HTML 仍指向已删除的 hash 文件
+    location = /index.html {
+        add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options SAMEORIGIN always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+    }
+
+    location = /favicon.svg {
+        add_header Cache-Control "public, max-age=604800" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options SAMEORIGIN always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        access_log off;
+    }
 
     # SPA 路由回退：非静态资源一律回 index.html
     location / {
