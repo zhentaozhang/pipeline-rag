@@ -72,3 +72,77 @@ def test_format_gate_runs_after_substantive_checks() -> None:
     assert format_index > unit_tests_index > mypy_index, (
         "格式门禁必须排在 mypy/单测之后：纯风格失败不应让实质检查被跳过"
     )
+
+
+# ── 门禁"永不触发"与依赖漂移的回归守卫（2026-10-24）─────────────────────────
+SETUP_UV = "astral-sh/setup-uv@"
+JEV_REQUIREMENTS = REPO_ROOT / "jev_service" / "requirements.txt"
+JEV_LOCK = REPO_ROOT / "jev_service" / "requirements.lock.txt"
+
+_SETUP_UV_VERSION = re.compile(
+    r"uses:\s*"
+    + re.escape(SETUP_UV)
+    + r"\S+\s*\n\s*with:\s*\n(?:\s*#.*\n)*\s*version:\s*\"([^\"]+)\""
+)
+_REQ_NAME = re.compile(r"^\s*([A-Za-z0-9_.\-]+)")
+
+
+def test_setup_uv_pins_concrete_version() -> None:
+    """CI 安装 uv 必须钉死版本：`latest` 会让某个早上 uv 升级就改变 CI 行为而仓库无 diff。"""
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    versions = _SETUP_UV_VERSION.findall(workflow)
+    assert versions, "ci.yml 里没有解析到 setup-uv 的 version"
+    assert all(v.lower() != "latest" for v in versions), (
+        f"setup-uv 不能使用 latest：{versions}。"
+        "锁解析器版本漂移会让 uv.lock 的解析结果在不同时间不一致。"
+    )
+
+
+def test_decision_ab_gate_is_not_permanently_skipped() -> None:
+    """decision-ab 不能在只依赖仓库变量时被永久跳过（那等于"界面绿但零覆盖"）。"""
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    start = workflow.find("  decision-ab:")
+    assert start > 0, "ci.yml 里找不到 decision-ab job"
+    body = workflow[start : start + 1200]
+    condition_start = body.find("if:")
+    condition_end = body.find("runs-on:")
+    assert 0 <= condition_start < condition_end, "decision-ab 缺少 if: 条件"
+    condition = body[condition_start:condition_end]
+    assert "github.event_name == 'schedule'" in condition, (
+        "decision-ab 必须能在夜间 schedule 上真实运行，否则 JEV 质量门禁形同不存在；"
+        f"当前条件：{condition.strip()}"
+    )
+    assert "--require-jev" in workflow, "JEV 门禁必须带 --require-jev，服务不可达时要失败而不是跳过"
+
+
+def test_jev_requirements_lock_covers_every_top_level_requirement() -> None:
+    """jev_service 依赖必须有冻结锁，且锁里覆盖 requirements.txt 的每个顶层依赖。"""
+    assert JEV_LOCK.exists(), (
+        "缺少 jev_service/requirements.lock.txt，Dockerfile 将失去可复现的依赖集"
+    )
+    lock_text = JEV_LOCK.read_text(encoding="utf-8")
+    pinned = {
+        line.split("==", 1)[0].strip().lower()
+        for line in lock_text.splitlines()
+        if "==" in line and not line.lstrip().startswith("#")
+    }
+    top_level = []
+    for line in JEV_REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("-"):
+            continue
+        match = _REQ_NAME.match(stripped)
+        if match:
+            top_level.append(match.group(1).lower())
+    assert top_level, "jev_service/requirements.txt 里没有解析到依赖"
+    missing = [name for name in top_level if name not in pinned]
+    assert not missing, f"这些依赖没被锁住（改完 requirements.txt 要跑 make jev-lock）：{missing}"
+
+
+def test_jev_dockerfile_installs_from_lock_not_bare_requirements() -> None:
+    """Dockerfile 必须安装冻结锁，否则 `>=` 约束会在构建时静默漂移。"""
+    dockerfile = (REPO_ROOT / "jev_service" / "Dockerfile").read_text(encoding="utf-8")
+    assert "requirements.lock.txt" in dockerfile, (
+        "jev_service/Dockerfile 没有使用 requirements.lock.txt"
+    )
+    assert "pip install --no-cache-dir -r requirements.lock.txt" in dockerfile

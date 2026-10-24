@@ -17,7 +17,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /data/cache \
     && chown -R appuser:appuser /data/cache
 
-COPY requirements.txt .
+# 依赖锁：requirements.lock.txt 由 uv 从 requirements.txt 冻结（linux/x86_64 目标平台），
+# 保证"同一份镜像 = 同一套依赖版本"，避免无上限的 >= 约束在构建时漂移。
+# 改依赖请改 requirements.txt 后跑 `make jev-lock` 重新生成。
+COPY requirements.txt requirements.lock.txt .
 
 # pip 源 / 代理均可通过构建参数覆盖（国内可用清华源 + 可选代理）：
 #   docker build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
@@ -32,7 +35,7 @@ ENV PIP_DEFAULT_TIMEOUT=1000 \
     PIP_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL}
 RUN HTTP_PROXY="${HTTP_PROXY}" HTTPS_PROXY="${HTTPS_PROXY}" \
     http_proxy="${HTTP_PROXY}" https_proxy="${HTTPS_PROXY}" \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.lock.txt
 
 COPY --chown=appuser:appuser . .
 

@@ -12,7 +12,7 @@ FRONTEND_COMPOSE := docker compose -f docker-compose.frontend.yml
 .PHONY: help init build up up-obs down down-all restart logs ps shell migrate verify test test-integration \
         lint format format-check typecheck check hooks config-check eval-ab \
         obs-up obs-down obs-logs \
-        jev-up jev-logs \
+        jev-up jev-logs jev-lock \
         fe-build fe-up fe-down fe-restart fe-logs fe-lint fe-test \
         up-all clean reset
 
@@ -60,9 +60,9 @@ eval-gate: ## 检索回归门禁（chunk_id 口径 R@5；不含 LLM judge）
 	uv run python -m scripts.evaluation.runner --round gate --retrieval-only --no-rewrite \
 		--channels both --gold-file reports/gold_llm.json --min-recall-ids 0.90
 
-eval-ab: ## JEV 决策 A/B 门禁（需 jev-service 可达；不可达则跳过）
+eval-ab: ## JEV 决策 A/B 门禁（--require-jev：服务不可达即失败，不再静默通过）
 	uv run python -m scripts.evaluation.decision_ab --all --backends jev \
-		--min-recall 0.8 --min-precision 0.85 --min-f1 0.8
+		--min-recall 0.8 --min-precision 0.85 --min-f1 0.8 --require-jev
 
 config-check: ## 校验全部 Docker Compose 配置文件语法
 	@$(BACKEND_COMPOSE) config >/dev/null && echo "✓ docker-compose.yml OK"
@@ -85,6 +85,12 @@ jev-up: ## 构建并启动 JEV 决策服务（含开发 override）
 
 jev-logs: ## 跟踪 JEV 决策服务日志
 	$(BACKEND_COMPOSE) logs -f --tail=100 jev-service
+
+# jev_service 不是 uv 项目（无 pyproject/uv.lock），依赖靠 requirements.txt + 冻结锁。
+# 锁按 linux/x86_64 目标平台解析（镜像内的真实平台），改依赖后必须重新生成。
+jev-lock: ## 重新生成 jev_service/requirements.lock.txt
+	uv pip compile --python-platform x86_64-unknown-linux-gnu \
+		jev_service/requirements.txt -o jev_service/requirements.lock.txt
 
 down: ## 停止后端栈（保留数据卷）
 	$(BACKEND_COMPOSE) down --remove-orphans

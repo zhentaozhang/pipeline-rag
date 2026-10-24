@@ -23,7 +23,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: "latest"
+          # 锁解析器自身也要可复现：与本地 uv --version 对齐，"latest" 会让
+          # 某个早上 uv 静默升级就改变 CI 行为，而仓库里没有任何 diff。
+          version: "0.10.0"
 
       - name: Set up Python
         run: uv python install 3.12
@@ -120,7 +122,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: "latest"
+          # 锁解析器自身也要可复现：与本地 uv --version 对齐，"latest" 会让
+          # 某个早上 uv 静默升级就改变 CI 行为，而仓库里没有任何 diff。
+          version: "0.10.0"
 
       - name: Set up Python
         run: uv python install 3.12
@@ -209,7 +213,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: "latest"
+          # 锁解析器自身也要可复现：与本地 uv --version 对齐，"latest" 会让
+          # 某个早上 uv 静默升级就改变 CI 行为，而仓库里没有任何 diff。
+          version: "0.10.0"
 
       - name: Set up Python
         run: uv python install 3.12
@@ -223,22 +229,29 @@ jobs:
       - name: Run integration tests
         run: uv run pytest tests/integration -q
 
-  # ── JEV 决策 A/B 门禁：仅在配置了可达的 JEV_BASE_URL 时执行 ────────────────
-  # GitHub 托管 runner 无 jev-service（模型不在 CI 构建/下载），默认跳过；
-  # 自托管 runner 配置仓库变量 JEV_BASE_URL 后启用，对 JEV 判定质量做回归门禁。
+  # ── JEV 决策 A/B 门禁：夜间真跑，不再"跳过即绿" ──────────────────────────
+  # 历史问题：条件挂在仓库变量 JEV_BASE_URL 上，而该变量从未配置 → job 永远
+  # skipped，界面全绿但零覆盖。现在的规则：
+  #   · schedule / workflow_dispatch：在本 runner 内用 compose 起 jev-service
+  #     （含 ~3GB 模型下载，所以只挂夜间，不进每次 push 的关键路径）；
+  #   · 配置了 vars.JEV_BASE_URL（自托管/外部服务）时直接复用，不起容器。
   decision-ab:
-    if: ${{ vars.JEV_BASE_URL != '' }}
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || vars.JEV_BASE_URL != '' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
-      JEV_BASE_URL: ${{ vars.JEV_BASE_URL }}
       LLM_API_KEY: ci-dummy-key
+      # 没有外部服务时，指向本 job 用 compose 起的容器（compose 把 8085 映射到 8080）
+      JEV_BASE_URL: ${{ vars.JEV_BASE_URL || 'http://localhost:8085' }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: "latest"
+          # 锁解析器自身也要可复现：与本地 uv --version 对齐，"latest" 会让
+          # 某个早上 uv 静默升级就改变 CI 行为，而仓库里没有任何 diff。
+          version: "0.10.0"
 
       - name: Set up Python
         run: uv python install 3.12
@@ -246,8 +259,32 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
+      # 只有"没有外部 JEV 服务"时才本地拉起；/health 在模型就绪前返回 503
+      # （jev_service/server.py:81-92），所以必须轮询到 200 再跑门禁。
+      - name: Start local JEV service
+        if: ${{ vars.JEV_BASE_URL == '' }}
+        run: |
+          # 用 --env-file 而不是 cp .env：runner 上不留一个含默认口令的 .env
+          docker compose --env-file .env.example up -d --build jev-service
+          for i in $(seq 1 150); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8085/health || true)
+            if [ "$code" = "200" ]; then
+              echo "JEV service ready after $((i * 10))s"
+              exit 0
+            fi
+            echo "waiting for JEV service ($((i * 10))s elapsed, last status=$code)"
+            sleep 10
+          done
+          echo "::error::JEV service 未在 25 分钟内就绪"
+          docker compose --env-file .env.example logs --tail=200 jev-service
+          exit 1
+
       - name: Decision A/B gate (JEV)
         run: |
           uv run python -m scripts.evaluation.decision_ab --all --backends jev \
             --min-recall 0.8 --min-precision 0.85 --min-f1 0.8 --require-jev
+
+      - name: Dump JEV logs on failure
+        if: failure()
+        run: docker compose --env-file .env.example logs --tail=200 jev-service || true
 
