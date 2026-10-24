@@ -282,7 +282,8 @@ jobs:
       - name: Decision A/B gate (JEV)
         run: |
           uv run python -m scripts.evaluation.decision_ab --all --backends jev \
-            --min-recall 0.8 --min-precision 0.85 --min-f1 0.8 --require-jev
+            --min-recall 0.8 --min-precision 0.85 --min-f1 0.8 \
+            --min-accuracy 0.75 --min-macro-f1 0.75 --require-jev
 
       - name: Dump JEV logs on failure
         if: failure()

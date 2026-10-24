@@ -740,11 +740,20 @@ def _gate_binary(jev_report: BackendReport | None, args: argparse.Namespace) -> 
 
 
 def _gate_choice(jev_report: ChoiceReport | None, args: argparse.Namespace) -> list[str]:
-    if jev_report is None or args.min_accuracy <= 0:
+    """多分类门禁：准确率 + 宏 F1 双阈值。
+
+    只看准确率会漏掉小类塌陷——2026-10-24 的实测里 structure_ambiguity 准确率
+    0.800 看着还行，但 list_item 的召回只有 0.600、宏 F1 0.794。单看 accuracy
+    这类退化会一路放行，所以必须同时卡宏 F1。
+    """
+    if jev_report is None:
         return []
-    if jev_report.accuracy < args.min_accuracy:
-        return [f"accuracy {jev_report.accuracy:.3f} < {args.min_accuracy}"]
-    return []
+    out: list[str] = []
+    if args.min_accuracy > 0 and jev_report.accuracy < args.min_accuracy:
+        out.append(f"accuracy {jev_report.accuracy:.3f} < {args.min_accuracy}")
+    if args.min_macro_f1 > 0 and jev_report.macro_f1 < args.min_macro_f1:
+        out.append(f"macro_f1 {jev_report.macro_f1:.3f} < {args.min_macro_f1}")
+    return out
 
 
 def _backend_names(predictors: dict, backends_arg: str) -> list[str]:
@@ -764,10 +773,11 @@ def main() -> None:
     parser.add_argument("--samples", type=int, default=0, help="限制样本数（0=全部）")
     parser.add_argument("--min-recall", type=float, default=0.0, help="JEV 召回率门禁（二分类）")
     parser.add_argument("--min-precision", type=float, default=0.0, help="JEV 精确率门禁（二分类）")
-    parser.add_argument(
-        "--min-f1", type=float, default=0.0, help="JEV F1 门禁（二分类）/ 宏 F1（多分类）"
-    )
+    parser.add_argument("--min-f1", type=float, default=0.0, help="JEV F1 门禁（二分类）")
     parser.add_argument("--min-accuracy", type=float, default=0.0, help="JEV 准确率门禁（多分类）")
+    parser.add_argument(
+        "--min-macro-f1", type=float, default=0.0, help="JEV 宏 F1 门禁（多分类，防小类塌陷）"
+    )
     parser.add_argument("--json-report", type=str, default="", help="写出 JSON 报告路径")
     parser.add_argument(
         "--require-jev",

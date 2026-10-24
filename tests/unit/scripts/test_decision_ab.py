@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import math
+from types import SimpleNamespace
 
 import pytest
 
@@ -14,9 +16,13 @@ from scripts.evaluation.datasets.decision_data import (
     QUALITY_DATASET,
 )
 from scripts.evaluation.decision_ab import (
+    BackendReport,
     BackendResult,
+    ChoiceReport,
     ConfusionMatrix,
     GuardrailTask,
+    _gate_binary,
+    _gate_choice,
     build_confusion,
     evaluate_backend,
     render_report,
@@ -202,3 +208,71 @@ class TestChoiceEvaluation:
         report = await evaluate_choice_backend("fake", samples, predictor)
         assert report.errors == 1
         assert report.pairs == []
+
+
+def _args(**kw) -> argparse.Namespace:
+    """门禁参数默认全零阈值（= 关掉），按需覆盖。"""
+    base = {
+        "min_recall": 0.0,
+        "min_precision": 0.0,
+        "min_f1": 0.0,
+        "min_accuracy": 0.0,
+        "min_macro_f1": 0.0,
+    }
+    base.update(kw)
+    return argparse.Namespace(**base)
+
+
+class TestGateChoice:
+    """多分类门禁必须同时卡准确率和宏 F1：小类塌陷时 accuracy 可能依然好看。"""
+
+    def test_blocks_low_macro_f1_even_when_accuracy_is_fine(self):
+        # 5 条样本判对 4 条（accuracy 0.8），但 list_item 全被误判成 body
+        report = ChoiceReport(
+            name="jev",
+            labels=["heading", "list_item", "body"],
+            pairs=[
+                ("heading", "heading"),
+                ("heading", "heading"),
+                ("body", "body"),
+                ("body", "body"),
+                ("list_item", "body"),
+            ],
+        )
+        assert report.accuracy == pytest.approx(0.8)
+        assert report.macro_f1 == pytest.approx(0.6)
+        assert _gate_choice(report, _args(min_accuracy=0.75, min_macro_f1=0.75)) == [
+            "macro_f1 0.600 < 0.75"
+        ]
+
+    def test_measured_baseline_passes(self):
+        # 2026-10-24 CPU 实测基线：accuracy 0.800 / macro_f1 0.794（n=15）
+        report = SimpleNamespace(accuracy=0.800, macro_f1=0.794)
+        assert _gate_choice(report, _args(min_accuracy=0.75, min_macro_f1=0.75)) == []
+
+    def test_blocks_low_accuracy(self):
+        report = ChoiceReport(
+            name="jev", labels=["a", "b"], pairs=[("a", "a"), ("b", "a"), ("b", "a")]
+        )
+        assert _gate_choice(report, _args(min_accuracy=0.75)) == ["accuracy 0.333 < 0.75"]
+
+    def test_zero_thresholds_disable_the_gate(self):
+        report = ChoiceReport(name="jev", labels=["a", "b"], pairs=[("a", "b")] * 4)
+        assert _gate_choice(report, _args()) == []
+
+    def test_missing_report_is_not_a_violation(self):
+        assert _gate_choice(None, _args(min_accuracy=0.9, min_macro_f1=0.9)) == []
+
+
+class TestGateBinary:
+    """--min-f1 只管二分类，多分类另开 --min-macro-f1，避免把 0.8 降到 0.75 削弱既有门禁。"""
+
+    def test_f1_threshold_applies(self):
+        cm = ConfusionMatrix(tp=6, fp=2, fn=4, tn=8)
+        report = BackendReport(name="jev", confusion=cm)
+        assert cm.f1 < 0.8
+        assert _gate_binary(report, _args(min_f1=0.8)) == [f"f1 {cm.f1:.3f} < 0.8"]
+
+    def test_binary_gate_ignores_multi_class_knobs(self):
+        report = BackendReport(name="jev", confusion=ConfusionMatrix(tp=9, fp=0, fn=1, tn=10))
+        assert _gate_binary(report, _args(min_accuracy=0.99, min_macro_f1=0.99)) == []

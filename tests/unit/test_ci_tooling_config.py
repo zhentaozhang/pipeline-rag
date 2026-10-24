@@ -146,3 +146,44 @@ def test_jev_dockerfile_installs_from_lock_not_bare_requirements() -> None:
         "jev_service/Dockerfile 没有使用 requirements.lock.txt"
     )
     assert "pip install --no-cache-dir -r requirements.lock.txt" in dockerfile
+
+
+# ── 多分类门禁必须同时卡准确率与宏 F1（2026-10-24）───────────────────────────
+MAKEFILE = REPO_ROOT / "Makefile"
+
+
+def test_decision_ab_gate_passes_multi_class_thresholds() -> None:
+    """门禁命令必须真的传 --min-accuracy / --min-macro-f1。
+
+    只写 flag 不传值等于没门禁：2026-10-24 之前 --min-accuracy 全仓库无人传，
+    多分类的宏 F1 退化（structure_ambiguity 0.794）一路放行。
+    """
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    start = workflow.find("name: Decision A/B gate (JEV)")
+    assert start > 0, "ci.yml 里找不到 Decision A/B gate 步骤"
+    command = workflow[start : workflow.find("- name:", start + 10)]
+    for flag in ("--min-accuracy", "--min-macro-f1", "--min-recall", "--require-jev"):
+        assert flag in command, f"decision-ab 门禁命令缺少 {flag}"
+    for flag in ("--min-accuracy", "--min-macro-f1"):
+        value = re.search(re.escape(flag) + r"\s+([0-9.]+)", command)
+        assert value is not None, f"{flag} 没有传具体阈值，等于关闭该门禁"
+        assert float(value.group(1)) > 0.0, f"{flag} 阈值必须大于 0，否则门禁永不触发"
+
+
+def test_makefile_eval_ab_uses_same_thresholds_as_ci() -> None:
+    """make eval-ab 与 CI 的门禁必须同源，否则本地绿/CI 红会再次分叉。"""
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    ci_start = workflow.find("name: Decision A/B gate (JEV)")
+    ci_command = workflow[ci_start : workflow.find("- name:", ci_start + 10)]
+    makefile = MAKEFILE.read_text(encoding="utf-8")
+    make_start = makefile.find("eval-ab:")
+    assert make_start > 0, "Makefile 里找不到 eval-ab 目标"
+    make_command = makefile[make_start : makefile.find("\n\n", make_start)]
+    for flag in ("--min-recall", "--min-precision", "--min-f1", "--min-accuracy", "--min-macro-f1"):
+        ci_value = re.search(re.escape(flag) + r"\s+([0-9.]+)", ci_command)
+        make_value = re.search(re.escape(flag) + r"\s+([0-9.]+)", make_command)
+        assert make_value is not None, f"make eval-ab 缺少 {flag}"
+        assert ci_value is not None, f"CI 门禁缺少 {flag}"
+        assert ci_value.group(1) == make_value.group(1), (
+            f"{flag} 阈值不一致：CI={ci_value.group(1)}，make={make_value.group(1)}"
+        )

@@ -62,7 +62,8 @@ eval-gate: ## 检索回归门禁（chunk_id 口径 R@5；不含 LLM judge）
 
 eval-ab: ## JEV 决策 A/B 门禁（--require-jev：服务不可达即失败，不再静默通过）
 	uv run python -m scripts.evaluation.decision_ab --all --backends jev \
-		--min-recall 0.8 --min-precision 0.85 --min-f1 0.8 --require-jev
+		--min-recall 0.8 --min-precision 0.85 --min-f1 0.8 \
+		--min-accuracy 0.75 --min-macro-f1 0.75 --require-jev
 
 config-check: ## 校验全部 Docker Compose 配置文件语法
 	@$(BACKEND_COMPOSE) config >/dev/null && echo "✓ docker-compose.yml OK"
