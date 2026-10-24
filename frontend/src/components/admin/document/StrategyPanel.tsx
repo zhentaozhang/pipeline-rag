@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Check, RefreshCw } from 'lucide-react';
 import { manageApi } from '../../../lib/api';
 import {
@@ -115,18 +115,27 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = ({ documentId, onConf
     () => manageApi.queryStrategyPlan(documentId),
     [documentId]
   );
-  const [parentTypes, setParentTypes] = useState<string[]>([]);
-  const [childTypes, setChildTypes] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const plan = data?.plan ?? null;
   const planReady = Boolean(data?.planReady && plan);
+  const planKey = String(plan?.planId ?? '');
 
-  useEffect(() => {
-    if (!plan) return;
-    setParentTypes(extractPipelineStrategyTypes(plan, 'parent'));
-    setChildTypes(extractPipelineStrategyTypes(plan, 'child'));
-  }, [plan]);
+  // 推荐流水线直接由 plan 派生；用户的手动调整只覆盖当次 plan 的结果，
+  // 重新拉取后（planId 变了）自动回到新推荐值——不在 effect 里 setState。
+  const recommended = useMemo(
+    () => ({
+      parent: plan ? extractPipelineStrategyTypes(plan, 'parent') : [],
+      child: plan ? extractPipelineStrategyTypes(plan, 'child') : [],
+    }),
+    [plan]
+  );
+  const [edited, setEdited] = useState<{ key: string; parent: string[]; child: string[] } | null>(null);
+  const activeEdit = edited && edited.key === planKey ? edited : null;
+  const parentTypes = activeEdit ? activeEdit.parent : recommended.parent;
+  const childTypes = activeEdit ? activeEdit.child : recommended.child;
+  const setParentTypes = (next: string[]) => setEdited({ key: planKey, parent: next, child: childTypes });
+  const setChildTypes = (next: string[]) => setEdited({ key: planKey, parent: parentTypes, child: next });
 
   const submit = async () => {
     if (parentTypes.length === 0 && childTypes.length === 0) {
@@ -187,8 +196,6 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = ({ documentId, onConf
     );
   }
 
-  const recommendedParent = extractPipelineStrategyTypes(plan, 'parent');
-  const recommendedChild = extractPipelineStrategyTypes(plan, 'child');
   const preview = buildStrategyPreview(parentTypes, STRATEGY_LIBRARY).map((item) => item.label).filter(Boolean);
 
   return (
@@ -204,14 +211,14 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = ({ documentId, onConf
           label={STRATEGY_PIPELINE_LIBRARY[0].label}
           description={STRATEGY_PIPELINE_LIBRARY[0].description}
           selected={parentTypes}
-          recommended={recommendedParent}
+          recommended={recommended.parent}
           onChange={setParentTypes}
         />
         <PipelineEditor
           label={STRATEGY_PIPELINE_LIBRARY[1].label}
           description={STRATEGY_PIPELINE_LIBRARY[1].description}
           selected={childTypes}
-          recommended={recommendedChild}
+          recommended={recommended.child}
           onChange={setChildTypes}
         />
       </div>

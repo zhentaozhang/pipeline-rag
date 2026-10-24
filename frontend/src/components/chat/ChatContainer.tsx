@@ -120,9 +120,10 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ sidebarOpen, toggl
     });
   }, [scrollToBottom]);
 
+  // 新消息到达后回到最新位置。showJump 不在这里复位——滚动本身会触发 handleScroll，
+  // 由事件回调更新状态，避免 effect 里同步 setState 造成的级联渲染。
   useEffect(() => {
     pinnedRef.current = true;
-    setShowJump(false);
     scrollToBottom();
   }, [messages.length, scrollToBottom]);
 
