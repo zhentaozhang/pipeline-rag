@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React from 'react';
 import type { ChannelExecution, RetrievalResult } from '../../types/api';
+import { formatNumber } from './adminFormat';
 
 interface RAGSankeyViewProps {
   channelExecutions: ChannelExecution[];
@@ -7,239 +8,148 @@ interface RAGSankeyViewProps {
   activeExchange: Record<string, unknown> | null;
 }
 
-export const RAGSankeyView: React.FC<RAGSankeyViewProps> = ({ 
-  channelExecutions, 
-  retrievalResults, 
-  activeExchange 
+interface FunnelNode {
+  key: string;
+  label: string;
+  value: number;
+  /** 用语义令牌而不是硬编码色值，暗色主题下才不会糊成一片 */
+  color: string;
+}
+
+function countChannels(executions: ChannelExecution[]) {
+  const lower = (value: unknown) => String(value ?? '').toLowerCase();
+  return executions.reduce<{ vector: number; keyword: number }>(
+    (acc, item) => {
+      const count = Number(item?.recalled_count ?? item?.recalledCount ?? 0);
+      if (lower(item?.channel).includes('vector')) acc.vector += count;
+      else if (lower(item?.channel).includes('keyword')) acc.keyword += count;
+      return acc;
+    },
+    { vector: 0, keyword: 0 }
+  );
+}
+
+function countPhases(results: RetrievalResult[]) {
+  const phaseOf = (item: RetrievalResult) => String(item?.phase ?? '').toUpperCase();
+  const fusion = results.filter((item) => phaseOf(item) === 'FUSION').length;
+  const rerank = results.filter((item) => phaseOf(item) === 'RERANK').length;
+  // 老数据没有 phase 字段，用门禁与分数兜底，避免漏斗永远显示 0
+  const passed = results.filter((item) => item?.gate_passed === true || Number(item?.score ?? 0) > 0).length;
+  return { fusion: fusion || passed, rerank: rerank || passed };
+}
+
+const WIDTH = 900;
+const HEIGHT = 300;
+const COLUMNS = [40, 300, 580, 800];
+const NODE_WIDTH = 14;
+
+/** 检索漏斗：两路召回 → 融合 → 重排 → 最终引用，条形宽度与数量成正比 */
+export const RAGSankeyView: React.FC<RAGSankeyViewProps> = ({
+  channelExecutions,
+  retrievalResults,
+  activeExchange,
 }) => {
-  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const channels = countChannels(channelExecutions);
+  const phases = countPhases(retrievalResults);
+  const references = Array.isArray(activeExchange?.references) ? activeExchange!.references as unknown[] : [];
+  const finalCount = references.length;
 
-  const { nodes, links, metrics } = useMemo(() => {
-    // 1. Data mapping (Fixing uppercase bug)
-    const vectorRecall = channelExecutions.find(c => String(c.channel).toLowerCase() === 'vector')?.recalled_count || 0;
-    const keywordRecall = channelExecutions.find(c => String(c.channel).toLowerCase() === 'keyword')?.recalled_count || 0;
-    
-    let fusionCount = retrievalResults.filter(r => String(r.phase).toUpperCase() === 'FUSION').length;
-    let rerankCount = retrievalResults.filter(r => String(r.phase).toUpperCase() === 'RERANK').length;
-    
-    // Fallback if phase string is missing or different
-    if (fusionCount === 0 && rerankCount === 0) {
-      fusionCount = retrievalResults.filter(r => r.gate_passed).length;
-      rerankCount = retrievalResults.filter((r) => (r.score ?? 0) > 0).length;
-    }
-    
-    // Total from vector + keyword might be greater or equal to fusion depending on deduplication
-    const sourceTotal = vectorRecall + keywordRecall;
-    const finalCount = (activeExchange?.references as unknown[] | undefined)?.length || 0;
+  const nodes: FunnelNode[] = [
+    { key: 'vector', label: '向量召回', value: channels.vector, color: 'var(--color-primary)' },
+    { key: 'keyword', label: '关键词召回', value: channels.keyword, color: 'var(--color-warning)' },
+    { key: 'fusion', label: '融合', value: phases.fusion, color: 'var(--color-success)' },
+    { key: 'rerank', label: '重排', value: phases.rerank, color: 'var(--color-accent)' },
+    { key: 'final', label: '最终引用', value: finalCount, color: 'var(--color-primary)' },
+  ];
 
-    // 2. Adaptive Layout Math
-    const maxFlow = Math.max(sourceTotal, fusionCount, rerankCount, finalCount, 1);
-    
-    const svgH = 340;
-    const usableH = 220; // Safe area for node heights to prevent clipping
-    
-    // Function to calculate node height, guaranteeing minimum height if > 0
-    const scale = (val: number) => {
-      if (val === 0) return 0;
-      return Math.max((val / maxFlow) * usableH, 12);
-    };
+  const total = nodes.reduce((sum, node) => sum + node.value, 0);
 
-    const vH = scale(vectorRecall);
-    const kH = scale(keywordRecall);
-    const fH = scale(fusionCount);
-    const rH = scale(rerankCount);
-    const finH = scale(finalCount);
-
-    const gap = 20;
-    const centerY = svgH / 2;
-
-    // Columns X
-    const x0 = 50, x1 = 300, x2 = 550, x3 = 800;
-    const nodeW = 14;
-
-    // Stack vector and keyword at x0
-    const sourceGroupH = vH + (vH > 0 && kH > 0 ? gap : 0) + kH;
-    const sourceStartY = centerY - sourceGroupH / 2;
-
-    const nodes = {
-      vector: { id: 'vector', x: x0, y: sourceStartY, h: vH, label: 'PGVector', value: vectorRecall, color: '#10B981', desc: '向量检索召回的段落数' },
-      keyword: { id: 'keyword', x: x0, y: sourceStartY + vH + (vH > 0 ? gap : 0), h: kH, label: 'Elasticsearch', value: keywordRecall, color: '#3B82F6', desc: '关键词检索召回的段落数' },
-      fusion: { id: 'fusion', x: x1, y: centerY - fH / 2, h: fH, label: 'RRF Fusion', value: fusionCount, color: '#8B5CF6', desc: '经倒数排序融合去重后的段落数' },
-      rerank: { id: 'rerank', x: x2, y: centerY - rH / 2, h: rH, label: 'BGE Reranker', value: rerankCount, color: '#F59E0B', desc: '经过重排截断后保留的优质段落数' },
-      final: { id: 'final', x: x3, y: centerY - finH / 2, h: finH, label: 'Prompt Context', value: finalCount, color: '#D97706', desc: '受限于 Token 预算最终进入 Prompt 的段落数' }
-    };
-
-    // SVG Cubic Bezier generator for Sankey links
-    const linkPath = (sx: number, sy: number, sh: number, tx: number, ty: number, th: number) => {
-      if (sh === 0 || th === 0) return '';
-      const cx1 = sx + (tx - sx) * 0.4;
-      const cx2 = tx - (tx - sx) * 0.4;
-      return `M ${sx} ${sy} C ${cx1} ${sy}, ${cx2} ${ty}, ${tx} ${ty} L ${tx} ${ty + th} C ${cx2} ${ty + th}, ${cx1} ${sy + sh}, ${sx} ${sy + sh} Z`;
-    };
-
-    // Distribute the target height proportionally for the incoming flows
-    const vToF_th = (vectorRecall / Math.max(sourceTotal, 1)) * fH;
-    const kToF_th = (keywordRecall / Math.max(sourceTotal, 1)) * fH;
-
-    const links = [
-      { 
-        source: 'vector', target: 'fusion',
-        d: linkPath(nodes.vector.x + nodeW, nodes.vector.y, nodes.vector.h, nodes.fusion.x, nodes.fusion.y, vToF_th), 
-        color: nodes.vector.color 
-      },
-      { 
-        source: 'keyword', target: 'fusion',
-        d: linkPath(nodes.keyword.x + nodeW, nodes.keyword.y, nodes.keyword.h, nodes.fusion.x, nodes.fusion.y + vToF_th, kToF_th), 
-        color: nodes.keyword.color 
-      },
-      { 
-        source: 'fusion', target: 'rerank',
-        d: linkPath(nodes.fusion.x + nodeW, nodes.fusion.y, nodes.fusion.h, nodes.rerank.x, nodes.rerank.y, nodes.rerank.h), 
-        color: nodes.fusion.color 
-      },
-      { 
-        source: 'rerank', target: 'final',
-        d: linkPath(nodes.rerank.x + nodeW, nodes.rerank.y, nodes.rerank.h, nodes.final.x, nodes.final.y, nodes.final.h), 
-        color: nodes.rerank.color 
-      }
-    ];
-
-    return { nodes: Object.values(nodes), links, metrics: { vectorRecall, keywordRecall, fusionCount, rerankCount, finalCount } };
-  }, [channelExecutions, retrievalResults, activeExchange]);
-
-  if (metrics.vectorRecall === 0 && metrics.keywordRecall === 0 && metrics.finalCount === 0) {
+  if (total === 0) {
     return (
-      <section className="mb-8">
-        <h3 className="text-lg font-semibold font-heading text-foreground mb-1">
-          <span className="block text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">召回流水线</span>
-          RAG 召回漏斗分析
-        </h3>
-        <div className="w-full bg-card border border-border/40 rounded-xl p-12 text-center shadow-sm">
-           <p className="text-muted-foreground">当前轮次未触发大规模文档检索，或后端未记录检索通道数据。</p>
-        </div>
-      </section>
+      <div className="rounded-lg border border-dashed border-border bg-secondary/30 px-5 py-8 text-center">
+        <p className="text-sm font-medium text-foreground">这一轮没有召回数据</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          可能是开放对话模式，或检索通道没有返回结果。切换到文档问答模式再试一次。
+        </p>
+      </div>
     );
   }
 
+  const maxValue = Math.max(...nodes.map((node) => node.value), 1);
+  const yOf = (node: FunnelNode, index: number) => {
+    const spread = HEIGHT - 80;
+    return 40 + (index / Math.max(nodes.length - 1, 1)) * spread * 0.2 + (1 - node.value / maxValue) * 40;
+  };
+
+  const summary = nodes.map((node) => `${node.label} ${formatNumber(node.value)}`).join('，');
+
   return (
-    <section className="mb-8">
-      <h3 className="text-lg font-semibold font-heading text-foreground mb-1">
-        <span className="block text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">Retrieval Pipeline</span>
-        RAG 召回漏斗分析
-      </h3>
-      <p className="text-sm text-muted-foreground mb-6">双路检索→融合→重排→最终上下文，追踪每一段切块的流向。</p>
-
-      <div className="w-full bg-background border border-border/50 rounded-xl shadow-sm overflow-hidden p-6 relative">
-        <div className="w-full overflow-x-auto overflow-y-hidden">
-          <div className="min-w-[900px] h-[360px] relative select-none">
-            
-            {/* Background Grid Lines optional for enterprise feel */}
-            <div className="absolute inset-0 pointer-events-none opacity-5">
-               <div className="h-full w-px bg-foreground absolute left-[50px]"></div>
-               <div className="h-full w-px bg-foreground absolute left-[300px]"></div>
-               <div className="h-full w-px bg-foreground absolute left-[550px]"></div>
-               <div className="h-full w-px bg-foreground absolute left-[800px]"></div>
-            </div>
-
-            <svg width="100%" height="100%" viewBox="0 0 900 360" className="absolute inset-0">
-              {/* Links */}
-              {links.map((link, i) => {
-                if (!link.d) return null;
-                const isFaded = hoveredNode && hoveredNode !== link.source && hoveredNode !== link.target;
-                return (
-                  <path 
-                    key={i} 
-                    d={link.d} 
-                    fill={link.color} 
-                    fillOpacity={isFaded ? "0.05" : "0.25"} 
-                    className="transition-all duration-300"
-                  />
-                );
-              })}
-
-              {/* Nodes */}
-              {nodes.map((node, i) => {
-                if (node.h === 0) return null;
-                const isHovered = hoveredNode === node.id;
-                const isFaded = hoveredNode && !isHovered;
-                
-                return (
-                  <g 
-                    key={i} 
-                    className="group"
-                    onMouseEnter={() => setHoveredNode(node.id)}
-                    onMouseLeave={() => setHoveredNode(null)}
-                  >
-                    <rect 
-                      x={node.x} 
-                      y={node.y} 
-                      width={14} 
-                      height={node.h} 
-                      fill={node.color} 
-                      rx={3}
-                      className={`cursor-pointer transition-all duration-300 ${isFaded ? 'opacity-30' : 'opacity-100'}`}
-                    />
-                    
-                    {/* Hover Glow */}
-                    {isHovered && (
-                       <rect x={node.x-2} y={node.y-2} width={18} height={node.h+4} fill="none" stroke={node.color} strokeWidth="2" rx="4" opacity="0.5" />
-                    )}
-
-                    {/* Node Label Top */}
-                    <text 
-                      x={node.x + 7} 
-                      y={node.y - 14} 
-                      textAnchor="middle" 
-                      className={`text-xs font-semibold font-mono transition-opacity ${isFaded ? 'opacity-30 fill-muted-foreground' : 'fill-foreground'}`}
-                    >
-                      {node.label}
-                    </text>
-                    
-                    {/* Node Value Pill */}
-                    <rect 
-                      x={node.x - 16} 
-                      y={node.y + node.h + 12} 
-                      width={46} 
-                      height={22} 
-                      fill={isHovered ? node.color : "var(--color-secondary, #f3f4f6)"} 
-                      rx={6} 
-                      className="transition-colors duration-300"
-                    />
-                    <text 
-                      x={node.x + 7} 
-                      y={node.y + node.h + 27} 
-                      textAnchor="middle" 
-                      className={`text-[11px] font-bold font-mono transition-colors duration-300 ${isHovered ? 'fill-white dark:fill-black' : 'fill-foreground'}`}
-                    >
-                      {node.value}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
-            
-            {/* Headers */}
-            <div className="absolute top-0 left-0 w-full flex justify-between px-[38px] pt-1 pointer-events-none">
-              <div className="flex flex-col w-[40px] items-center">
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-0.5">召回</span>
-                <span className="text-sm font-semibold text-foreground whitespace-nowrap">双路召回</span>
-              </div>
-              <div className="flex flex-col w-[40px] items-center ml-[210px]">
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-0.5">融合</span>
-                <span className="text-sm font-semibold text-foreground whitespace-nowrap">RRF 融合</span>
-              </div>
-              <div className="flex flex-col w-[40px] items-center ml-[210px]">
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-0.5">精排</span>
-                <span className="text-sm font-semibold text-foreground whitespace-nowrap">重排截断</span>
-              </div>
-              <div className="flex flex-col w-[40px] items-center ml-[210px]">
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-0.5">结果</span>
-                <span className="text-sm font-semibold text-foreground whitespace-nowrap">最终上下文</span>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="overflow-x-auto">
+        <svg
+          role="img"
+          aria-label={`检索漏斗：${summary}`}
+          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          className="h-[260px] w-full min-w-[640px]"
+        >
+          <title>检索漏斗</title>
+          {nodes.slice(0, nodes.length - 1).map((from, index) => {
+            const to = nodes[index + 1];
+            const x1 = COLUMNS[Math.min(index, COLUMNS.length - 1)] + NODE_WIDTH;
+            const x2 = COLUMNS[Math.min(index + 1, COLUMNS.length - 1)];
+            const y1 = yOf(from, index);
+            const y2 = yOf(to, index + 1);
+            const stroke = Math.max(2, (from.value / maxValue) * 26);
+            return (
+              <path
+                key={`link-${from.key}`}
+                d={`M ${x1} ${y1} C ${(x1 + x2) / 2} ${y1}, ${(x1 + x2) / 2} ${y2}, ${x2} ${y2}`}
+                fill="none"
+                stroke={from.color}
+                strokeOpacity={0.25}
+                strokeWidth={stroke}
+                strokeLinecap="round"
+              />
+            );
+          })}
+          {nodes.map((node, index) => {
+            const x = COLUMNS[Math.min(index, COLUMNS.length - 1)];
+            const y = yOf(node, index);
+            return (
+              <g key={node.key}>
+                <rect
+                  x={x}
+                  y={y - 14}
+                  width={NODE_WIDTH}
+                  height={`${Math.max(16, (node.value / maxValue) * 40)}`}
+                  rx={4}
+                  fill={node.color}
+                  fillOpacity={0.85}
+                />
+                <text x={x + NODE_WIDTH + 8} y={y - 2} className="fill-current text-2xs" fill="currentColor">
+                  {node.label}
+                </text>
+                <text x={x + NODE_WIDTH + 8} y={y + 12} className="fill-current text-2xs" fill="currentColor" fillOpacity={0.65}>
+                  {formatNumber(node.value)}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
       </div>
-    </section>
+
+      {/* 关键数字再以文本给一遍，不依赖图形传达信息 */}
+      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {nodes.map((node) => (
+          <div key={`fact-${node.key}`} className="rounded-lg border border-border bg-card px-3 py-2">
+            <dt className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: node.color }} />
+              {node.label}
+            </dt>
+            <dd className="mt-0.5 font-mono text-sm tabular-nums text-foreground">{formatNumber(node.value)}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 };

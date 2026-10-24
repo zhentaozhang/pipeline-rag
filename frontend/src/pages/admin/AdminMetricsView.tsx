@@ -1,319 +1,157 @@
-import React, { useEffect, useState } from 'react';
-import { 
-  BarChart3, 
-  Activity, 
-  Clock, 
-  MessageSquare,
-  AlertTriangle,
-  Coins, Zap,
-  PlayCircle
-} from 'lucide-react';
-import { 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip as RechartsTooltip, 
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  Legend
-} from 'recharts';
+import React, { useState } from 'react';
+import { RefreshCw, Zap } from 'lucide-react';
 import { manageApi } from '../../lib/api';
+import { useAsyncData } from '../../lib/useAsyncData';
 import type { BenchmarkItem, EvaluationDataset, MetricsOverview } from '../../types/api';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
+import { Alert } from '../../components/ui/Alert';
 import { Button } from '../../components/ui/Button';
-import { errorMessage } from '../../lib/utils';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { Skeleton } from '../../components/ui/Skeleton';
+import { toast } from '../../lib/toast';
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader';
+import { AdminPanel } from '../../components/admin/AdminPanel';
+import { AdminStatGrid } from '../../components/admin/AdminStatGrid';
+import { BenchmarkTable } from '../../components/admin/metrics/BenchmarkTable';
+import { EvaluationQuickTable } from '../../components/admin/metrics/EvaluationQuickTable';
+import { UsageTrendChart, type UsageTrendPoint } from '../../components/admin/charts/UsageTrendChart';
+import { actionFailure, formatCost, formatNumber, formatRatio, loadFailure } from '../../components/admin/adminFormat';
 
+interface MetricsBundle {
+  overview: MetricsOverview | null;
+  trend: UsageTrendPoint[];
+  benchmarks: BenchmarkItem[];
+  evaluations: EvaluationDataset[];
+}
+
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+/** 观测指标：概览卡片 + 用量趋势 + 阶段分位 + 评估样本快捷重跑 */
 export const AdminMetricsView: React.FC = () => {
-  const [overview, setOverview] = useState<MetricsOverview | null>(null);
-  const [trend, setTrend] = useState<unknown[]>([]);
-  const [benchmarks, setBenchmarks] = useState<BenchmarkItem[]>([]);
-  const [evaluations, setEvaluations] = useState<EvaluationDataset[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [runningEval, setRunningEval] = useState(false);
-  const [error, setError] = useState('');
+  const [runningId, setRunningId] = useState<number | null>(null);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchRunning, setBatchRunning] = useState(false);
 
-  const loadData = async () => {
-    setLoading(true);
-    setError('');
+  const { data, loading, error, refetch } = useAsyncData<MetricsBundle>(async () => {
+    const [overview, trend, benchmarks, evaluations] = await Promise.all([
+      manageApi.getMetricsOverview(),
+      manageApi.getUsageTrend(14),
+      manageApi.getBenchmarks(),
+      manageApi.listEvaluationDataset({ pageNo: 1, pageSize: 20 }),
+    ]);
+    return {
+      // 后端偶尔把结果包一层 data，这里两种形态都接受
+      overview: ((overview as { data?: MetricsOverview }).data ?? overview) as MetricsOverview,
+      trend: asArray<UsageTrendPoint>(trend),
+      benchmarks: asArray<BenchmarkItem>(benchmarks),
+      evaluations: evaluations?.records ?? [],
+    };
+  });
+
+  const overview = data?.overview ?? null;
+
+  const runOne = async (item: EvaluationDataset) => {
+    setRunningId(item.id);
     try {
-      const [overviewData, trendData, benchData, evalData] = await Promise.all([
-        manageApi.getMetricsOverview(),
-        manageApi.getUsageTrend(14),
-        manageApi.getBenchmarks(),
-        manageApi.listEvaluationDataset({ pageNo: 1, pageSize: 20 })
-      ]);
-      setOverview(overviewData);
-      setTrend(Array.isArray(trendData) ? trendData : []);
-      setBenchmarks(Array.isArray(benchData) ? (benchData as BenchmarkItem[]) : []);
-      // The dataset might be wrapped in records/list depending on backend, handle gracefully
-      setEvaluations(evalData?.records || []);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : '加载指标数据失败');
+      await manageApi.runEvaluation([item.id]);
+      toast({ title: '已提交单条评估', description: `样本 #${item.id} 开始运行，稍后回到评估看板查看分数。`, variant: 'success' });
+      refetch();
+    } catch (runError) {
+      toast({ title: '提交评估失败', description: actionFailure(runError, '提交单条评估', '请确认后端评估任务队列正常后重试。'), variant: 'error' });
     } finally {
-      setLoading(false);
+      setRunningId(null);
     }
   };
 
-  useEffect(() => {
-    void (async () => {
-      await loadData();
-    })();
-  }, []);
-
-  const handleRunEvaluation = async (datasetId?: number) => {
-    if (!confirm('确定要触发评估任务吗？这将消耗较多大模型调用额度。')) {
-      return;
-    }
-    setRunningEval(true);
+  const runBatch = async () => {
+    setBatchRunning(true);
     try {
-      await manageApi.runEvaluation(datasetId ? [datasetId] : undefined);
-      alert('评估任务已触发');
-    } catch (e) {
-      alert(`触发失败: ${errorMessage(e)}`);
+      await manageApi.runEvaluation();
+      toast({ title: '已提交全量评估', description: '所有待评估样本已入队，结果会写回评估看板。', variant: 'success' });
+      setBatchOpen(false);
+      refetch();
+    } catch (runError) {
+      toast({ title: '提交全量评估失败', description: actionFailure(runError, '提交全量评估', '请确认后端评估任务队列正常后重试。'), variant: 'error' });
     } finally {
-      setRunningEval(false);
+      setBatchRunning(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center h-full min-h-[500px]">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-muted-foreground text-sm">正在加载指标数据...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-8">
-        <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-md flex items-center gap-2">
-          <AlertTriangle size={18} />
-          {error}
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <BarChart3 className="text-primary" />
-            观测指标看板
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            实时总览对话系统运行状态、成本消耗及性能基准。
-          </p>
-        </div>
-        <Button onClick={loadData} variant="outline" className="shrink-0">
-          刷新数据
-        </Button>
-      </div>
-
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex justify-between">
-              总对话轮次
-              <MessageSquare size={16} className="text-primary/70" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{overview?.totalExchanges || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              活跃会话数: {overview?.activeConversations || 0}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex justify-between">
-              平均响应耗时
-              <Clock size={16} className="text-amber-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{overview?.avgResponseTimeMs || 0} <span className="text-sm font-normal text-muted-foreground">ms</span></div>
-            <p className="text-xs text-muted-foreground mt-1">
-              失败率: {overview?.errorRate || 0}%
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex justify-between">
-              今日 Token 消耗
-              <Activity size={16} className="text-green-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{(overview?.todayTokens || 0).toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              总计: {(overview?.totalTokens || 0).toLocaleString()} Tokens
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex justify-between">
-              今日预估成本
-              <Coins size={16} className="text-blue-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">${overview?.todayCost || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              总计: ${overview?.totalCost || 0}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex justify-between">
-              Prompt 缓存命中率
-              <Zap size={16} className="text-purple-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {((overview?.cacheHitRatio ?? 0) * 100).toFixed(1)}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              命中 token 按约 1/10 单价计费（P0 Prompt Caching）
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Usage Trend Charts */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="text-lg">近 14 天 Token 用量趋势</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[300px] w-full mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trend} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis yAxisId="left" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `${val / 1000}k`} />
-                <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <RechartsTooltip 
-                  contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                  itemStyle={{ color: 'hsl(var(--foreground))' }}
-                />
-                <Legend />
-                <Line yAxisId="left" type="monotone" dataKey="tokens" name="Tokens 消耗" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                <Line yAxisId="right" type="monotone" dataKey="calls" name="调用次数" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Benchmarks & Evaluations Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Benchmarks Table */}
-        <Card className="flex flex-col">
-          <CardHeader>
-            <CardTitle className="text-lg">流水线阶段耗时基准</CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-auto">
-            <div className="rounded-md border border-border">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-secondary/50 text-muted-foreground text-xs uppercase">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">阶段代码</th>
-                    <th className="px-4 py-3 font-medium">执行模式</th>
-                    <th className="px-4 py-3 font-medium text-right">P50</th>
-                    <th className="px-4 py-3 font-medium text-right">P90</th>
-                    <th className="px-4 py-3 font-medium text-right">P99</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {benchmarks.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">暂无基准数据</td>
-                    </tr>
-                  ) : (
-                    benchmarks.map((bench, idx) => (
-                      <tr key={idx} className="hover:bg-secondary/30 transition-colors">
-                        <td className="px-4 py-3 font-medium text-foreground">{bench.stageCode}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{bench.executionMode || '-'}</td>
-                        <td className="px-4 py-3 text-right">{bench.p50Ms} ms</td>
-                        <td className="px-4 py-3 text-right">{bench.p90Ms} ms</td>
-                        <td className="px-4 py-3 text-right font-medium text-amber-500">{bench.p99Ms} ms</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Evaluations */}
-        <Card className="flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-lg">评估数据集 (RAGAS)</CardTitle>
-            <Button 
-              size="sm" 
-              onClick={() => handleRunEvaluation()} 
-              disabled={runningEval}
-              className="gap-2"
-            >
-              <PlayCircle size={16} />
-              {runningEval ? '评估中...' : '全量评估'}
+    <div className="flex flex-col gap-6">
+      <AdminPageHeader
+        eyebrow="观测指标"
+        title="运行指标"
+        description="这里汇总调用量、失败率、成本与阶段耗时。指标偏高时先看阶段分位表，再决定优化检索还是生成。"
+        actions={
+          <>
+            <Button size="sm" variant="outline" onClick={() => refetch()} loading={loading}>
+              <RefreshCw size={13} aria-hidden="true" />
+              刷新
             </Button>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-auto">
-            <div className="rounded-md border border-border mt-2">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-secondary/50 text-muted-foreground text-xs uppercase">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">数据集 ID</th>
-                    <th className="px-4 py-3 font-medium">描述</th>
-                    <th className="px-4 py-3 font-medium text-right">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {evaluations.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">暂无评估数据集</td>
-                    </tr>
-                  ) : (
-                    evaluations.map((item, idx) => (
-                      <tr key={item.id || idx} className="hover:bg-secondary/30 transition-colors">
-                        <td className="px-4 py-3 font-medium text-foreground">{item.id}</td>
-                        <td className="px-4 py-3 text-muted-foreground truncate max-w-[200px]" title={item.description || item.question}>{item.description || item.question || '-'}</td>
-                        <td className="px-4 py-3 text-right">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={() => handleRunEvaluation(item.id)}
-                            disabled={runningEval}
-                          >
-                            运行
-                          </Button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <Button size="sm" onClick={() => setBatchOpen(true)} disabled={loading || !data || batchRunning}>
+              <Zap size={13} aria-hidden="true" />
+              运行全量评估
+            </Button>
+          </>
+        }
+      />
+
+      {loading && !data ? (
+        <div className="flex flex-col gap-4">
+          <Skeleton lines={3} />
+          <Skeleton lines={8} />
+        </div>
+      ) : error ? (
+        <Alert variant="destructive" title="加载运行指标失败" action={<Button size="sm" variant="outline" onClick={() => refetch()}>重试</Button>}>
+          {loadFailure(error, '运行指标')}
+        </Alert>
+      ) : (
+        <>
+          <AdminStatGrid
+            stats={[
+              { label: '问答轮次', value: formatNumber(overview?.totalExchanges), hint: `活跃会话 ${formatNumber(overview?.activeConversations)}` },
+              { label: '平均响应', value: `${formatNumber(overview?.avgResponseTimeMs)} ms`, hint: `失败率 ${formatNumber(overview?.errorRate)}%` },
+              { label: '今日 Token', value: formatNumber(overview?.todayTokens), hint: `累计 ${formatNumber(overview?.totalTokens)}` },
+              { label: '今日成本', value: formatCost(overview?.todayCost), hint: `累计 ${formatCost(overview?.totalCost)}` },
+              { label: '缓存命中率', value: formatRatio(overview?.cacheHitRatio), hint: '越高越省钱' },
+            ]}
+            columns={5}
+          />
+
+          <AdminPanel title="近 14 天用量趋势" description="实线为 Token，虚线为调用次数，左右各一根 Y 轴">
+            <UsageTrendChart data={data?.trend ?? []} />
+          </AdminPanel>
+
+          <AdminPanel title="阶段耗时分布" description="某一阶段的 P99 明显高于 P50，说明长尾卡在这一步">
+            <BenchmarkTable rows={data?.benchmarks ?? []} loading={loading} />
+          </AdminPanel>
+
+          <AdminPanel
+            title="评估样本"
+            description="只展示最近 20 条，完整分数到评估看板查看"
+            actions={
+              <Button size="sm" variant="outline" onClick={() => refetch()} loading={loading}>
+                <RefreshCw size={13} aria-hidden="true" />
+                刷新
+              </Button>
+            }
+          >
+            <EvaluationQuickTable rows={data?.evaluations ?? []} loading={loading} runningId={runningId} onRun={runOne} />
+          </AdminPanel>
+        </>
+      )}
+
+      <ConfirmDialog
+        open={batchOpen}
+        title="运行全量评估？"
+        description="会把所有待评估样本排进队列，逐条调用模型评分，可能持续较长时间并产生费用。"
+        confirmLabel="开始运行"
+        onConfirm={runBatch}
+        onCancel={() => setBatchOpen(false)}
+        danger={false}
+      />
     </div>
   );
 };

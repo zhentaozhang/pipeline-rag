@@ -1,213 +1,186 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
+import { RefreshCw } from 'lucide-react';
 import { manageApi } from '../../lib/api';
+import { useAsyncData } from '../../lib/useAsyncData';
+import { useUrlFilters } from '../../lib/useUrlFilters';
+import { useDebouncedValue } from '../../components/admin/useDebouncedValue';
 import type { TraceListItem, TracePageResponse } from '../../types/api';
+import { Alert } from '../../components/ui/Alert';
 import { Button } from '../../components/ui/Button';
-import { Card, CardContent } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { formatTime, normalizeError, truncate } from '../../lib/observabilityHelpers';
+import { DataTable, TablePagination, type DataTableColumn } from '../../components/ui/DataTable';
+import { FilterBar, FilterSelect, FilterSearch } from '../../components/ui/FilterBar';
+import { Skeleton } from '../../components/ui/Skeleton';
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader';
+import { AdminPanel } from '../../components/admin/AdminPanel';
+import { AdminStatGrid } from '../../components/admin/AdminStatGrid';
+import { AdminStatusBadge } from '../../components/admin/AdminStatusBadge';
+import { formatMs, formatNumber, loadFailure } from '../../components/admin/adminFormat';
+import { formatDateTime } from '../../lib/observabilityHelpers';
 
+const DEFAULT_FILTERS = { q: '', status: 'ALL', page: '1' };
 const PAGE_SIZE = 15;
 
-function statusTone(status: string): 'success' | 'destructive' | 'default' {
-  if (status === 'ok') return 'success';
-  if (status === 'error') return 'destructive';
-  return 'default';
-}
+const STATUS_OPTIONS = [
+  { value: 'ALL', label: '全部状态' },
+  { value: 'ok', label: '成功' },
+  { value: 'error', label: '失败' },
+];
 
+/** Trace 链路列表：按会话 ID 与状态筛，点进任意一条看 span 瀑布 */
 export const AdminTraceListView: React.FC = () => {
-  const [page, setPage] = useState(1);
-  const [conversationId, setConversationId] = useState('');
-  const [status, setStatus] = useState('');
-  const [data, setData] = useState<TracePageResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [filters, patchFilters] = useUrlFilters(DEFAULT_FILTERS);
+  const conversationId = useDebouncedValue(filters.q, 350).trim();
+  const page = Math.max(1, Number(filters.page) || 1);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await manageApi.getTraces({
+  const { data, loading, error, refetch } = useAsyncData<TracePageResponse>(
+    () =>
+      manageApi.getTraces({
         pageNo: page,
         pageSize: PAGE_SIZE,
-        conversationId: conversationId.trim() || undefined,
-        status: status || undefined
-      });
-      setError('');
-      setData(res);
-    } catch (e) {
-      setError(normalizeError(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [page, conversationId, status]);
+        conversationId,
+        status: filters.status === 'ALL' ? '' : filters.status,
+      }),
+    [page, conversationId, filters.status]
+  );
 
-  useEffect(() => {
-    void (async () => {
-      await load();
-    })();
-  }, [load]);
+  const stats = data?.stats;
+  const rows = data?.records ?? [];
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+  const columns: DataTableColumn<TraceListItem>[] = [
+    {
+      key: 'traceId',
+      header: 'Trace',
+      render: (row) => (
+        <Link
+          to={`/admin/traces/${row.traceId}`}
+          className="font-mono text-xs text-primary underline-offset-2 hover:underline"
+        >
+          {row.traceId}
+        </Link>
+      ),
+    },
+    {
+      key: 'conversation',
+      header: '会话',
+      render: (row) => (
+        <Link
+          to={`/admin/observability/${row.conversationId}`}
+          className="font-mono text-2xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        >
+          {row.conversationId}
+        </Link>
+      ),
+    },
+    { key: 'spans', header: 'Span', align: 'right', render: (row) => formatNumber(row.spanCount) },
+    { key: 'duration', header: '耗时', align: 'right', render: (row) => formatMs(row.durationMs) },
+    {
+      key: 'status',
+      header: '状态',
+      align: 'center',
+      render: (row) => (
+        <AdminStatusBadge
+          label={row.status === 'error' ? '失败' : '成功'}
+          tone={row.status === 'error' ? 'destructive' : 'success'}
+        />
+      ),
+    },
+    {
+      key: 'preview',
+      header: '输出预览',
+      render: (row) => (
+        <span className="line-clamp-2 max-w-[24rem] text-2xs leading-relaxed text-muted-foreground">
+          {row.outputPreview || '（无输出）'}
+        </span>
+      ),
+    },
+    { key: 'createdAt', header: '时间', align: 'right', render: (row) => formatDateTime(row.createdAt) },
+  ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Trace 链路</h2>
-        <div className="flex items-center gap-2">
-          <input
-            value={conversationId}
-            onChange={(e) => {
-              setConversationId(e.target.value);
-              setPage(1);
-            }}
-            placeholder="按会话 ID 过滤"
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-          />
-          <select
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              setPage(1);
-            }}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-          >
-            <option value="">全部状态</option>
-            <option value="ok">正常</option>
-            <option value="error">异常</option>
-          </select>
-          <Button
-            variant="default"
-            onClick={() => {
-              setLoading(true);
-              void load();
-            }}
-            disabled={loading}
-          >
-            {loading ? '加载中...' : '刷新'}
+    <div className="flex flex-col gap-6">
+      <AdminPageHeader
+        eyebrow="Trace 链路"
+        title="链路列表"
+        description="每条链路是一次问答的完整调用树。耗时长的链路先看 span 瀑布，定位是检索慢还是生成慢。"
+        actions={
+          <Button size="sm" variant="outline" onClick={() => refetch()} loading={loading}>
+            <RefreshCw size={13} aria-hidden="true" />
+            刷新
           </Button>
+        }
+      />
+
+      {loading && !data ? (
+        <div className="flex flex-col gap-4">
+          <Skeleton lines={3} />
+          <Skeleton lines={8} />
         </div>
-      </div>
+      ) : error ? (
+        <Alert variant="destructive" title="加载链路列表失败" action={<Button size="sm" variant="outline" onClick={() => refetch()}>重试</Button>}>
+          {loadFailure(error, '链路列表')}
+        </Alert>
+      ) : (
+        <>
+          <AdminStatGrid
+            stats={[
+              { label: '链路总数', value: formatNumber(stats?.totalTraces) },
+              { label: '今日链路', value: formatNumber(stats?.todayTraces) },
+              { label: '异常链路', value: formatNumber(stats?.errorTraces), tone: Number(stats?.errorTraces ?? 0) > 0 ? 'destructive' : 'default' },
+              { label: '平均根耗时', value: formatMs(stats?.avgRootDurationMs) },
+            ]}
+          />
 
-      {error && (
-        <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+          <AdminPanel bodyClassName="flex flex-col gap-3">
+            <FilterBar>
+              <FilterSearch
+                label="会话 ID"
+                value={filters.q}
+                onChange={(value) => patchFilters({ q: value, page: '1' })}
+                placeholder="输入完整或部分会话 ID"
+              />
+              <FilterSelect
+                label="链路状态"
+                value={filters.status}
+                onChange={(value) => patchFilters({ status: value, page: '1' })}
+                options={STATUS_OPTIONS}
+              />
+            </FilterBar>
+
+            <DataTable
+              caption="链路列表，含每条链路的 span 数量、耗时与状态"
+              columns={columns}
+              rows={rows}
+              rowKey={(row) => row.traceId}
+              loading={loading}
+              error=""
+              skeletonRows={6}
+              dense
+              emptyTitle={conversationId || filters.status !== 'ALL' ? '没有符合条件的链路' : '还没有链路数据'}
+              emptyDescription={
+                conversationId || filters.status !== 'ALL'
+                  ? '放宽筛选条件试试，或清空会话 ID 后再看。'
+                  : '链路来自真实问答请求。去聊天页问一个问题，再回来刷新即可看到。'
+              }
+              emptyAction={
+                conversationId || filters.status !== 'ALL' ? (
+                  <Button size="sm" variant="outline" onClick={() => patchFilters({ q: '', status: 'ALL', page: '1' })}>
+                    清空筛选
+                  </Button>
+                ) : undefined
+              }
+              footer={
+                <TablePagination
+                  page={page}
+                  pageSize={PAGE_SIZE}
+                  total={Number(data?.total ?? 0)}
+                  onPageChange={(next) => patchFilters({ page: String(next) })}
+                />
+              }
+            />
+          </AdminPanel>
+        </>
       )}
-
-      {/* 关键指标卡片 */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-gray-500">Trace 总数</p>
-            <p className="mt-1 text-2xl font-semibold text-gray-900">
-              {data?.stats.totalTraces ?? '—'}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-gray-500">今日新增</p>
-            <p className="mt-1 text-2xl font-semibold text-gray-900">
-              {data?.stats.todayTraces ?? '—'}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-gray-500">异常 Trace</p>
-            <p className="mt-1 text-2xl font-semibold text-red-600">
-              {data?.stats.errorTraces ?? '—'}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-gray-500">平均耗时 (ms)</p>
-            <p className="mt-1 text-2xl font-semibold text-gray-900">
-              {data ? Math.round(data.stats.avgRootDurationMs) : '—'}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
-                <th className="px-4 py-3">Trace ID</th>
-                <th className="px-4 py-3">会话</th>
-                <th className="px-4 py-3">Span</th>
-                <th className="px-4 py-3">耗时</th>
-                <th className="px-4 py-3">状态</th>
-                <th className="px-4 py-3">输出预览</th>
-                <th className="px-4 py-3">时间</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data?.records ?? []).map((t: TraceListItem) => (
-                <tr
-                  key={t.traceId}
-                  className="border-b border-gray-100 transition-colors hover:bg-gray-50"
-                >
-                  <td className="px-4 py-3">
-                    <Link
-                      to={`/admin/traces/${t.traceId}`}
-                      className="font-mono text-xs text-blue-600 hover:underline"
-                    >
-                      {truncate(t.traceId, 20)}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">
-                    {truncate(t.conversationId, 18)}
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">{t.spanCount}</td>
-                  <td className="px-4 py-3 text-gray-700">
-                    {t.durationMs != null ? `${Math.round(t.durationMs)} ms` : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant={statusTone(t.status)}>{t.status}</Badge>
-                  </td>
-                  <td className="max-w-[220px] truncate px-4 py-3 text-xs text-gray-500">
-                    {truncate(t.outputPreview, 60)}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
-                    {formatTime(t.createdAt)}
-                  </td>
-                </tr>
-              ))}
-              {!loading && (data?.records ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                    暂无 trace 数据（对话未触发采样或尚无记录）
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
-            <span className="text-xs text-gray-500">共 {data?.total ?? 0} 条</span>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                上一页
-              </Button>
-              <span className="text-xs text-gray-600">
-                {page} / {totalPages}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                下一页
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };

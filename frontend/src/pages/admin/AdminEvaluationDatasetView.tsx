@@ -1,269 +1,197 @@
-import React, { useEffect, useState } from 'react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import React, { useMemo, useState } from 'react';
+import { RefreshCw, Zap } from 'lucide-react';
 import { manageApi } from '../../lib/api';
-import { Database, Search, Beaker, CheckCircle2, Play, Trash2, Loader2 } from 'lucide-react';
-import { formatDateTime } from '../../lib/manageFormat';
-import { errorMessage } from '../../lib/utils';
+import type { EvaluationDataset } from '../../types/api';
+import { Alert } from '../../components/ui/Alert';
+import { Button } from '../../components/ui/Button';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { FilterBar, FilterSearch } from '../../components/ui/FilterBar';
+import { Skeleton } from '../../components/ui/Skeleton';
+import { toast } from '../../lib/toast';
+import { useAsyncData } from '../../lib/useAsyncData';
+import { useUrlFilters } from '../../lib/useUrlFilters';
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader';
+import { AdminPanel } from '../../components/admin/AdminPanel';
+import { AdminStatGrid } from '../../components/admin/AdminStatGrid';
+import { EvaluationTable } from '../../components/admin/evaluation/EvaluationTable';
+import { useDebouncedValue } from '../../components/admin/useDebouncedValue';
+import { actionFailure, formatNumber, loadFailure } from '../../components/admin/adminFormat';
 
-interface DatasetItem {
-  id: number;
-  question?: string;
-  groundTruth?: string;
-  status?: number;
-  sourceType?: string;
-  conversationId?: string;
-  createdAt?: string | null;
-  faithfulnessScore?: number | null;
-  answerRelevancyScore?: number | null;
-  contextPrecisionScore?: number | null;
-  contextRecallScore?: number | null;
-  answerCorrectnessScore?: number | null;
-  [key: string]: unknown;
+const DEFAULT_FILTERS = { q: '', page: '1' };
+const PAGE_SIZE = 10;
+/** 一次拉满，前端做真实的搜索 + 分页；评估集是人工维护的，超过 200 条再改回服务端分页 */
+const FETCH_SIZE = 200;
+
+interface DatasetBundle {
+  records: EvaluationDataset[];
+  total: number;
 }
 
+/** 评估看板：样本清单 + RAGAS 五项分数 + 重跑与删除 */
 export const AdminEvaluationDatasetView: React.FC = () => {
-  const [loading, setLoading] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [items, setItems] = useState<DatasetItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [pageNo, setPageNo] = useState(1);
-  const pageSize = 10;
+  const [filters, patchFilters] = useUrlFilters(DEFAULT_FILTERS);
+  const keyword = useDebouncedValue(filters.q, 300);
+  const [runningId, setRunningId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<EvaluationDataset | null>(null);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchRunning, setBatchRunning] = useState(false);
 
-  const loadData = async (page: number) => {
+  const { data, loading, error, refetch } = useAsyncData<DatasetBundle>(async () => {
+    const response = await manageApi.listEvaluationDataset({ pageNo: 1, pageSize: FETCH_SIZE });
+    return { records: response?.records ?? [], total: Number(response?.total ?? response?.records?.length ?? 0) };
+  });
+
+  const records = useMemo(() => data?.records ?? [], [data]);
+  const filtered = useMemo(() => {
+    const needle = keyword.trim().toLowerCase();
+    if (!needle) return records;
+    return records.filter((item) =>
+      [item.question, item.description, item.groundTruth].some((field) => String(field ?? '').toLowerCase().includes(needle))
+    );
+  }, [records, keyword]);
+
+  const page = Math.max(1, Number(filters.page) || 1);
+  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pending = records.filter((item) => Number(item.status ?? 1) === 1).length;
+  const done = records.filter((item) => Number(item.status ?? 1) === 2).length;
+
+  const runOne = async (item: EvaluationDataset) => {
+    setRunningId(item.id);
     try {
-      setLoading(true);
-      const res = await manageApi.listEvaluationDataset({ pageNo: page, pageSize });
-      setItems(res.records || []);
-      setTotal(res.total || 0);
-      setPageNo(page);
-    } catch (e) {
-      console.error('Failed to load dataset:', e);
+      await manageApi.runEvaluation([item.id]);
+      toast({ title: '已提交评估', description: `样本 #${item.id} 已入队，稍后刷新看分数。`, variant: 'success' });
+      refetch();
+    } catch (runError) {
+      toast({ title: '提交评估失败', description: actionFailure(runError, '提交评估', '请确认后端评估任务队列正常后重试。'), variant: 'error' });
     } finally {
-      setLoading(false);
+      setRunningId(null);
     }
   };
 
-  useEffect(() => {
-    void (async () => {
-      await loadData(1);
-    })();
-  }, []);
-
-  const handleRunEvaluation = async (id?: number) => {
+  const runBatch = async () => {
+    setBatchRunning(true);
     try {
-      setRunning(true);
-      const res = await manageApi.runEvaluation(id ? [id] : undefined);
-      alert(res?.message || '已触发评估任务，请等待后台执行完毕刷新页面查看结果。');
-      await loadData(pageNo); // refresh
-    } catch (e) {
-      alert(`触发失败: ${errorMessage(e)}`);
-      console.error('Failed to run evaluation:', e);
+      await manageApi.runEvaluation();
+      toast({ title: '已提交全量评估', description: '待评估样本都入队了，列表里状态会变成「评估中」。', variant: 'success' });
+      setBatchOpen(false);
+      refetch();
+    } catch (runError) {
+      toast({ title: '提交全量评估失败', description: actionFailure(runError, '提交全量评估', '请确认后端评估任务队列正常后重试。'), variant: 'error' });
     } finally {
-      setRunning(false);
+      setBatchRunning(false);
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('确定要删除这条测试数据吗？')) return;
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    const id = deleting.id;
+    setDeleting(null);
     try {
-      setLoading(true);
-      const res = await manageApi.deleteEvaluationDataset(id);
-      alert(res?.message || '删除成功');
-      await loadData(pageNo);
-    } catch (e) {
-      alert(`删除失败: ${errorMessage(e)}`);
-      console.error('Failed to delete:', e);
-      setLoading(false);
+      await manageApi.deleteEvaluationDataset(id);
+      toast({ title: '已删除样本', description: `样本 #${id} 已从评估集移除。`, variant: 'success' });
+      refetch();
+    } catch (deleteError) {
+      toast({ title: '删除失败', description: actionFailure(deleteError, '删除评估样本'), variant: 'error' });
     }
   };
-
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="p-8 max-w-[1400px] mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
-            <Database className="text-primary" size={32} />
-            评估测试集 (Golden Dataset)
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            收集用户的预期答案反馈，作为 RAG 回归测试和评估打分的标准数据集。
-          </p>
+    <div className="flex flex-col gap-6">
+      <AdminPageHeader
+        eyebrow="评估看板"
+        title="评估数据集"
+        description="每条样本都会用 RAGAS 五项指标打分：忠实度看答案有没有编，上下文指标看检索给得够不够。"
+        actions={
+          <>
+            <Button size="sm" variant="outline" onClick={() => refetch()} loading={loading}>
+              <RefreshCw size={13} aria-hidden="true" />
+              刷新
+            </Button>
+            <Button size="sm" onClick={() => setBatchOpen(true)} disabled={pending === 0 || batchRunning}>
+              <Zap size={13} aria-hidden="true" />
+              运行全部待评估
+            </Button>
+          </>
+        }
+      />
+
+      {loading && !data ? (
+        <div className="flex flex-col gap-4">
+          <Skeleton lines={3} />
+          <Skeleton lines={8} />
         </div>
-        <div className="flex gap-3">
-            <Button 
-            variant="default" 
-            className="flex items-center gap-2"
-            onClick={() => handleRunEvaluation()}
-            disabled={running || items.filter(i => i.status === 1).length === 0}
+      ) : error ? (
+        <Alert
+          variant="destructive"
+          title="加载评估数据集失败"
+          action={
+            <Button size="sm" variant="outline" onClick={() => refetch()}>
+              重试
+            </Button>
+          }
+        >
+          {loadFailure(error, '评估数据集')}
+        </Alert>
+      ) : (
+        <>
+          <AdminStatGrid
+            stats={[
+              { label: '样本总数', value: formatNumber(records.length), hint: `后端报告 ${formatNumber(data?.total)}` },
+              { label: '已评估', value: formatNumber(done), tone: 'success' },
+              { label: '待评估', value: formatNumber(pending), tone: pending > 0 ? 'warning' : 'default' },
+              { label: '筛出条数', value: formatNumber(filtered.length), hint: keyword ? `关键词「${keyword}」` : '未筛选' },
+            ]}
+          />
+
+          <AdminPanel
+            title="样本清单"
+            description={`一次最多加载 ${FETCH_SIZE} 条，搜索会在这批数据里过滤，再在前端分页。`}
+            bodyClassName="flex flex-col gap-3"
           >
-            {running ? <Loader2 size={18} className="animate-spin" /> : <Beaker size={18} />}
-            批量运行 Ragas 评估
-          </Button>
-        </div>
-      </div>
+            <FilterBar>
+              <FilterSearch
+                label="搜索样本"
+                value={filters.q}
+                onChange={(value) => patchFilters({ q: value, page: '1' })}
+                placeholder="按问题、标准答案或描述搜索"
+              />
+            </FilterBar>
 
-      <Card className="p-0 overflow-hidden border border-border/50 shadow-sm">
-        <div className="p-4 border-b border-border/50 bg-secondary/20 flex gap-4 items-center">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-            <input 
-              type="text"
-              placeholder="搜索问题或答案..."
-              className="w-full pl-10 pr-4 py-2 bg-background border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            <EvaluationTable
+              rows={pageRows}
+              loading={loading}
+              keyword={keyword}
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={filtered.length}
+              runningId={runningId}
+              onRun={runOne}
+              onDelete={setDeleting}
+              onPageChange={(next) => patchFilters({ page: String(next) })}
+              onClearSearch={() => patchFilters({ q: '', page: '1' })}
             />
-          </div>
-        </div>
+          </AdminPanel>
+        </>
+      )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-secondary/30 text-muted-foreground uppercase text-xs tracking-wider">
-              <tr>
-                <th className="px-6 py-4 font-medium">问题 (Question)</th>
-                <th className="px-6 py-4 font-medium">期望答案 (Ground Truth)</th>
-                <th className="px-6 py-4 font-medium w-32">来源</th>
-                <th className="px-6 py-4 font-medium w-48">Ragas 指标</th>
-                <th className="px-6 py-4 font-medium w-32">状态</th>
-                <th className="px-6 py-4 font-medium w-48">创建时间</th>
-                <th className="px-6 py-4 font-medium w-32 text-right">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              {loading && items.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
-                    加载中...
-                  </td>
-                </tr>
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
-                    暂无测试数据
-                  </td>
-                </tr>
-              ) : (
-                items.map((item) => (
-                  <tr key={item.id} className="hover:bg-secondary/20 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="text-foreground font-medium line-clamp-3 leading-relaxed">
-                        {item.question}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-2 font-mono opacity-60">ID: {item.id}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-muted-foreground line-clamp-3 leading-relaxed">
-                        {item.groundTruth}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="px-2 py-1 bg-blue-500/10 text-blue-500 text-xs rounded border border-blue-500/20 whitespace-nowrap">
-                        {item.sourceType === 'user_feedback' ? '用户反馈' : item.sourceType}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      {item.status === 2 && (
-                        <div className="flex flex-col gap-1 text-[11px] font-mono">
-                          <div className="flex justify-between w-32">
-                            <span className="text-muted-foreground">Faithful:</span>
-                            <span className={item.faithfulnessScore && item.faithfulnessScore >= 0.8 ? "text-green-500" : "text-orange-500"}>{item.faithfulnessScore ?? '-'}</span>
-                          </div>
-                          <div className="flex justify-between w-32">
-                            <span className="text-muted-foreground">Relevant:</span>
-                            <span className={item.answerRelevancyScore && item.answerRelevancyScore >= 0.8 ? "text-green-500" : "text-orange-500"}>{item.answerRelevancyScore ?? '-'}</span>
-                          </div>
-                          <div className="flex justify-between w-32">
-                            <span className="text-muted-foreground">Precision:</span>
-                            <span className={item.contextPrecisionScore && item.contextPrecisionScore >= 0.8 ? "text-green-500" : "text-orange-500"}>{item.contextPrecisionScore ?? '-'}</span>
-                          </div>
-                          <div className="flex justify-between w-32">
-                            <span className="text-muted-foreground">Recall:</span>
-                            <span className={item.contextRecallScore && item.contextRecallScore >= 0.8 ? "text-green-500" : "text-orange-500"}>{item.contextRecallScore ?? '-'}</span>
-                          </div>
-                          <div className="flex justify-between w-32 font-bold mt-1 pt-1 border-t border-border/50">
-                            <span className="text-foreground">Correctness:</span>
-                            <span className={item.answerCorrectnessScore && item.answerCorrectnessScore >= 0.8 ? "text-green-500" : "text-orange-500"}>{item.answerCorrectnessScore ?? '-'}</span>
-                          </div>
-                        </div>
-                      )}
-                      {item.status !== 2 && (
-                        <span className="text-muted-foreground text-xs">-</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      {item.status === 2 ? (
-                        <div className="flex items-center gap-1.5 text-green-500 text-xs font-medium">
-                          <CheckCircle2 size={14} /> 已评估
-                        </div>
-                      ) : item.status === 3 ? (
-                        <div className="flex items-center gap-1.5 text-blue-500 text-xs font-medium">
-                          <Loader2 size={14} className="animate-spin" /> 评估中
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-orange-500 text-xs font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-orange-500" /> 待评估
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">
-                      {formatDateTime(item.createdAt)}
-                    </td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleRunEvaluation(item.id)}
-                          disabled={running}
-                          title="运行单条评估"
-                          className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors disabled:opacity-50"
-                        >
-                          <Play size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          disabled={loading}
-                          title="删除"
-                          className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors disabled:opacity-50"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      <ConfirmDialog
+        open={deleting !== null}
+        title="删除这条评估样本？"
+        description={deleting ? `样本 #${deleting.id}「${deleting.question || '未填写问题'}」会被永久移除，已有分数一并丢失。` : ''}
+        confirmLabel="删除"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleting(null)}
+      />
 
-        {/* Pagination */}
-        <div className="p-4 border-t border-border/50 bg-secondary/10 flex items-center justify-between text-sm text-muted-foreground">
-          <div>
-            共 {total} 条记录
-          </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              disabled={pageNo <= 1 || loading}
-              onClick={() => loadData(pageNo - 1)}
-            >
-              上一页
-            </Button>
-            <span className="px-4 text-foreground font-medium">
-              {pageNo} / {totalPages}
-            </span>
-            <Button 
-              variant="outline" 
-              size="sm"
-              disabled={pageNo >= totalPages || loading}
-              onClick={() => loadData(pageNo + 1)}
-            >
-              下一页
-            </Button>
-          </div>
-        </div>
-      </Card>
+      <ConfirmDialog
+        open={batchOpen}
+        title="运行全部待评估样本？"
+        description={`还有 ${pending} 条待评估，会逐条调用模型评分，可能持续较长时间并产生费用。`}
+        confirmLabel="开始运行"
+        onConfirm={runBatch}
+        onCancel={() => setBatchOpen(false)}
+      />
     </div>
   );
 };

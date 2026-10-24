@@ -1,244 +1,168 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { manageApi, APIError } from '../../lib/api';
+import React from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { manageApi } from '../../lib/api';
+import { formatDateTime, formatFileSize, normalizeCode } from '../../lib/manageFormat';
+import { useAsyncData } from '../../lib/useAsyncData';
+import { useUrlFilters } from '../../lib/useUrlFilters';
 import type { ManageDocument } from '../../types/api';
-import { formatDateTime, formatFileSize } from '../../lib/manageFormat';
-import { AdminStatusBadge } from '../../components/admin/AdminStatusBadge';
-import { AdminDocumentStrategyView } from '../../components/admin/AdminDocumentStrategyView';
-import { AdminDocumentExecutionView } from '../../components/admin/AdminDocumentExecutionView';
-import { AdminDocumentChunkView } from '../../components/admin/AdminDocumentChunkView';
+import { Alert } from '../../components/ui/Alert';
 import { Button } from '../../components/ui/Button';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { Skeleton } from '../../components/ui/Skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/Tabs';
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader';
+import { AdminPanel } from '../../components/admin/AdminPanel';
+import { AdminStatusBadge } from '../../components/admin/AdminStatusBadge';
+import { StrategyPanel } from '../../components/admin/document/StrategyPanel';
+import { ExecutionPanel } from '../../components/admin/document/ExecutionPanel';
+import { ChunkEditor } from '../../components/admin/document/ChunkEditor';
+import { loadFailure } from '../../components/admin/adminFormat';
 
+const DEFAULT_FILTERS = { tab: 'overview' };
+const TABS = [
+  { value: 'overview', label: '概览', step: '01', hint: '文档元信息与三段状态' },
+  { value: 'strategy', label: '策略', step: '02', hint: '确认父子块流水线' },
+  { value: 'execution', label: '构建', step: '03', hint: '触发索引并看任务日志' },
+  { value: 'chunk', label: '验证', step: '04', hint: '抽查切块结果' },
+];
+
+const MetaRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <div className="flex flex-col gap-1 border-b border-border py-2.5 last:border-b-0 sm:flex-row sm:items-baseline sm:gap-4">
+    <dt className="w-24 shrink-0 text-xs text-muted-foreground">{label}</dt>
+    <dd className="min-w-0 break-words text-sm text-foreground">{children}</dd>
+  </div>
+);
+
+/** 文档详情：把策略确认、索引构建、切块验证按步骤分到四个分区，避免一屏堆满 */
 export const AdminDocumentDetailView: React.FC = () => {
-  const { documentId } = useParams<{ documentId: string }>();
+  const { documentId = '' } = useParams();
   const navigate = useNavigate();
+  const [filters, patchFilters] = useUrlFilters(DEFAULT_FILTERS);
 
-  const [loading, setLoading] = useState(true);
-  const [documentDetail, setDocumentDetail] = useState<ManageDocument | null>(null);
-  const [activeSection, setActiveSection] = useState<'overview' | 'strategy' | 'execution' | 'chunk'>('overview');
-  const [pageNotice, setPageNotice] = useState({ type: 'info', message: '' });
+  const { data: detail, loading, error, refetch } = useAsyncData<ManageDocument>(
+    () => manageApi.queryDocumentDetail(documentId),
+    [documentId]
+  );
 
-  const showNotice = (message: string, type: 'info' | 'success' | 'danger' = 'info') => {
-    setPageNotice({ type, message });
-  };
+  const tab = TABS.some((item) => item.value === filters.tab) ? filters.tab : 'overview';
+  const parseDone = normalizeCode(detail?.parseStatus) === '3';
+  const indexReady = normalizeCode(detail?.indexStatus) === '3';
 
-  const loadDocumentDetail = async () => {
-    if (!documentId) return;
-    setLoading(true);
-    try {
-      const data = await manageApi.queryDocumentDetail(documentId);
-      setDocumentDetail(data);
-    } catch (error) {
-      console.error('加载文档详情失败', error);
-      showNotice(error instanceof APIError ? error.message : '加载文档详情失败', 'danger');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void (async () => {
-      await loadDocumentDetail();
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentId]);
-
-  if (loading && !documentDetail) {
+  if (!documentId) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-muted-foreground">
-        <svg className="animate-spin h-8 w-8 text-primary mb-4" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <p>正在加载文档详情...</p>
-      </div>
+      <EmptyState
+        title="没有指定文档"
+        description="请回到文档列表，从列表里点开一份文档查看详情。"
+        action={
+          <Button size="sm" onClick={() => navigate('/admin/documents')}>
+            返回文档列表
+          </Button>
+        }
+      />
     );
   }
-
-  if (!documentDetail) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-muted-foreground">
-        <p>未能找到该文档，或已被删除。</p>
-        <Button onClick={() => navigate('/admin/documents')} className="mt-4">
-          返回列表
-        </Button>
-      </div>
-    );
-  }
-
-  const sections = [
-    { key: 'overview', label: '文档概览', step: '概览', desc: '确认文档状态' },
-    { key: 'strategy', label: '配置策略', step: '策略', desc: '调整切块策略' },
-    { key: 'execution', label: '构建索引', step: '构建', desc: '执行索引构建' },
-    { key: 'chunk', label: '切块验证', step: '验证', desc: '检查分块结果' },
-  ];
 
   return (
-    <div className="p-6 md:p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
-      {/* Top Navigation */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/admin/documents')}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            返回文档列表
-          </button>
-          <div className="h-4 w-px bg-border"></div>
-          <h2 className="text-xl font-bold text-foreground truncate max-w-md">
-            {documentDetail.documentName}
-          </h2>
-        </div>
-        <Button variant="outline" onClick={loadDocumentDetail}>
-          刷新详情
-        </Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <AdminPageHeader
+        eyebrow="接入文档"
+        title={detail?.documentName || '文档详情'}
+        description={detail?.originalFileName ? `原始文件：${detail.originalFileName}` : '正在加载文档信息…'}
+        actions={
+          <>
+            <Button size="sm" variant="outline" onClick={() => navigate('/admin/documents')}>
+              <ArrowLeft size={13} aria-hidden="true" />
+              返回列表
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => refetch()} loading={loading}>
+              <RefreshCw size={13} aria-hidden="true" />
+              刷新
+            </Button>
+          </>
+        }
+      />
 
-      {pageNotice.message && (
-        <div className={`p-4 rounded-lg text-sm border ${
-          pageNotice.type === 'success' ? 'bg-success/10 border-success/20 text-success' :
-          pageNotice.type === 'danger' ? 'bg-destructive/10 border-destructive/20 text-destructive' :
-          'bg-primary/10 border-primary/20 text-primary'
-        }`}>
-          {pageNotice.message}
-        </div>
-      )}
+      {loading && !detail ? (
+        <AdminPanel title="文档信息">
+          <Skeleton lines={6} />
+        </AdminPanel>
+      ) : error ? (
+        <Alert
+          variant="destructive"
+          title="加载文档详情失败"
+          action={<Button size="sm" variant="outline" onClick={() => refetch()}>重试</Button>}
+        >
+          {loadFailure(error, '文档详情')}
+        </Alert>
+      ) : (
+        <Tabs value={tab} onValueChange={(value) => patchFilters({ tab: value })}>
+          <TabsList>
+            {TABS.map((item) => (
+              <TabsTrigger key={item.value} value={item.value} step={item.step} hint={item.hint}>
+                {item.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-      {/* Main Content Layout */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
-        {/* Sidebar Navigation */}
-        <div className="w-full lg:w-64 flex-shrink-0 flex flex-col gap-2 sticky top-6">
-          {sections.map((section) => (
-            <button
-              key={section.key}
-              onClick={() => setActiveSection(section.key as 'overview' | 'strategy' | 'execution' | 'chunk')}
-              className={`flex flex-col items-start p-4 rounded-xl border text-left transition-all ${
-                activeSection === section.key
-                  ? 'bg-primary/5 border-primary/20'
-                  : 'bg-background border-border hover:border-primary/30'
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                  activeSection === section.key 
-                    ? 'bg-primary/10 text-primary' 
-                    : 'bg-secondary text-muted-foreground'
-                }`}>
-                  {section.step}
-                </span>
-                <span className={`font-bold ${
-                  activeSection === section.key ? 'text-primary' : 'text-foreground'
-                }`}>
-                  {section.label}
-                </span>
-              </div>
-              <p className={`text-xs ${
-                activeSection === section.key ? 'text-primary/70' : 'text-muted-foreground'
-              }`}>
-                {section.desc}
-              </p>
-            </button>
-          ))}
-        </div>
-
-        {/* Content Area */}
-        <div className="flex-1 bg-background border border-border rounded-xl shadow-sm overflow-hidden min-h-[600px]">
-          
-          {/* Overview Section */}
-          {activeSection === 'overview' && (
-            <div className="p-6 md:p-8">
-              <div className="mb-8">
-                <h3 className="text-lg font-bold text-foreground">文档概览</h3>
-                <p className="text-sm text-muted-foreground mt-1">先确认文档状态、关键指标和当前工作焦点，再进入后续流程。</p>
-              </div>
-
-              <div className="bg-secondary/30 rounded-xl p-6 mb-8 border border-border">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">文档名称</label>
-                    <p className="font-medium text-foreground text-lg break-all">
-                      {documentDetail.documentName}
-                    </p>
-                    {documentDetail.documentName !== documentDetail.originalFileName && (
-                      <p className="text-sm text-muted-foreground mt-1 break-all">
-                        {documentDetail.originalFileName}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">状态标识</label>
-                    <div className="flex flex-wrap gap-2">
-                      <AdminStatusBadge label={documentDetail.parseStatusName} code={documentDetail.parseStatus} type="parse" />
-                      <AdminStatusBadge label={documentDetail.strategyStatusName} code={documentDetail.strategyStatus} type="strategy" />
-                      <AdminStatusBadge label={documentDetail.indexStatusName} code={documentDetail.indexStatus} type="index" />
-                    </div>
-                  </div>
+          <TabsContent value="overview">
+            <div className="flex flex-col gap-4">
+              <AdminPanel title="三段状态" description="解析 → 策略 → 索引，任一段卡住都看这里">
+                <div className="flex flex-wrap gap-2">
+                  <AdminStatusBadge label={detail?.parseStatusName} code={detail?.parseStatus} type="parse" />
+                  <AdminStatusBadge label={detail?.strategyStatusName} code={detail?.strategyStatus} type="strategy" />
+                  <AdminStatusBadge label={detail?.indexStatusName} code={detail?.indexStatus} type="index" />
                 </div>
+                {detail?.parseErrorMsg ? (
+                  <Alert variant="destructive" title="解析失败原因" className="mt-3">
+                    {detail.parseErrorMsg}
+                  </Alert>
+                ) : null}
+              </AdminPanel>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-border">
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">文件类型</label>
-                    <span className="font-mono text-sm font-medium text-foreground">
-                      {documentDetail.fileTypeName || '-'}
-                    </span>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">文件大小</label>
-                    <span className="font-mono text-sm font-medium text-foreground">
-                      {formatFileSize(documentDetail.fileSize)}
-                    </span>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">更新时间</label>
-                    <span className="font-mono text-sm font-medium text-foreground">
-                      {formatDateTime(documentDetail.editTime)}
-                    </span>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">业务分类</label>
-                    <span className="text-sm font-medium text-foreground">
-                      {documentDetail.businessCategory || '-'}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <AdminPanel title="文档元信息">
+                <dl className="flex flex-col">
+                  <MetaRow label="文档名称">{detail?.documentName || '—'}</MetaRow>
+                  <MetaRow label="原始文件">{detail?.originalFileName || '—'}</MetaRow>
+                  <MetaRow label="文件类型">{detail?.fileTypeName || '—'}</MetaRow>
+                  <MetaRow label="文件大小">{formatFileSize(detail?.fileSize)}</MetaRow>
+                  <MetaRow label="知识域">
+                    {detail?.knowledgeScopeName || detail?.knowledgeScopeCode || '未归属'}
+                  </MetaRow>
+                  <MetaRow label="业务分类">{detail?.businessCategory || '—'}</MetaRow>
+                  <MetaRow label="文档标签">{detail?.documentTags || '—'}</MetaRow>
+                  <MetaRow label="更新时间">{formatDateTime(detail?.editTime)}</MetaRow>
+                  <MetaRow label="文档 ID">
+                    <span className="font-mono text-xs">{documentId}</span>
+                  </MetaRow>
+                </dl>
+              </AdminPanel>
             </div>
-          )}
+          </TabsContent>
 
-          {/* Strategy Section */}
-          {activeSection === 'strategy' && (
-            <AdminDocumentStrategyView 
-              documentId={documentId!} 
-              documentDetail={documentDetail} 
-              showNotice={showNotice}
-              onStrategyConfirmed={loadDocumentDetail}
+          <TabsContent value="strategy">
+            {parseDone ? (
+              <StrategyPanel documentId={documentId} onConfirmed={() => refetch()} />
+            ) : (
+              <Alert variant="info" title="还在等待解析">
+                解析完成后才能确认切块策略。如果解析失败，请回到列表重新上传。
+              </Alert>
+            )}
+          </TabsContent>
+
+          <TabsContent value="execution">
+            <ExecutionPanel documentId={documentId} documentDetail={detail} onRefresh={() => refetch()} />
+          </TabsContent>
+
+          <TabsContent value="chunk">
+            <ChunkEditor
+              documentId={documentId}
+              indexReady={indexReady}
+              onBuildIndex={() => patchFilters({ tab: 'execution' })}
             />
-          )}
-
-          {/* Execution Section */}
-          {activeSection === 'execution' && (
-            <AdminDocumentExecutionView 
-              documentId={documentId!} 
-              documentDetail={documentDetail} 
-              showNotice={showNotice}
-              onRefresh={loadDocumentDetail}
-            />
-          )}
-
-          {/* Chunk Section */}
-          {activeSection === 'chunk' && (
-            <AdminDocumentChunkView 
-              documentId={documentId!} 
-              documentDetail={documentDetail} 
-              showNotice={showNotice}
-            />
-          )}
-
-        </div>
-      </div>
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 };

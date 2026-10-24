@@ -1,247 +1,125 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
 import { manageApi } from '../../lib/api';
-import type { TraceDetail, TraceSpan } from '../../types/api';
-import { Card, CardContent } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { formatTime, normalizeError } from '../../lib/observabilityHelpers';
+import { useAsyncData } from '../../lib/useAsyncData';
+import type { TraceDetail } from '../../types/api';
+import { Alert } from '../../components/ui/Alert';
+import { Button } from '../../components/ui/Button';
+import { Skeleton } from '../../components/ui/Skeleton';
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader';
+import { AdminPanel } from '../../components/admin/AdminPanel';
+import { AdminStatGrid } from '../../components/admin/AdminStatGrid';
+import { AdminStatusBadge } from '../../components/admin/AdminStatusBadge';
+import { SpanWaterfall } from '../../components/admin/traces/SpanWaterfall';
+import { TraceScoreList } from '../../components/admin/traces/TraceScoreList';
+import { formatMs, formatNumber, loadFailure } from '../../components/admin/adminFormat';
+import { formatDateTime } from '../../lib/observabilityHelpers';
 
-const KIND_COLORS: Record<string, string> = {
-  pipeline: 'bg-blue-100 text-blue-700',
-  retrieval: 'bg-emerald-100 text-emerald-700',
-  generation: 'bg-purple-100 text-purple-700',
-  agent: 'bg-amber-100 text-amber-700',
-  llm: 'bg-indigo-100 text-indigo-700',
-  tool: 'bg-cyan-100 text-cyan-700'
-};
-
-const METRIC_LABELS: Record<string, string> = {
-  faithfulness: '事实一致性',
-  context_recall: '上下文召回',
-  context_precision: '上下文精确率',
-  answer_relevancy: '答案相关性',
-  answer_correctness: '答案正确性'
-};
-
-function kindClass(kind: string): string {
-  return KIND_COLORS[kind] ?? 'bg-gray-100 text-gray-600';
+function rootDuration(trace: TraceDetail): number {
+  const root = trace.spans.find((span) => span.spanId === trace.rootSpanId) ?? trace.spans.find((span) => !span.parentSpanId);
+  const direct = Number(root?.durationMs ?? 0);
+  if (direct > 0) return direct;
+  // 老链路缺根耗时，用各 span 之和近似，避免整页显示 0
+  return trace.spans.reduce((sum, span) => sum + Number(span.durationMs ?? 0), 0);
 }
 
-function spanTree(spans: TraceSpan[]): TraceSpan[] {
-  // 按 parentSpanId 建立深度序（保持 started_at 顺序，根在顶）
-  const depthMap = new Map<string, number>();
-  const byId = new Map(spans.map((s) => [s.spanId, s]));
-  const ordered: TraceSpan[] = [];
-  for (const span of spans) {
-    let depth = 0;
-    let parent = span.parentSpanId ? byId.get(span.parentSpanId) : undefined;
-    while (parent && depth < 20) {
-      depth += 1;
-      parent = parent.parentSpanId ? byId.get(parent.parentSpanId) : undefined;
-    }
-    depthMap.set(span.spanId, depth);
-    ordered.push(span);
-  }
-  void depthMap;
-  return ordered;
+function renderPayload(payload: unknown): string {
+  if (payload === null || payload === undefined) return '（空）';
+  return typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
 }
 
-function renderValue(value: unknown): string {
-  if (value == null) return '';
-  if (typeof value === 'string') return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
+/** 单条链路的详情：span 瀑布定位瓶颈，打分看质量 */
 export const AdminTraceDetailView: React.FC = () => {
-  const { traceId = '' } = useParams<{ traceId: string }>();
-  const [detail, setDetail] = useState<TraceDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const { traceId = '' } = useParams();
+  const { data, loading, error, refetch } = useAsyncData<TraceDetail>(() => manageApi.getTraceDetail(traceId), [traceId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    manageApi
-      .getTraceDetail(traceId)
-      .then((d) => {
-        if (!cancelled) setDetail(d);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(normalizeError(e));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [traceId]);
-
-  const tree = useMemo(() => (detail ? spanTree(detail.spans) : []), [detail]);
-  const totalMs = useMemo(() => {
-    const roots = tree.filter((s) => !s.parentSpanId);
-    return roots.reduce((acc, s) => acc + (s.durationMs ?? 0), 0);
-  }, [tree]);
-
-  if (loading) {
-    return <div className="py-12 text-center text-sm text-gray-400">加载中...</div>;
-  }
-  if (error) {
-    return <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
-  }
-  if (!detail) {
-    return <div className="py-12 text-center text-sm text-gray-400">Trace 不存在</div>;
-  }
+  const failedSpans = data ? data.spans.filter((span) => span.status && span.status.toLowerCase() !== 'ok').length : 0;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Link
-          to="/admin/traces"
-          className="text-sm text-blue-600 hover:underline"
-        >
-          ← Trace 列表
-        </Link>
-        <h2 className="text-lg font-semibold text-gray-900">Trace 详情</h2>
-        {detail.langfuseUrl && (
-          <a
-            href={detail.langfuseUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="ml-auto text-sm text-blue-600 hover:underline"
-          >
-            在 Langfuse 打开 ↗
-          </a>
-        )}
-      </div>
+    <div className="flex flex-col gap-6">
+      <AdminPageHeader
+        eyebrow="Trace 链路"
+        title={traceId || '链路详情'}
+        description="耗时条长度相对这条链路最慢的 span。点任意一行可以展开输入输出。"
+        actions={
+          <>
+            <Button size="sm" variant="outline" onClick={() => window.history.back()}>
+              <ArrowLeft size={13} aria-hidden="true" />
+              返回
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => refetch()} loading={loading}>
+              <RefreshCw size={13} aria-hidden="true" />
+              刷新
+            </Button>
+            {data?.langfuseUrl ? (
+              <Button size="sm" variant="outline" onClick={() => window.open(String(data.langfuseUrl), '_blank', 'noopener')}>
+                <ExternalLink size={13} aria-hidden="true" />
+                Langfuse
+              </Button>
+            ) : null}
+          </>
+        }
+      />
 
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
-            <div>
-              <p className="text-xs text-gray-500">Trace ID</p>
-              <p className="mt-0.5 font-mono text-xs text-gray-800">{detail.traceId}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">会话 ID</p>
-              <p className="mt-0.5 font-mono text-xs text-gray-800">{detail.conversationId}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Exchange</p>
-              <p className="mt-0.5 text-gray-800">#{detail.exchangeId}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">总耗时</p>
-              <p className="mt-0.5 text-gray-800">{totalMs} ms</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">创建时间</p>
-              <p className="mt-0.5 text-gray-800">{formatTime(detail.createdAt)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Span 数</p>
-              <p className="mt-0.5 text-gray-800">{detail.spans.length}</p>
+      {loading && !data ? (
+        <div className="flex flex-col gap-4">
+          <Skeleton lines={3} />
+          <Skeleton lines={10} />
+        </div>
+      ) : error ? (
+        <Alert variant="destructive" title="加载链路详情失败" action={<Button size="sm" variant="outline" onClick={() => refetch()}>重试</Button>}>
+          {loadFailure(error, '链路详情')}
+        </Alert>
+      ) : data ? (
+        <>
+          <AdminStatGrid
+            stats={[
+              { label: '总耗时', value: formatMs(rootDuration(data)) },
+              { label: 'Span 数', value: formatNumber(data.spans.length), hint: `异常 ${failedSpans} 个`, tone: failedSpans > 0 ? 'destructive' : 'default' },
+              { label: '打分项', value: formatNumber(data.scores.length), hint: data.scores.length === 0 ? '还没跑评估' : '已在线打分' },
+              { label: '创建时间', value: formatDateTime(data.createdAt), hint: data.flushedAt ? `落盘 ${formatDateTime(data.flushedAt)}` : '尚未落盘' },
+            ]}
+          />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <AdminStatusBadge label={failedSpans > 0 ? '有异常 span' : '全部成功'} tone={failedSpans > 0 ? 'destructive' : 'success'} />
+            {data.conversationId ? (
+              <Link
+                to={`/admin/observability/${data.conversationId}`}
+                className="font-mono text-2xs text-primary underline-offset-2 hover:underline"
+              >
+                会话 {data.conversationId}
+              </Link>
+            ) : null}
+            {data.exchangeId ? <span className="font-mono text-2xs text-muted-foreground">exchange #{data.exchangeId}</span> : null}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr_1fr]">
+            <AdminPanel title="Span 瀑布" description="按调用树缩进，颜色区分 span 类型">
+              <SpanWaterfall spans={data.spans} />
+            </AdminPanel>
+
+            <div className="flex flex-col gap-4">
+              <AdminPanel title="质量打分">
+                <TraceScoreList scores={data.scores} />
+              </AdminPanel>
+
+              <AdminPanel title="链路输入">
+                <pre className="max-h-64 overflow-auto rounded-md border border-border bg-secondary/40 p-2 text-2xs leading-relaxed text-foreground">
+                  {renderPayload(data.input)}
+                </pre>
+              </AdminPanel>
+
+              <AdminPanel title="链路输出">
+                <pre className="max-h-64 overflow-auto rounded-md border border-border bg-secondary/40 p-2 text-2xs leading-relaxed text-foreground">
+                  {renderPayload(data.output)}
+                </pre>
+              </AdminPanel>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Span 瀑布 */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="border-b border-gray-200 px-4 py-3 text-sm font-medium text-gray-700">
-            Span 瀑布（{detail.spans.length}）
-          </div>
-          <ul className="divide-y divide-gray-100">
-            {tree.map((span) => {
-              const depth = span.parentSpanId ? 1 : 0;
-              const isExpanded = expanded === span.spanId;
-              const ratio =
-                totalMs > 0 && span.durationMs != null
-                  ? Math.min(100, Math.round((span.durationMs / totalMs) * 100))
-                  : 0;
-              return (
-                <li key={span.spanId} className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="inline-block h-2 w-2 rounded-full"
-                      style={{ marginLeft: depth * 20 }}
-                    />
-                    <Badge variant={span.status === 'error' ? 'destructive' : 'default'}>
-                      {span.status}
-                    </Badge>
-                    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${kindClass(span.kind)}`}>
-                      {span.kind}
-                    </span>
-                    <button
-                      className="text-sm font-medium text-gray-800 hover:text-blue-600"
-                      onClick={() => setExpanded(isExpanded ? null : span.spanId)}
-                    >
-                      {span.name}
-                    </button>
-                    <span className="ml-auto text-xs text-gray-500">
-                      {span.durationMs != null ? `${span.durationMs} ms` : '—'}
-                    </span>
-                  </div>
-                  <div className="mt-1.5 ml-3 h-1.5 w-full max-w-md overflow-hidden rounded bg-gray-100">
-                    <div
-                      className={`h-full rounded ${
-                        span.status === 'error' ? 'bg-red-400' : 'bg-blue-400'
-                      }`}
-                      style={{ width: `${ratio}%` }}
-                    />
-                  </div>
-                  {isExpanded && (
-                    <div className="mt-3 grid gap-2 pl-3 text-xs lg:grid-cols-2">
-                      {span.input != null && (
-                        <pre className="max-h-48 overflow-auto rounded bg-gray-50 p-2 text-gray-700">
-                          {renderValue(span.input)}
-                        </pre>
-                      )}
-                      {span.output != null && (
-                        <pre className="max-h-48 overflow-auto rounded bg-gray-50 p-2 text-gray-700">
-                          {renderValue(span.output)}
-                        </pre>
-                      )}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </CardContent>
-      </Card>
-
-      {/* 评估分数 */}
-      {detail.scores.length > 0 && (
-        <Card>
-          <CardContent className="p-4">
-            <p className="mb-3 text-sm font-medium text-gray-700">评估分数</p>
-            <div className="flex flex-wrap gap-3">
-              {detail.scores.map((s) => (
-                <div
-                  key={s.scoreId}
-                  className="rounded-lg border border-gray-200 px-4 py-2"
-                >
-                  <p className="text-xs text-gray-500">
-                    {METRIC_LABELS[s.metricName] ?? s.metricName}
-                  </p>
-                  <p className="mt-0.5 text-lg font-semibold text-gray-900">
-                    {(s.value ?? 0).toFixed(2)}
-                  </p>
-                  {s.reason && (
-                    <p className="mt-1 max-w-xs text-xs text-gray-500">{s.reason}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+        </>
+      ) : null}
     </div>
   );
 };

@@ -1,325 +1,198 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
+import { RefreshCw, Search } from 'lucide-react';
 import { chatApi } from '../../lib/api';
-import type { ChatSession } from '../../types/api';
+import { formatChatMode, formatDateTime, formatStatusLabel, statusTone } from '../../lib/observabilityHelpers';
+import { useAsyncData } from '../../lib/useAsyncData';
+import { useUrlFilters } from '../../lib/useUrlFilters';
+import type { SessionPageResult } from '../../lib/api';
+import { Alert } from '../../components/ui/Alert';
 import { Button } from '../../components/ui/Button';
-import { Card, CardContent } from '../../components/ui/Card';
-import { Badge, type BadgeProps } from '../../components/ui/Badge';
-import {
-  formatChatMode,
-  formatStatusLabel,
-  formatTime,
-  normalizeError,
-  sessionMessageCount,
-  sessionPreview,
-  sessionTitle,
-  statusTone,
-  truncate
-} from '../../lib/observabilityHelpers';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { FilterBar, FilterSearch, FilterSelect } from '../../components/ui/FilterBar';
+import { Skeleton } from '../../components/ui/Skeleton';
+import { TablePagination } from '../../components/ui/DataTable';
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader';
+import { AdminStatGrid } from '../../components/admin/AdminStatGrid';
+import { AdminStatusBadge } from '../../components/admin/AdminStatusBadge';
+import { useDebouncedValue } from '../../components/admin/useDebouncedValue';
+import { loadFailure } from '../../components/admin/adminFormat';
 
+const DEFAULT_FILTERS = { q: '', mode: 'ALL', status: 'ALL', page: '1', size: '12' };
+const MODE_OPTIONS = [
+  { value: 'ALL', label: '全部模式' },
+  { value: 'DOCUMENT', label: '文档问答' },
+  { value: 'AUTO_DOCUMENT', label: '自动文档' },
+  { value: 'OPEN_CHAT', label: '开放对话' },
+];
+const STATUS_OPTIONS = [
+  { value: 'ALL', label: '全部状态' },
+  { value: 'RUNNING', label: '运行中' },
+  { value: 'COMPLETED', label: '已完成' },
+  { value: 'FAILED', label: '失败' },
+  { value: 'STOPPED', label: '已停止' },
+];
+const SIZE_OPTIONS = [
+  { value: '12', label: '每页 12 条' },
+  { value: '24', label: '每页 24 条' },
+  { value: '36', label: '每页 36 条' },
+];
+
+/** 对话观测列表：按模式/状态筛会话，点进去看单会话的轮次时间线 */
 export const AdminObservabilityListView: React.FC = () => {
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [loadingSessions, setLoadingSessions] = useState(false);
-  const [pageError, setPageError] = useState('');
-  const [keyword, setKeyword] = useState('');
-  const [modeFilter, setModeFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
-  const [pageNo, setPageNo] = useState('1');
-  const [pageSize, setPageSize] = useState('12');
-  const [totalSize, setTotalSize] = useState('0');
-  const [totalPages, setTotalPages] = useState('0');
+  const [filters, patchFilters] = useUrlFilters(DEFAULT_FILTERS);
+  const keyword = useDebouncedValue(filters.q, 350);
+  const page = Math.max(1, Number(filters.page) || 1);
+  const pageSize = Number(filters.size) || 12;
 
-  const currentPageNumber = Number(pageNo) || 1;
-  const totalPagesCount = Number(totalPages) || 0;
-  const canPrev = currentPageNumber > 1;
-  const canNext = totalPagesCount > 0 && currentPageNumber < totalPagesCount;
+  const { data, loading, error, refetch } = useAsyncData<SessionPageResult>(
+    () =>
+      chatApi.listSessionsPage({
+        keyword: keyword.trim(),
+        chatMode: filters.mode === 'ALL' ? '' : filters.mode,
+        turnStatus: filters.status === 'ALL' ? '' : filters.status,
+        pageNo: String(page),
+        pageSize: String(pageSize),
+      }),
+    [keyword, filters.mode, filters.status, page, pageSize]
+  );
 
-  const loadSessions = async (options: Record<string, unknown> = {}) => {
-    setLoadingSessions(true);
-    setPageError('');
-
-    try {
-      const page = await chatApi.listSessionsPage({
-        keyword: typeof options.keyword === 'string' ? options.keyword : keyword,
-        chatMode: typeof options.chatMode === 'string' ? options.chatMode : modeFilter,
-        turnStatus: typeof options.turnStatus === 'string' ? options.turnStatus : statusFilter,
-        pageNo: typeof options.pageNo === 'number' ? options.pageNo : typeof options.pageNo === 'string' ? options.pageNo : pageNo,
-        pageSize: typeof options.pageSize === 'number' ? options.pageSize : typeof options.pageSize === 'string' ? options.pageSize : pageSize
-      });
-      setSessions(page.sessions || []);
-      setPageNo(page.pageNo || '1');
-      setPageSize(page.pageSize || pageSize);
-      setTotalSize(page.totalSize || '0');
-      setTotalPages(page.totalPages || '0');
-    } catch (error) {
-      setPageError(normalizeError(error, '加载会话列表失败'));
-    } finally {
-      setLoadingSessions(false);
-    }
-  };
-
-  useEffect(() => {
-    void (async () => {
-      await loadSessions();
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const summaryStats = useMemo(() => {
-    const total = totalSize;
-    const running = sessions.filter((item) => item.running).length;
-    const documentMode = sessions.filter((item) => item.chatMode === 'DOCUMENT').length;
-    const failed = sessions.filter((item) => item.latestTurnStatus === 'FAILED').length;
-
-    return [
-      { label: '会话总数', value: total, description: '后台当前可回看的全部业务会话数' },
-      { label: '本页运行中', value: running, description: '正在生成中的会话会在详情页实时轮询' },
-      { label: '本页文档问答', value: documentMode, description: '当前页里走 RAG 编排链路的会话规模' },
-      { label: '本页最近失败', value: failed, description: '优先进入这些会话可更快定位问题' }
-    ];
-  }, [sessions, totalSize]);
-
-  const applyFilters = () => {
-    loadSessions({ pageNo: '1' });
-  };
-
-  const resetFilters = () => {
-    setKeyword('');
-    setModeFilter('ALL');
-    setStatusFilter('ALL');
-    loadSessions({
-      keyword: '',
-      chatMode: 'ALL',
-      turnStatus: 'ALL',
-      pageNo: '1',
-      pageSize: pageSize
-    });
-  };
-
-  const goPage = (nextPageNo: string) => {
-    if (!nextPageNo || nextPageNo === pageNo || loadingSessions) return;
-    loadSessions({ pageNo: nextPageNo });
-  };
-
-  const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newSize = e.target.value;
-    setPageSize(newSize);
-    loadSessions({ pageNo: '1', pageSize: newSize });
-  };
-
-  const getStatusVariant = (tone: string): BadgeProps['variant'] => {
-    if (tone === 'running') return 'default';
-    if (tone === 'completed') return 'success';
-    if (tone === 'failed') return 'destructive';
-    if (tone === 'warning') return 'warning';
-    return 'secondary';
-  };
+  const sessions = data?.sessions ?? [];
+  const total = Number(data?.totalSize ?? 0);
+  const running = sessions.filter((item) => item.running).length;
+  const documentSessions = sessions.filter((item) => String(item.chatMode ?? '').toUpperCase().includes('DOCUMENT')).length;
+  const failed = sessions.filter((item) => String(item.latestTurnStatus ?? '').toUpperCase() === 'FAILED').length;
 
   return (
-    <div className="p-6 md:p-8 flex flex-col gap-6 max-w-7xl mx-auto w-full">
-      {/* Header */}
-      <div className="border-b border-border pb-6">
-        <div className="flex justify-between items-start gap-4 mb-4">
-          <div>
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-widest">对话观测</span>
-            <h2 className="text-2xl font-bold font-heading text-foreground mt-1 mb-2">选择会话，查看执行详情</h2>
-            <p className="text-muted-foreground max-w-3xl leading-relaxed">
-              观测每轮对话的执行路径、RAG 召回和模型用量。
-            </p>
-          </div>
-          <Button onClick={() => loadSessions()} disabled={loadingSessions}>
-            {loadingSessions ? '正在刷新...' : '刷新会话列表'}
+    <div className="flex flex-col gap-6">
+      <AdminPageHeader
+        eyebrow="对话观测"
+        title="会话列表"
+        description="按关键词、问答模式和最近一轮状态筛会话。点开任意会话可以查看每一轮的阶段耗时、引用来源与 token 成本。"
+        actions={
+          <Button size="sm" variant="outline" onClick={() => refetch()} loading={loading}>
+            <RefreshCw size={13} aria-hidden="true" />
+            刷新
           </Button>
-        </div>
+        }
+      />
 
-        <div className="flex gap-2 flex-wrap">
-          {summaryStats.map(stat => (
-            <div key={stat.label} title={stat.description} className="flex items-center gap-2 bg-secondary border border-border px-3 py-1.5 rounded-lg">
-              <span className="text-sm text-muted-foreground">{stat.label}</span>
-              <strong className="text-sm font-mono text-foreground">{stat.value}</strong>
+      <AdminStatGrid
+        stats={[
+          { label: '会话总数', value: total, hint: '符合当前筛选条件的全部会话' },
+          { label: '本页运行中', value: running, tone: running ? 'primary' : 'default' },
+          { label: '本页文档问答', value: documentSessions },
+          { label: '本页最近失败', value: failed, tone: failed ? 'destructive' : 'default' },
+        ]}
+      />
+
+      <FilterBar
+        actions={
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => patchFilters({ q: '', mode: 'ALL', status: 'ALL', page: '1' })}
+            disabled={!filters.q && filters.mode === 'ALL' && filters.status === 'ALL' && page === 1}
+          >
+            清空筛选
+          </Button>
+        }
+      >
+        <FilterSearch
+          label="搜索会话"
+          value={filters.q}
+          onChange={(value) => patchFilters({ q: value, page: '1' })}
+          placeholder="按标题或最近一条消息搜索"
+        />
+        <FilterSelect
+          label="问答模式"
+          value={filters.mode}
+          onChange={(value) => patchFilters({ mode: value, page: '1' })}
+          options={MODE_OPTIONS}
+        />
+        <FilterSelect
+          label="最近状态"
+          value={filters.status}
+          onChange={(value) => patchFilters({ status: value, page: '1' })}
+          options={STATUS_OPTIONS}
+        />
+        <FilterSelect
+          label="每页条数"
+          value={filters.size}
+          onChange={(value) => patchFilters({ size: value, page: '1' })}
+          options={SIZE_OPTIONS}
+        />
+      </FilterBar>
+
+      {loading && sessions.length === 0 ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="rounded-xl border border-border bg-card p-4">
+              <Skeleton lines={3} />
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3 pb-6 border-b border-border">
-        <label className="flex flex-col gap-1 flex-1 min-w-[200px]">
-          <span className="text-xs text-muted-foreground uppercase tracking-wider">搜索会话</span>
-          <input 
-            type="text" 
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-            placeholder="按会话ID、文档名、问题或回答筛选" 
-            className="w-full border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </label>
-        
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground uppercase tracking-wider">提问模式</span>
-          <select 
-            value={modeFilter} 
-            onChange={(e) => setModeFilter(e.target.value)}
-            className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="ALL">全部模式</option>
-            <option value="DOCUMENT">当前文档问答</option>
-            <option value="AUTO_DOCUMENT">自动知识问答</option>
-            <option value="OPEN_CHAT">开放式提问</option>
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground uppercase tracking-wider">最近状态</span>
-          <select 
-            value={statusFilter} 
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="ALL">全部状态</option>
-            <option value="RUNNING">进行中</option>
-            <option value="COMPLETED">已完成</option>
-            <option value="FAILED">失败</option>
-            <option value="STOPPED">已停止</option>
-          </select>
-        </label>
-
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={resetFilters}>重置筛选</Button>
-          <Button onClick={applyFilters}>应用筛选</Button>
-        </div>
-      </div>
-
-      {pageError && (
-        <div className="p-4 bg-destructive/10 text-destructive rounded-lg text-sm border border-destructive/20">
-          {pageError}
-        </div>
-      )}
-
-      {/* List */}
-      {loadingSessions ? (
-        <div className="p-12 text-center text-muted-foreground border border-dashed border-border rounded-xl">
-          正在加载会话列表...
-        </div>
+      ) : error ? (
+        <Alert
+          variant="destructive"
+          title="加载会话列表失败"
+          action={<Button size="sm" variant="outline" onClick={() => refetch()}>重试</Button>}
+        >
+          {loadFailure(error, '会话列表')}
+        </Alert>
       ) : sessions.length === 0 ? (
-        <div className="p-12 text-center text-muted-foreground border border-dashed border-border rounded-xl">
-          当前筛选条件下没有匹配的会话。可以先清空筛选，或者去聊天页发起一轮对话再回来观察。
-        </div>
+        <EmptyState
+          icon={<Search size={22} aria-hidden="true" />}
+          title="没有匹配的会话"
+          description="换个关键词，或把模式和状态都切回「全部」。也可以先去聊天页发一条问题，再回来观察链路。"
+          action={
+            <Button size="sm" variant="outline" onClick={() => patchFilters({ q: '', mode: 'ALL', status: 'ALL', page: '1' })}>
+              清空筛选
+            </Button>
+          }
+        />
       ) : (
-        <div className="flex flex-col gap-3">
-          {sessions.map(session => {
-            const tone = session.running ? 'running' : statusTone(session.latestTurnStatus);
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {sessions.map((session) => {
+            const tone = statusTone(session.latestTurnStatus);
             return (
-              <Card key={session.conversationId} className="relative overflow-hidden group border-border/40 shadow-sm hover:shadow-md hover:border-primary/30 transition-all">
-                <div className={`absolute left-0 top-0 bottom-0 w-1 ${
-                  tone === 'running' ? 'bg-primary animate-pulse' : 
-                  tone === 'completed' ? 'bg-success' :
-                  tone === 'failed' ? 'bg-destructive' : 'bg-warning'
-                }`} />
-                
-                <CardContent className="p-5">
-                  <div className="flex justify-between items-center mb-3">
-                    <div className="flex gap-2">
-                      <Badge variant="secondary">
-                        {formatChatMode(session.chatMode)}
-                      </Badge>
-                      {session.running ? (
-                        <Badge variant="default" className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">
-                          实时执行中
-                        </Badge>
-                      ) : session.latestTurnStatus ? (
-                        <Badge variant={getStatusVariant(tone)}>
-                          {formatStatusLabel(session.latestTurnStatus)}
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <span className="text-xs text-muted-foreground font-mono">{formatTime(session.updatedAt)}</span>
+              <li key={session.conversationId}>
+                <Link
+                  to={`/admin/observability/${session.conversationId}`}
+                  className={`flex h-full flex-col gap-2 rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    tone === 'failed' || tone === 'error' ? 'border-destructive/30' : 'border-border'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                      {session.title || '未命名会话'}
+                    </span>
+                    <AdminStatusBadge label={formatStatusLabel(session.latestTurnStatus)} tone={tone === 'error' ? 'destructive' : tone === 'failed' ? 'destructive' : tone === 'running' ? 'primary' : tone === 'completed' ? 'success' : 'default'} />
                   </div>
-
-                  <h3 className="text-base font-semibold font-heading text-foreground mb-2">
-                    {sessionTitle(session)}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-4 line-clamp-2 leading-relaxed opacity-90">
-                    {sessionPreview(session)}
+                  <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                    {session.latestUserMessage || session.latestAssistantMessage || '这轮还没有消息内容。'}
                   </p>
-
-                  <div className="flex gap-4 text-xs text-muted-foreground mb-4 font-mono">
-                    <span>{session.conversationId}</span>
-                    <span>•</span>
-                    <span>{sessionMessageCount(session)} 条消息</span>
-                    {session.selectedDocumentName && (
-                      <>
-                        <span>•</span>
-                        <span>{session.selectedDocumentName}</span>
-                      </>
-                    )}
+                  {session.latestTurnErrorMessage ? (
+                    <p className="rounded-md bg-destructive/10 px-2 py-1 text-2xs leading-relaxed text-destructive">
+                      最近一轮失败：{session.latestTurnErrorMessage}
+                    </p>
+                  ) : null}
+                  <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-foreground">
+                    <span>{formatChatMode(session.chatMode)}</span>
+                    <span>{Number(session.exchangeCount ?? 0)} 轮</span>
+                    <span>{formatDateTime(session.updatedAt)}</span>
+                    <span className="font-mono">{session.conversationId}</span>
                   </div>
-
-                  {session.latestTurnErrorMessage && (
-                    <div className="mb-4 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
-                      最近一轮异常：{truncate(session.latestTurnErrorMessage, 88)}
-                    </div>
-                  )}
-
-                  <div className="flex gap-4 border-t border-border pt-4 mt-2">
-                    <Link 
-                      to={`/admin/observability/${session.conversationId}`}
-                      className="text-sm font-semibold text-primary hover:underline"
-                    >
-                      查看整页详情
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
+                </Link>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
 
-      {/* Pagination */}
-      {!loadingSessions && totalPagesCount > 0 && (
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-border">
-          <div className="text-sm text-muted-foreground">
-            <strong className="text-foreground">第 {pageNo} / {totalPages} 页</strong>
-            <span className="ml-2">共 {totalSize} 条记录</span>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              每页
-              <select 
-                value={pageSize} 
-                onChange={handlePageSizeChange}
-                className="border border-input bg-background rounded px-2 py-1"
-              >
-                <option value="12">12</option>
-                <option value="24">24</option>
-                <option value="36">36</option>
-              </select>
-            </label>
-            
-            <div className="flex gap-1">
-              <Button 
-                variant="outline"
-                size="sm"
-                disabled={!canPrev} 
-                onClick={() => goPage(String(currentPageNumber - 1))}
-              >
-                上一页
-              </Button>
-              <Button 
-                variant="outline"
-                size="sm"
-                disabled={!canNext} 
-                onClick={() => goPage(String(currentPageNumber + 1))}
-              >
-                下一页
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {sessions.length > 0 ? (
+        <TablePagination page={page} pageSize={pageSize} total={total} onPageChange={(next) => patchFilters({ page: String(next) })} />
+      ) : null}
     </div>
   );
 };

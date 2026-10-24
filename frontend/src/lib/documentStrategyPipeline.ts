@@ -48,7 +48,7 @@ export const STRATEGY_PIPELINE_LIBRARY = [
   }
 ];
 
-export function normalizeStrategyTypeList(selectedTypes: string[], strategyLibrary = STRATEGY_LIBRARY) {
+function normalizeStrategyTypeList(selectedTypes: string[], strategyLibrary = STRATEGY_LIBRARY) {
   const seen = new Set<string>();
   const availableTypes = new Set(strategyLibrary.map((item) => item.type));
   const orderedTypes: string[] = [];
@@ -74,11 +74,7 @@ export function buildStrategyPreview(selectedTypes: string[], strategyLibrary = 
     .filter(Boolean) as StrategyPreviewItem[];
 }
 
-export function buildStrategySignature(selectedTypes: string[], strategyLibrary = STRATEGY_LIBRARY) {
-  return normalizeStrategyTypeList(selectedTypes, strategyLibrary).join('|');
-}
-
-export function resolvePlanPipeline(
+function resolvePlanPipeline(
   plan: StrategyPlan | null | undefined,
   pipelineKey: string
 ): StrategyPipeline | null {
