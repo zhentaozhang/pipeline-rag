@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* P4：字体改为同源自托管，不再依赖 Google Fonts CDN（见 styles/fonts.css） */
+@import "./styles/fonts.css";
 
 @theme {
   /* Editorial Minimal Typography */
@@ -16,7 +18,11 @@
   --color-popover: #FFFFFF;
   --color-popover-foreground: #09090B;
 
-  --color-primary: #D97706; /* Amber 600 */
+  /* Amber 700 而不是 600：
+     #D97706 配白字的对比度只有 3.19:1，作正文色配白底只有 3.05:1，
+     两者都低于 WCAG AA 的 4.5:1。主色在深色模式下的取值本来就是
+     亮底深字，浅色模式统一到 700 后，白字与主色文字同时达标（5.0:1 / 4.8:1）。*/
+  --color-primary: #B45309; /* Amber 700 */
   --color-primary-foreground: #FFFFFF;
 
   --color-secondary: #F4F4F5;
@@ -28,20 +34,43 @@
   --color-accent: #FEF3C7; /* Amber 100 */
   --color-accent-foreground: #92400E; /* Amber 800 */
 
-  --color-success: #10B981;
+  --color-success: #047857; /* Emerald 700，白字 5.5:1 */
   --color-success-foreground: #ffffff;
   
-  --color-warning: #F59E0B;
+  --color-warning: #A16207; /* Yellow 700，白字 4.9:1 */
   --color-warning-foreground: #ffffff;
 
-  --color-destructive: #EF4444;
+  --color-destructive: #B91C1C; /* Red 700，白字 6.5:1 */
   --color-destructive-foreground: #FAFAFA;
 
   --color-border: #E5E7EB;
   --color-input: #E5E7EB;
-  --color-ring: #D97706;
+  --color-ring: #B45309;
 
   --radius: 0.5rem;
+
+  /* ---- 排版刻度 ----------------------------------------------------
+     正文 16px(text-base) / 次要 14px(text-sm) / 表格与代码 13px(text-fine)
+     / 说明 12px(text-xs) / 元信息 11px(text-2xs)。此前 22 处 text-[Npx] 各写各的。
+     这里只补 Tailwind 缺的两档，不覆盖既有刻度以免整站缩放。 */
+  --text-2xs: 0.6875rem; /* 11px 时间戳、计数、徽标 */
+  --text-2xs--line-height: 1rem;
+  --text-fine: 0.8125rem; /* 13px 表格单元格、代码块、表单提示 */
+  --text-fine--line-height: 1.25rem;
+
+  /* ---- 圆角刻度（唯一来源，取值与 Tailwind 默认一致）-----------------
+     控件(按钮/输入/下拉) rounded-md 6px
+     浮层(菜单/toast/提示) rounded-lg 8px
+     卡片/面板 rounded-xl 12px
+     胶囊/头像 rounded-full */
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  /* ---- 动效 --------------------------------------------------------
+     交互反馈 150ms，容器展开 200ms，统一 standard 缓动。 */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --default-transition-duration: 150ms;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -76,7 +105,9 @@
   --color-warning-foreground: #000000;
 
   --color-destructive: #F87171;
-  --color-destructive-foreground: #FAFAFA;
+  /* 深色模式下的错误色是浅红，前景必须反过来用深色，
+     否则白字配浅红只有 2.4:1 */
+  --color-destructive-foreground: #0A0A0A;
 
   --color-border: #27272A;
   --color-input: #27272A;
@@ -114,5 +145,43 @@
     height: 100%;
     display: flex;
     flex-direction: column;
+  }
+}
+/* ------------------------------------------------------------------
+   原生控件的主题跟随
+   color-scheme 让滚动条、输入框、日期选择器、以及浏览器自动生成的
+   控件（如 <select> 下拉列表）跟着变深/变浅。缺少它时深色模式下
+   依然是白色滚动条与白色下拉列表。
+   ------------------------------------------------------------------ */
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+@layer base {
+  /* 统一键盘焦点样式：此前全站只有零散的 focus:ring，Tab 键导航时
+     很多自定义按钮（77 个 <button>）根本没有可见焦点。 */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-primary) 24%, transparent);
+  }
+}
+
+/* 尊重系统"减少动态效果"设置：流式打字、骨架屏、过渡动画都不再抖动 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

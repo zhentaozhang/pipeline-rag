@@ -3,16 +3,43 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Pipeline RAG - 面向企业知识库的检索增强对话与文档流水线平台" />
+    <meta name="theme-color" content="#FAFAFA" />
     <title>Pipeline RAG - 企业知识助理</title>
-    
-    <!-- Google Fonts: Plus Jakarta Sans (Heading), Inter (Body), JetBrains Mono (Code) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!--
+      首屏主题引导：必须在样式与 React 挂载之前同步执行。
+      否则深色模式用户会先看到一帧白底（FOUC），再被 useEffect 切回深色。
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('app-theme') || 'system';
+          var isDark =
+            stored === 'dark' ||
+            (stored !== 'light' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var root = document.documentElement;
+          root.classList.toggle('dark', isDark);
+          root.style.colorScheme = isDark ? 'dark' : 'light';
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', isDark ? '#0A0A0A' : '#FAFAFA');
+        } catch (error) {
+          // localStorage 被禁用时保持默认浅色，不影响渲染
+        }
+      })();
+    </script>
+
+    <!--
+      字体已改为同源自托管（src/styles/fonts.css），这里不再有任何第三方请求：
+      原来是 1 个 render-blocking 的跨域 CSS + 3 个跨域 woff2，
+      国内网络下首屏会出现长达数秒的字体回退。
+    -->
   </head>
   <body>
     <div id="root"></div>
+    <noscript>Pipeline RAG 需要启用 JavaScript 才能运行。</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
